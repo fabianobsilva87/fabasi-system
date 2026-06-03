@@ -165,30 +165,41 @@ function inicializarCanvasAssinatura() {
   canvas = document.getElementById('canvas-assinatura');
   if (!canvas) return;
 
-  // Sincroniza o tamanho interno do canvas com o tamanho CSS renderizado.
-  // Sem isso, o canvas interno fica em 420×110 enquanto o CSS o estica para
-  // 100% do container, causando descalibração total das coordenadas de desenho.
-  function sincronizarTamanhoCanvas() {
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width > 0 && (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height))) {
-      canvas.width  = Math.round(rect.width);
-      canvas.height = Math.round(rect.height);
-      // Reaplica estilos do traço após redimensionar (redimensionar limpa o contexto)
-      ctx.lineWidth   = 2;
-      ctx.strokeStyle = '#1a202c';
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-    }
+  ctx = canvas.getContext('2d');
+
+  // Ajusta o buffer interno do canvas ao tamanho CSS real UMA vez.
+  // IMPORTANTE: atribuir canvas.width/height apaga todo o conteúdo —
+  // isso só pode acontecer na inicialização e no resize, NUNCA durante o desenho.
+  function aplicarEstiloCtx() {
+    ctx.lineWidth   = 2.5;
+    ctx.strokeStyle = '#1a202c';
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
   }
 
-  ctx = canvas.getContext('2d');
-  ctx.lineWidth = 2; ctx.strokeStyle = '#1a202c'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  function sincronizarTamanho() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0) return;
+    canvas.width  = Math.round(rect.width);
+    canvas.height = Math.round(rect.height);
+    aplicarEstiloCtx(); // contexto é resetado ao redimensionar
+  }
 
-  // Sincroniza imediatamente e a cada redimensionamento de janela
-  sincronizarTamanhoCanvas();
-  window.addEventListener('resize', sincronizarTamanhoCanvas);
+  sincronizarTamanho();
 
-  // getPos calcula coordenadas relativas ao canvas já escalonado
+  // No resize só ressincroniza se a largura mudou de fato (evita apagar em scroll)
+  let larguraAnterior = canvas.width;
+  window.addEventListener('resize', () => {
+    const novaLargura = Math.round(canvas.getBoundingClientRect().width);
+    if (novaLargura !== larguraAnterior && novaLargura > 0) {
+      larguraAnterior = novaLargura;
+      sincronizarTamanho();
+    }
+  });
+
+  // getPos: converte coordenadas de tela para coordenadas do buffer interno.
+  // Com canvas.width === rect.width (1:1), scaleX/Y são sempre 1 —
+  // mas mantemos o cálculo para robustez em telas de alta densidade (devicePixelRatio).
   const getPos = (e) => {
     const rect   = canvas.getBoundingClientRect();
     const scaleX = canvas.width  / rect.width;
@@ -200,8 +211,8 @@ function inicializarCanvasAssinatura() {
     };
   };
 
+  // Mouse
   canvas.addEventListener('mousedown', (e) => {
-    sincronizarTamanhoCanvas();
     desenhando = true;
     ctx.beginPath();
     const p = getPos(e);
@@ -216,8 +227,8 @@ function inicializarCanvasAssinatura() {
   });
   window.addEventListener('mouseup', () => { desenhando = false; });
 
+  // Touch (celular)
   canvas.addEventListener('touchstart', (e) => {
-    sincronizarTamanhoCanvas();
     desenhando = true;
     ctx.beginPath();
     const p = getPos(e);
