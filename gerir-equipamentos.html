@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concredur — Gerenciamento de Ativos</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+            <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item active" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item " onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>⚙️ Painel Central de Controle de Ativos</h2></div>
+      <div class="section-content">
+        <div class="card">
+          <h3 class="card-title">Filtros Avançados de Busca</h3>
+          <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">
+            <div class="form-group">
+              <label>Filtro por TAG ou Nome do Ativo</label>
+              <input type="text" id="search-eq-termo" placeholder="Buscar..." oninput="filtrarEquipamentos(0)">
+            </div>
+            <div class="form-group">
+              <label>Classe de Criticidade</label>
+              <select id="search-eq-criticidade" class="form-input-style" onchange="filtrarEquipamentos(0)">
+                <option value="">Todas</option>
+                <option value="Alta">Classe Alta (A)</option>
+                <option value="Média">Classe Média (B)</option>
+                <option value="Baixa">Classe Baixa (C)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Filtro por Bloco</label>
+              <input type="text" id="search-eq-bloco" placeholder="Ex: Bloco B" oninput="filtrarEquipamentos(0)">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Inventário de Ativos Homologados</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>TAG</th><th>Equipamento / Marca</th><th>Localização</th><th>Criticidade</th><th>QR Code</th><th>Ações</th></tr>
+              </thead>
+              <tbody id="tbody-equipamentos-gerir">
+                <tr><td colspan="6" class="td-loading">Consultando registros ativos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination-container no-print" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <button class="btn-secondary" id="btn-eq-prev" onclick="mudarPaginaEquipamento(-1)">◀ Anterior</button>
+            <span id="txt-eq-paginacao" style="font-weight:700;">Página 1 de 1</span>
+            <button class="btn-secondary" id="btn-eq-next" onclick="mudarPaginaEquipamento(1)">Próximo ▶</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="qrcode-temp-generator" style="display:none; position:absolute; pointer-events:none;"></div>
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(carregarEquipamentos, 400);
+    });
+  </script>
+</body>
+</html>

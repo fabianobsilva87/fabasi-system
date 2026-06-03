@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concredur — Colaboradores</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+    </div>
+    <nav>
+      <div class="nav-label">Visão Geral</div>
+      <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+      <div class="nav-label">Refrigeração</div>
+      <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+      <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+      <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+      <div class="nav-label">Manutenção</div>
+      <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+      <div class="nav-label">Administração</div>
+      <div class="nav-item active" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+      <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+      <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+    </nav>
+    <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <button class="btn-refresh" onclick="alternarAbasColab('lista')">👷 Colaboradores</button>
+      <button class="btn-refresh" style="background:#7c3aed; border-color:#7c3aed; color:#fff;" onclick="alternarAbasColab('cargo')">🪪 Cargos e Funções</button>
+    </div>
+
+    <div class="section-content">
+
+      <!-- ===== ABA: COLABORADORES ===== -->
+      <div id="aba-lista" class="app-sub-panel">
+        <div class="card">
+          <h3 class="card-title">👷 Registrar Novo Técnico / Colaborador</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Cadastro para vínculo com Ordens de Serviço e PMOC.</p>
+
+          <input type="hidden" id="colab-id-edicao" value="">
+
+          <div class="form-grid">
+            <div class="form-group"><label>Nome Completo *</label><input type="text" id="colab-nome" placeholder="Nome do técnico"></div>
+            <div class="form-group"><label>CPF *</label><input type="text" id="colab-cpf" class="input-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+            <div class="form-group"><label>Cargo / Função</label><select id="colab-funcao" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+            <div class="form-group"><label>Data de Contratação</label><input type="date" id="colab-contratacao"></div>
+          </div>
+
+          <!-- ASSINATURA DIGITAL -->
+          <div style="margin-top:20px; padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+            <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">🖋️ Assinatura Digital do Técnico</label>
+            <p style="font-size:11px;color:#718096;margin-bottom:10px;">O técnico pode assinar diretamente no celular. A assinatura será usada automaticamente nos laudos PMOC e O.S.</p>
+
+            <div id="assinatura-preview-existente" style="display:none; margin-bottom:10px; padding:10px; background:#fff; border:1px solid #d1fae5; border-radius:6px;">
+              <span style="font-size:11px; font-weight:600; color:#059669;">✓ Assinatura cadastrada:</span>
+              <img id="img-assinatura-atual" src="" style="display:block; max-width:260px; max-height:70px; margin-top:6px; border:1px solid #e2e8f0; border-radius:4px;">
+              <button onclick="limparAssinaturaColaborador()" style="margin-top:6px; font-size:11px; padding:3px 10px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; cursor:pointer;">✕ Remover e redesenhar</button>
+            </div>
+
+            <canvas id="canvas-colab-assinatura" width="600" height="140"
+              style="border:2px dashed #cbd5e0; background:#fff; border-radius:6px; cursor:crosshair; touch-action:none; max-width:100%; display:block;">
+            </canvas>
+            <div style="margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="btn-secondary" style="padding:4px 12px;font-size:11px;" onclick="limparCanvasColabAssinatura()">✕ Limpar</button>
+              <span style="font-size:11px; color:#a0aec0;">← Use o dedo ou caneta no celular / mouse no computador</span>
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button id="btn-salvar-colaborador" class="btn-primary">💾 Registrar Colaborador</button>
+            <button id="btn-cancelar-colab" class="btn-secondary" style="display:none;" onclick="resetarFormColaborador()">✕ Cancelar</button>
+          </div>
+          <p id="msg-colaborador" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Técnicos de Campo Homologados</h3>
+            <button class="btn-refresh" onclick="carregarColaboradores()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>CPF</th>
+                  <th>Função</th>
+                  <th>Contratação</th>
+                  <th>Assinatura</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-colaboradores"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ABA: CARGOS E FUNÇÕES ===== -->
+      <div id="aba-cargo" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🪪 Novo Cargo / Função</h3>
+          <div class="form-grid">
+            <div class="form-group"><label>Nome do Cargo *</label><input type="text" id="func-nome" placeholder="Ex: Mecânico de Refrigeração"></div>
+            <div class="form-group"><label>Salário Base (R$)</label><input type="number" id="func-salario" placeholder="0,00"></div>
+            <div class="form-group"><label>Nível</label>
+              <select id="func-nivel" class="form-input-style">
+                <option value="Junior">Júnior</option>
+                <option value="Pleno" selected>Pleno</option>
+                <option value="Senior">Sênior</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row"><button id="btn-salvar-funcao" class="btn-primary">💾 Salvar Cargo</button></div>
+          <p id="msg-funcao" class="msg-form"></p>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Cargos e Funções Cadastrados</h3>
+            <button class="btn-refresh" onclick="carregarFuncoes()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cargo / Função</th><th>Nível</th><th>Salário Base</th><th>Colaboradores</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-funcoes"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /section-content -->
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script>
+// ===================== CANVAS DE ASSINATURA DO COLABORADOR =====================
+let canvasColab, ctxColab, desenhandoColab = false;
+
+function inicializarCanvasColaborador() {
+  canvasColab = document.getElementById('canvas-colab-assinatura');
+  if (!canvasColab) return;
+  ctxColab = canvasColab.getContext('2d');
+  ctxColab.lineWidth = 2.5;
+  ctxColab.strokeStyle = '#1a202c';
+  ctxColab.lineCap = 'round';
+  ctxColab.lineJoin = 'round';
+
+  const getPos = (e) => {
+    const rect = canvasColab.getBoundingClientRect();
+    const scaleX = canvasColab.width / rect.width;
+    const scaleY = canvasColab.height / rect.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+  };
+
+  canvasColab.addEventListener('mousedown',  (e) => { desenhandoColab = true; ctxColab.beginPath(); const p = getPos(e); ctxColab.moveTo(p.x, p.y); });
+  canvasColab.addEventListener('mousemove',  (e) => { if (!desenhandoColab) return; e.preventDefault(); const p = getPos(e); ctxColab.lineTo(p.x, p.y); ctxColab.stroke(); });
+  window.addEventListener('mouseup',         ()  => { desenhandoColab = false; });
+  canvasColab.addEventListener('touchstart', (e) => { desenhandoColab = true; ctxColab.beginPath(); const p = getPos(e); ctxColab.moveTo(p.x, p.y); }, { passive: true });
+  canvasColab.addEventListener('touchmove',  (e) => { if (!desenhandoColab) return; e.preventDefault(); const p = getPos(e); ctxColab.lineTo(p.x, p.y); ctxColab.stroke(); }, { passive: false });
+  window.addEventListener('touchend',        ()  => { desenhandoColab = false; });
+}
+
+function limparCanvasColabAssinatura() {
+  if (ctxColab && canvasColab) ctxColab.clearRect(0, 0, canvasColab.width, canvasColab.height);
+}
+
+function limparAssinaturaColaborador() {
+  document.getElementById('assinatura-preview-existente').style.display = 'none';
+  document.getElementById('img-assinatura-atual').src = '';
+  document.getElementById('canvas-colab-assinatura').style.display = 'block';
+  limparCanvasColabAssinatura();
+}
+
+function canvasColabTemConteudo() {
+  if (!canvasColab || !ctxColab) return false;
+  const idat = ctxColab.getImageData(0, 0, canvasColab.width, canvasColab.height);
+  return idat.data.some((v, i) => i % 4 === 3 && v > 0);
+}
+
+// ===================== EDITAR COLABORADOR =====================
+function editarColaborador(id) {
+  const c = _colabCache.find(x => x.id === id);
+  if (!c) return;
+
+  document.getElementById('colab-id-edicao').value = id;
+  document.getElementById('colab-nome').value = c.nome || '';
+  const cpfF = (c.cpf || '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  document.getElementById('colab-cpf').value = cpfF;
+  document.getElementById('colab-funcao').value = c.funcao_id || '';
+  document.getElementById('colab-contratacao').value = c.data_contratacao || '';
+
+  // Exibe assinatura existente se houver
+  if (c.assinatura_digital && c.assinatura_digital.startsWith('data:image')) {
+    document.getElementById('img-assinatura-atual').src = c.assinatura_digital;
+    document.getElementById('assinatura-preview-existente').style.display = 'block';
+    document.getElementById('canvas-colab-assinatura').style.display = 'none';
+    limparCanvasColabAssinatura();
+  } else {
+    document.getElementById('assinatura-preview-existente').style.display = 'none';
+    document.getElementById('canvas-colab-assinatura').style.display = 'block';
+    limparCanvasColabAssinatura();
+  }
+
+  const btn = document.getElementById('btn-salvar-colaborador');
+  btn.textContent = '💾 Salvar Alterações';
+  btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-colab').style.display = 'inline-block';
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormColaborador() {
+  document.getElementById('colab-id-edicao').value = '';
+  document.getElementById('colab-nome').value = '';
+  document.getElementById('colab-cpf').value = '';
+  document.getElementById('colab-funcao').value = '';
+  document.getElementById('colab-contratacao').value = '';
+  document.getElementById('assinatura-preview-existente').style.display = 'none';
+  document.getElementById('canvas-colab-assinatura').style.display = 'block';
+  limparCanvasColabAssinatura();
+  const btn = document.getElementById('btn-salvar-colaborador');
+  btn.textContent = '💾 Registrar Colaborador';
+  btn.style.background = '';
+  document.getElementById('btn-cancelar-colab').style.display = 'none';
+}
+
+// ===================== CONTROLE DE ABAS =====================
+function alternarAbasColab(aba) {
+  ['lista','cargo'].forEach(a => {
+    const el = document.getElementById('aba-' + a);
+    if (el) el.style.display = a === aba ? 'block' : 'none';
+  });
+}
+
+// ===================== INIT =====================
+window.addEventListener('DOMContentLoaded', async () => {
+  inicializarCanvasColaborador();
+  await atualizarSelectFuncoes();
+  await Promise.all([carregarColaboradores(), carregarFuncoes()]);
+});
+</script>
+</body>
+</html>

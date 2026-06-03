@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concredur — Central de O.S.</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+            <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item " onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item active" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <button class="btn-refresh" onclick="alternarSubAbasOS('ac')">❄️ Climatização</button>
+        <button class="btn-refresh" style="background:#8b5cf6; border-color:#8b5cf6; color:#fff;" onclick="alternarSubAbasOS('fac')">🏢 Facilities</button>
+        <button class="btn-refresh" style="background:#4a5568; border-color:#4a5568; color:#fff;" onclick="alternarSubAbasOS('central')">🗂️ Central Unificada</button>
+      </div>
+
+      <div class="section-content">
+        <div id="sub-os-ac" class="app-sub-panel no-print">
+          <div class="card" id="foco-formulario-os">
+            <h3 class="card-title" id="titulo-formulario-os">Abertura / Atualização de O.S. Técnica</h3>
+            <input type="hidden" id="os-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group"><label>Equipamento (TAG) *</label><select id="os-equipamento" class="form-input-style"><option value="">-- Selecione o Ativo --</option></select></div>
+              <div class="form-group"><label>Técnico Responsável *</label><select id="os-tecnico" class="form-input-style"><option value="">-- Selecione o Colaborador --</option></select></div>
+              <div class="form-group"><label>Regime de Manutenção</label><select id="os-tipo" class="form-input-style"><option value="Corretiva">Corretiva</option><option value="Preventiva">Preventiva</option><option value="Instalação">Instalação / Start-Up</option><option value="Emergencial">Emergencial</option></select></div>
+              <div class="form-group"><label>Status Operacional</label><select id="os-status" class="form-input-style"><option value="Aberta">Aberta / Pendente</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option></select></div>
+              <div class="form-group" style="grid-column:span 2;"><label>Descrição da Ocorrência / Sintomas *</label><textarea id="os-defeito" rows="2" placeholder="Descreva os sintomas..."></textarea></div>
+              <div class="form-group" style="grid-column:span 2;"><label>Diagnóstico Técnico / Ações Executadas</label><textarea id="os-laudo" rows="3" placeholder="Detalhamento..."></textarea></div>
+              <div class="form-group" style="grid-column:span 2;"><label>📷 Evidência de Campo</label><input type="file" id="os-foto" accept="image/*" capture="environment" class="form-input-style"></div>
+            </div>
+            <div class="btn-row">
+              <button id="btn-salvar-os" class="btn-primary">✓ Registrar Ordem de Serviço</button>
+              <button id="btn-cancelar-edicao-os" class="btn-secondary" style="display:none;">✕ Cancelar Edição</button>
+            </div>
+            <p id="msg-os" class="msg-form"></p>
+          </div>
+          <div class="card">
+            <h3 class="card-title">Registros Ativos — Climatização</h3>
+            <div class="table-wrap"><table><thead><tr><th>Código O.S.</th><th>Abertura</th><th>TAG Ativo</th><th>Operador</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tbody-os"></tbody></table></div>
+          </div>
+        </div>
+
+        <div id="sub-os-fac" class="app-sub-panel no-print" style="display:none;">
+          <div class="card" id="foco-formulario-osg"><input type="hidden" id="osg-id-edicao" value="">
+            <h3 class="card-title">Nova Solicitação Corporativa — Facilities</h3>
+            <div class="form-grid">
+              <div class="form-group"><label>Serviço Requisitado / Título *</label><input type="text" id="osg-requisitado" placeholder="Ex: Substituição de disjuntor"></div>
+              <div class="form-group"><label>Setor / Destino do Reparo *</label><input type="text" id="osg-setor" placeholder="Ex: Bloco C"></div>
+              <div class="form-group" style="grid-column:span 2;">
+                <label>Tipo de Intervenção</label>
+                <div class="checkbox-group-os">
+                  <label><input type="radio" name="osg-tipo" value="Corretiva"> Corretiva</label>
+                  <label><input type="radio" name="osg-tipo" value="Preventiva" checked> Preventiva</label>
+                  <label><input type="radio" name="osg-tipo" value="Reforma"> Reforma</label>
+                </div>
+              </div>
+              <div class="form-group" style="grid-column:span 2;">
+                <label>Especialidades Técnicas Envolvidas</label>
+                <div class="checkbox-group-os">
+                  <label><input type="checkbox" name="osg-area" value="Ar Condicionado"> Climatização</label>
+                  <label><input type="checkbox" name="osg-area" value="Elétrica"> Elétrica</label>
+                  <label><input type="checkbox" name="osg-area" value="Hidráulica"> Hidráulica</label>
+                </div>
+              </div>
+              <div class="form-group" style="grid-column:span 2;"><label>Falha Relatada *</label><textarea id="osg-falha" rows="3"></textarea></div>
+              <div class="form-group"><label>Equipamento</label><input type="text" id="osg-equipamento"></div>
+              <div class="form-group"><label>Status Atual</label><select id="osg-status" class="form-input-style"><option value="Aberta">Aberta</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option></select></div>
+              <div class="form-group"><label>Técnico Atribuído</label><select id="osg-tecnico" class="form-input-style"></select></div>
+            </div>
+            <div class="btn-row"><button id="btn-salvar-osg" class="btn-primary">✓ Salvar Ordem Facilities</button><button id="btn-cancelar-edicao-osg" class="btn-secondary" style="display:none;">✕ Cancelar Edição</button></div>
+            <p id="msg-osg" class="msg-form"></p>
+          </div>
+          <div class="card">
+            <h3 class="card-title">Ordens de Serviço de Facilities Processadas</h3>
+            <div class="table-wrap"><table><thead><tr><th>Código O.S.</th><th>Chamada</th><th>Setor</th><th>Área(s)</th><th>Status</th></tr></thead><tbody id="tbody-osg"></tbody></table></div>
+          </div>
+        </div>
+
+        <div id="sub-os-central" class="app-sub-panel no-print" style="display:none;">
+          <div class="card">
+            <h3 class="card-title">Histórico Geral de Atividades Unificadas</h3>
+            <div class="table-wrap"><table><thead><tr><th>ID Documento</th><th>Data</th><th>Origem</th><th>Categoria</th><th>Resumo</th><th>Status</th></tr></thead><tbody id="tbody-central-unificada-os"></tbody></table></div>
+          </div>
+        </div>
+
+        <div id="area-os-impressao" class="print-only"></div>
+        <div id="area-osg-impressao" class="print-only"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', async () => {
+      await new Promise(r => setTimeout(r, 400));
+      // Os dois selects são independentes entre si — carregam em paralelo
+      await Promise.all([
+        atualizarSelectEquipamentos(),
+        atualizarSelectColaboradores(),
+      ]);
+      // As três tabelas também são independentes — carregam em paralelo
+      await Promise.all([
+        carregarOrdensServico(),
+        carregarOSGeral(),
+        carregarCentralUnificadaOS(),
+      ]);
+    });
+  </script>
+</body>
+</html>

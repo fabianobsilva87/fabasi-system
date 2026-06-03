@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concredur — Cadastro de Empresas</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+    </div>
+          <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item " onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item " onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item " onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item " onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item active" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item " onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+    <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <button class="btn-refresh" onclick="alternarAba('empregadora')">🏛️ Empresa Empregadora</button>
+      <button class="btn-refresh" style="background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="alternarAba('contratante')">🤝 Empresas Contratantes</button>
+      <button class="btn-refresh" style="background:#0891b2;border-color:#0891b2;color:#fff;" onclick="alternarAba('responsavel')">👷 Resp. de Segurança</button>
+    </div>
+
+    <div class="section-content">
+
+      <!-- ===== ABA: EMPRESA EMPREGADORA ===== -->
+      <div id="aba-empregadora" class="app-sub-panel">
+        <div class="card">
+          <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
+            <h2>🏛️ Empresa Empregadora — Vínculo Empregatício</h2>
+            <p style="font-size:12px;opacity:.8;margin-top:4px;">Esta é a empresa que assina a CTPS e aparece nos documentos de registro, fichas de EPI e certificados NR.</p>
+          </div>
+
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#1e40af;">
+            ℹ️ <strong>Atenção:</strong> Apenas <strong>uma</strong> empresa empregadora pode estar ativa por vez. Ao ativar outra, a anterior é desativada automaticamente.
+          </div>
+
+          <input type="hidden" id="emp-id-edicao" value="">
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+            <div class="form-group" style="grid-column:span 2;">
+              <label>Razão Social *</label>
+              <input type="text" id="emp-razao" placeholder="Nome completo da empresa">
+            </div>
+            <div class="form-group">
+              <label>Nome Fantasia</label>
+              <input type="text" id="emp-fantasia" placeholder="Nome fantasia (opcional)">
+            </div>
+            <div class="form-group">
+              <label>CNPJ *</label>
+              <input type="text" id="emp-cnpj" placeholder="00.000.000/0000-00" maxlength="18">
+            </div>
+            <div class="form-group">
+              <label>Inscrição Estadual</label>
+              <input type="text" id="emp-ie" placeholder="000.000.000.000">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input type="text" id="emp-tel" placeholder="(65) 99999-9999">
+            </div>
+            <div class="form-group" style="grid-column:span 3;">
+              <label>Endereço Completo *</label>
+              <input type="text" id="emp-end" placeholder="Rua, Nº, Bairro, Cidade – UF, CEP">
+            </div>
+            <div class="form-group">
+              <label>E-mail Corporativo</label>
+              <input type="email" id="emp-email" placeholder="contato@empresa.com.br">
+            </div>
+            <div class="form-group">
+              <label>Site / URL</label>
+              <input type="text" id="emp-site" placeholder="www.empresa.com.br">
+            </div>
+            <div class="form-group">
+              <label>CNAE Principal</label>
+              <input type="text" id="emp-cnae" placeholder="Ex: 4322-3/01">
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:6px;">
+            <button id="btn-salvar-empresa" class="btn-primary" style="background:#1a56db;">💾 Salvar Empresa Empregadora</button>
+            <button id="btn-cancelar-empresa" class="btn-secondary" style="display:none;" onclick="limparFormEmpresa()">✕ Cancelar</button>
+          </div>
+          <p id="msg-empresa" class="msg-form"></p>
+        </div>
+
+        <!-- Listagem -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Empresas Empregadoras Cadastradas</h3>
+            <button class="btn-refresh" onclick="carregarEmpresas('empregadora')">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Razão Social</th><th>CNPJ</th><th>Endereço</th><th>Status</th><th>Ações</th></tr>
+              </thead>
+              <tbody id="tbody-empregadoras">
+                <tr><td colspan="5" class="td-loading">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ABA: EMPRESAS CONTRATANTES ===== -->
+      <div id="aba-contratante" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <div class="card-header-admin" style="background:linear-gradient(135deg,#5b21b6,#7c3aed);">
+            <h2>🤝 Empresa Contratante — Vínculo de Atividades</h2>
+            <p style="font-size:12px;opacity:.8;margin-top:4px;">Clientes ou tomadores de serviço onde os colaboradores executam atividades. Vinculada às Ordens de Serviço e PMOC.</p>
+          </div>
+
+          <input type="hidden" id="cont-id-edicao" value="">
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+            <div class="form-group" style="grid-column:span 2;">
+              <label>Razão Social *</label>
+              <input type="text" id="cont-razao" placeholder="Nome completo da empresa contratante">
+            </div>
+            <div class="form-group">
+              <label>Nome Fantasia / Apelido</label>
+              <input type="text" id="cont-fantasia" placeholder="Como é conhecida">
+            </div>
+            <div class="form-group">
+              <label>CNPJ</label>
+              <input type="text" id="cont-cnpj" placeholder="00.000.000/0000-00" maxlength="18">
+            </div>
+            <div class="form-group">
+              <label>Responsável / Contato</label>
+              <input type="text" id="cont-contato" placeholder="Nome do contato na empresa">
+            </div>
+            <div class="form-group">
+              <label>Telefone do Contato</label>
+              <input type="text" id="cont-tel" placeholder="(65) 99999-9999">
+            </div>
+            <div class="form-group" style="grid-column:span 3;">
+              <label>Endereço / Localização da Obra ou Sede</label>
+              <input type="text" id="cont-end" placeholder="Rua, Nº, Bairro, Cidade – UF">
+            </div>
+            <div class="form-group">
+              <label>Segmento / Tipo de Contrato</label>
+              <select id="cont-segmento" class="form-input-style">
+                <option value="Construção Civil">Construção Civil</option>
+                <option value="Indústria">Indústria</option>
+                <option value="Comércio">Comércio</option>
+                <option value="Serviços">Serviços</option>
+                <option value="Condomínio">Condomínio / Facilities</option>
+                <option value="Saúde">Saúde / Hospital</option>
+                <option value="Educação">Educação</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status do Contrato</label>
+              <select id="cont-status" class="form-input-style">
+                <option value="Ativo">Ativo</option>
+                <option value="Suspenso">Suspenso</option>
+                <option value="Encerrado">Encerrado</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Observações</label>
+              <input type="text" id="cont-obs" placeholder="Ex: Contrato anual renovável">
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:6px;">
+            <button id="btn-salvar-contratante" class="btn-primary" style="background:#7c3aed;">💾 Salvar Empresa Contratante</button>
+            <button id="btn-cancelar-contratante" class="btn-secondary" style="display:none;" onclick="limparFormContratante()">✕ Cancelar</button>
+          </div>
+          <p id="msg-contratante" class="msg-form"></p>
+        </div>
+
+        <!-- Listagem -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Empresas Contratantes Cadastradas</h3>
+            <button class="btn-refresh" onclick="carregarEmpresas('contratante')">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Razão Social / Fantasia</th><th>CNPJ</th><th>Contato</th><th>Segmento</th><th>Status</th><th>Ações</th></tr>
+              </thead>
+              <tbody id="tbody-contratantes">
+                <tr><td colspan="6" class="td-loading">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ABA: RESPONSÁVEL DE SEGURANÇA ===== -->
+      <div id="aba-responsavel" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <div class="card-header-admin" style="background:linear-gradient(135deg,#065f46,#0891b2);">
+            <h2>👷 Responsável Técnico de Segurança</h2>
+            <p style="font-size:12px;opacity:.8;margin-top:4px;">Dados do responsável que assina os documentos de EPI e certificados NR. Aparece no rodapé dos PDFs gerados.</p>
+          </div>
+
+          <input type="hidden" id="resp-id-edicao" value="">
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+            <div class="form-group" style="grid-column:span 2;">
+              <label>Nome Completo *</label>
+              <input type="text" id="resp-nome" placeholder="Nome do responsável">
+            </div>
+            <div class="form-group">
+              <label>Registro MTE / CRT</label>
+              <input type="text" id="resp-registro" placeholder="Ex: 000584-3/MTE">
+            </div>
+            <div class="form-group" style="grid-column:span 2;">
+              <label>Cargo / Função</label>
+              <input type="text" id="resp-cargo" placeholder="Ex: Técnico em Segurança do Trabalho">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input type="text" id="resp-tel" placeholder="(65) 99999-9999">
+            </div>
+            <div class="form-group">
+              <label>E-mail</label>
+              <input type="email" id="resp-email" placeholder="responsavel@empresa.com.br">
+            </div>
+            <div class="form-group">
+              <label>CREA / CFT (se aplicável)</label>
+              <input type="text" id="resp-crea" placeholder="Nº registro profissional">
+            </div>
+          </div>
+
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:6px;font-size:12px;color:#14532d;">
+            📄 <strong>Como aparece nos PDFs:</strong><br>
+            <span id="preview-resp-pdf" style="font-family:monospace;font-size:11px;color:#065f46;display:block;margin-top:6px;white-space:pre-line;">—</span>
+          </div>
+
+          <div class="btn-row" style="margin-top:14px;">
+            <button id="btn-salvar-responsavel" class="btn-primary" style="background:#0891b2;">💾 Salvar Responsável</button>
+          </div>
+          <p id="msg-responsavel" class="msg-form"></p>
+        </div>
+
+        <!-- Listagem -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Responsáveis Cadastrados</h3>
+            <button class="btn-refresh" onclick="carregarResponsaveis()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Nome</th><th>Cargo</th><th>Registro MTE/CRT</th><th>Contato</th><th>Ativo</th><th>Ações</th></tr>
+              </thead>
+              <tbody id="tbody-responsaveis">
+                <tr><td colspan="6" class="td-loading">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script>
+
+// ===== MÁSCARAS =====
+function mascaraCNPJ(v) {
+  v = v.replace(/\D/g,'').slice(0,14);
+  if (v.length > 12) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+  else if (v.length > 8) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d+)/,'$1.$2.$3/$4');
+  else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d+)/,'$1.$2.$3');
+  else if (v.length > 2) v = v.replace(/(\d{2})(\d+)/,'$1.$2');
+  return v;
+}
+['emp-cnpj','cont-cnpj'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => { el.value = mascaraCNPJ(el.value); });
+});
+
+// ===== PREVIEW AO VIVO DO RESPONSÁVEL NO PDF =====
+['resp-nome','resp-cargo','resp-registro'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', atualizarPreviewResp);
+});
+function atualizarPreviewResp() {
+  const nome = document.getElementById('resp-nome').value || '—';
+  const cargo = document.getElementById('resp-cargo').value || '';
+  const reg = document.getElementById('resp-registro').value || '';
+  document.getElementById('preview-resp-pdf').textContent =
+    `${nome}${cargo ? '\n' + cargo : ''}${reg ? '\n' + reg : ''}`;
+}
+
+// ===== ALTERNÂNCIA DE ABAS =====
+function alternarAba(aba) {
+  ['empregadora','contratante','responsavel'].forEach(a => {
+    const el = document.getElementById('aba-' + a);
+    if (el) el.style.display = a === aba ? 'block' : 'none';
+  });
+}
+
+// ===== EMPRESA EMPREGADORA =====
+let _empregadorasCache = [];
+
+async function carregarEmpresas(tipo) {
+  if (tipo === 'empregadora') {
+    const tbody = document.getElementById('tbody-empregadoras'); if (!tbody) return;
+    const { data } = await db.from('empresas').select('*').eq('tipo','empregadora').order('ativa', {ascending:false}).order('razao_social');
+    _empregadorasCache = data || [];
+    if (!_empregadorasCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma empresa cadastrada.</td></tr>'; return; }
+    tbody.innerHTML = _empregadorasCache.map(e => `<tr>
+      <td><strong>${e.razao_social}</strong>${e.fantasia ? `<br><small style="color:#718096">${e.fantasia}</small>` : ''}</td>
+      <td style="font-family:monospace;">${e.cnpj || '—'}</td>
+      <td style="font-size:12px;">${e.endereco || '—'}</td>
+      <td>${e.ativa
+        ? '<span class="tag-badge success">✅ Ativa</span>'
+        : '<span class="tag-badge">Inativa</span>'}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${!e.ativa ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="ativarEmpresa('${e.id}')">✓ Ativar</button>` : ''}
+        <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarEmpresa('${e.id}')">✏️ Editar</button>
+        <button class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirEmpresa('${e.id}','${e.razao_social.replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>`).join('');
+  } else {
+    await carregarContratantes();
+  }
+}
+
+async function ativarEmpresa(id) {
+  // Desativa todas, ativa só a escolhida
+  await db.from('empresas').update({ ativa: false }).eq('tipo','empregadora');
+  await db.from('empresas').update({ ativa: true }).eq('id', id);
+  carregarEmpresas('empregadora');
+  msgForm('msg-empresa','✓ Empresa ativada com sucesso!','green');
+}
+
+function editarEmpresa(id) {
+  const e = _empregadorasCache.find(x => x.id === id); if (!e) return;
+  document.getElementById('emp-id-edicao').value = id;
+  document.getElementById('emp-razao').value    = e.razao_social || '';
+  document.getElementById('emp-fantasia').value = e.fantasia || '';
+  document.getElementById('emp-cnpj').value     = e.cnpj || '';
+  document.getElementById('emp-ie').value       = e.ie || '';
+  document.getElementById('emp-tel').value      = e.telefone || '';
+  document.getElementById('emp-end').value      = e.endereco || '';
+  document.getElementById('emp-email').value    = e.email || '';
+  document.getElementById('emp-site').value     = e.site || '';
+  document.getElementById('emp-cnae').value     = e.cnae || '';
+  document.getElementById('btn-cancelar-empresa').style.display = 'inline-flex';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function limparFormEmpresa() {
+  ['emp-id-edicao','emp-razao','emp-fantasia','emp-cnpj','emp-ie','emp-tel','emp-end','emp-email','emp-site','emp-cnae'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('btn-cancelar-empresa').style.display = 'none';
+}
+
+async function excluirEmpresa(id, nome) {
+  if (!confirm(`Excluir empresa "${nome}"?`)) return;
+  await db.from('empresas').delete().eq('id', id);
+  carregarEmpresas('empregadora');
+}
+
+document.getElementById('btn-salvar-empresa')?.addEventListener('click', async () => {
+  const razao = document.getElementById('emp-razao').value.trim();
+  const cnpj  = document.getElementById('emp-cnpj').value.trim();
+  const end   = document.getElementById('emp-end').value.trim();
+  if (!razao) { msgForm('msg-empresa','Informe a Razão Social.','red'); return; }
+
+  const payload = {
+    tipo: 'empregadora',
+    razao_social: razao,
+    fantasia:  document.getElementById('emp-fantasia').value.trim(),
+    cnpj,
+    ie:        document.getElementById('emp-ie').value.trim(),
+    telefone:  document.getElementById('emp-tel').value.trim(),
+    endereco:  end,
+    email:     document.getElementById('emp-email').value.trim(),
+    site:      document.getElementById('emp-site').value.trim(),
+    cnae:      document.getElementById('emp-cnae').value.trim(),
+    ativa:     true,
+  };
+
+  msgForm('msg-empresa','Salvando...','blue');
+  const idEd = document.getElementById('emp-id-edicao').value;
+
+  if (idEd) {
+    const { error } = await db.from('empresas').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-empresa','Erro: '+error.message,'red'); return; }
+  } else {
+    // Ao criar nova ativa, desativa as demais
+    await db.from('empresas').update({ ativa: false }).eq('tipo','empregadora');
+    const { error } = await db.from('empresas').insert([payload]);
+    if (error) { msgForm('msg-empresa','Erro: '+error.message,'red'); return; }
+  }
+
+  msgForm('msg-empresa','✓ Empresa salva com sucesso!','green');
+  limparFormEmpresa();
+  carregarEmpresas('empregadora');
+});
+
+// ===== EMPRESAS CONTRATANTES =====
+let _contratantesCache = [];
+
+async function carregarContratantes() {
+  const tbody = document.getElementById('tbody-contratantes'); if (!tbody) return;
+  const { data } = await db.from('empresas').select('*').eq('tipo','contratante').order('razao_social');
+  _contratantesCache = data || [];
+  if (!_contratantesCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma empresa contratante cadastrada.</td></tr>'; return; }
+  const statusCor = { Ativo:'success', Suspenso:'andamento', Encerrado:'' };
+  tbody.innerHTML = _contratantesCache.map(e => `<tr>
+    <td><strong>${e.razao_social}</strong>${e.fantasia ? `<br><small style="color:#718096">${e.fantasia}</small>` : ''}</td>
+    <td style="font-family:monospace;">${e.cnpj || '—'}</td>
+    <td style="font-size:12px;">${e.contato ? `${e.contato}${e.telefone ? '<br><small>'+e.telefone+'</small>' : ''}` : '—'}</td>
+    <td><span class="tag-badge">${e.segmento || '—'}</span></td>
+    <td><span class="tag-badge ${statusCor[e.status_contrato]||''}">${e.status_contrato || 'Ativo'}</span></td>
+    <td style="display:flex;gap:4px;">
+      <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContratante('${e.id}')">✏️ Editar</button>
+      <button class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContratante('${e.id}','${e.razao_social.replace(/'/g,"\\'")}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarContratante(id) {
+  const e = _contratantesCache.find(x => x.id === id); if (!e) return;
+  document.getElementById('cont-id-edicao').value    = id;
+  document.getElementById('cont-razao').value        = e.razao_social || '';
+  document.getElementById('cont-fantasia').value     = e.fantasia || '';
+  document.getElementById('cont-cnpj').value         = e.cnpj || '';
+  document.getElementById('cont-contato').value      = e.contato || '';
+  document.getElementById('cont-tel').value          = e.telefone || '';
+  document.getElementById('cont-end').value          = e.endereco || '';
+  document.getElementById('cont-segmento').value     = e.segmento || 'Construção Civil';
+  document.getElementById('cont-status').value       = e.status_contrato || 'Ativo';
+  document.getElementById('cont-obs').value          = e.observacoes || '';
+  document.getElementById('btn-cancelar-contratante').style.display = 'inline-flex';
+  alternarAba('contratante');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function limparFormContratante() {
+  ['cont-id-edicao','cont-razao','cont-fantasia','cont-cnpj','cont-contato','cont-tel','cont-end','cont-obs'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('cont-segmento').value = 'Construção Civil';
+  document.getElementById('cont-status').value   = 'Ativo';
+  document.getElementById('btn-cancelar-contratante').style.display = 'none';
+}
+
+async function excluirContratante(id, nome) {
+  if (!confirm(`Excluir empresa contratante "${nome}"?`)) return;
+  await db.from('empresas').delete().eq('id', id);
+  carregarContratantes();
+}
+
+document.getElementById('btn-salvar-contratante')?.addEventListener('click', async () => {
+  const razao = document.getElementById('cont-razao').value.trim();
+  if (!razao) { msgForm('msg-contratante','Informe a Razão Social.','red'); return; }
+
+  const payload = {
+    tipo: 'contratante',
+    razao_social:    razao,
+    fantasia:        document.getElementById('cont-fantasia').value.trim(),
+    cnpj:            document.getElementById('cont-cnpj').value.trim(),
+    contato:         document.getElementById('cont-contato').value.trim(),
+    telefone:        document.getElementById('cont-tel').value.trim(),
+    endereco:        document.getElementById('cont-end').value.trim(),
+    segmento:        document.getElementById('cont-segmento').value,
+    status_contrato: document.getElementById('cont-status').value,
+    observacoes:     document.getElementById('cont-obs').value.trim(),
+    ativa:           true,
+  };
+
+  msgForm('msg-contratante','Salvando...','blue');
+  const idEd = document.getElementById('cont-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('empresas').update(payload).eq('id', idEd)
+    : await db.from('empresas').insert([payload]);
+  if (error) { msgForm('msg-contratante','Erro: '+error.message,'red'); return; }
+
+  msgForm('msg-contratante','✓ Empresa contratante salva!','green');
+  limparFormContratante();
+  carregarContratantes();
+});
+
+// ===== RESPONSÁVEL DE SEGURANÇA =====
+let _respCache = [];
+
+async function carregarResponsaveis() {
+  const tbody = document.getElementById('tbody-responsaveis'); if (!tbody) return;
+  const { data } = await db.from('responsaveis_seguranca').select('*').order('ativo',{ascending:false}).order('nome');
+  _respCache = data || [];
+  if (!_respCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum responsável cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _respCache.map(r => `<tr>
+    <td><strong>${r.nome}</strong></td>
+    <td style="font-size:12px;">${r.cargo || '—'}</td>
+    <td style="font-family:monospace;font-size:12px;">${r.registro_mte || '—'}</td>
+    <td style="font-size:12px;">${r.telefone || r.email || '—'}</td>
+    <td>${r.ativo
+      ? '<span class="tag-badge success">✅ Ativo</span>'
+      : `<button class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="ativarResponsavel('${r.id}')">✓ Ativar</button>`}</td>
+    <td style="display:flex;gap:4px;">
+      <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarResponsavel('${r.id}')">✏️ Editar</button>
+      <button class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirResponsavel('${r.id}','${r.nome.replace(/'/g,"\\'")}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function ativarResponsavel(id) {
+  await db.from('responsaveis_seguranca').update({ ativo: false }).neq('id','00000000-0000-0000-0000-000000000000');
+  await db.from('responsaveis_seguranca').update({ ativo: true }).eq('id', id);
+  carregarResponsaveis();
+}
+
+function editarResponsavel(id) {
+  const r = _respCache.find(x => x.id === id); if (!r) return;
+  document.getElementById('resp-id-edicao').value = id;
+  document.getElementById('resp-nome').value      = r.nome || '';
+  document.getElementById('resp-cargo').value     = r.cargo || '';
+  document.getElementById('resp-registro').value  = r.registro_mte || '';
+  document.getElementById('resp-tel').value       = r.telefone || '';
+  document.getElementById('resp-email').value     = r.email || '';
+  document.getElementById('resp-crea').value      = r.crea || '';
+  atualizarPreviewResp();
+  alternarAba('responsavel');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function excluirResponsavel(id, nome) {
+  if (!confirm(`Excluir responsável "${nome}"?`)) return;
+  await db.from('responsaveis_seguranca').delete().eq('id', id);
+  carregarResponsaveis();
+}
+
+document.getElementById('btn-salvar-responsavel')?.addEventListener('click', async () => {
+  const nome = document.getElementById('resp-nome').value.trim();
+  if (!nome) { msgForm('msg-responsavel','Informe o nome do responsável.','red'); return; }
+
+  const payload = {
+    nome,
+    cargo:        document.getElementById('resp-cargo').value.trim(),
+    registro_mte: document.getElementById('resp-registro').value.trim(),
+    telefone:     document.getElementById('resp-tel').value.trim(),
+    email:        document.getElementById('resp-email').value.trim(),
+    crea:         document.getElementById('resp-crea').value.trim(),
+    ativo:        true,
+  };
+
+  msgForm('msg-responsavel','Salvando...','blue');
+  const idEd = document.getElementById('resp-id-edicao').value;
+
+  if (idEd) {
+    const { error } = await db.from('responsaveis_seguranca').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-responsavel','Erro: '+error.message,'red'); return; }
+  } else {
+    // Desativa os demais ao criar novo ativo
+    await db.from('responsaveis_seguranca').update({ ativo: false }).neq('id','00000000-0000-0000-0000-000000000000');
+    const { error } = await db.from('responsaveis_seguranca').insert([payload]);
+    if (error) { msgForm('msg-responsavel','Erro: '+error.message,'red'); return; }
+  }
+
+  msgForm('msg-responsavel','✓ Responsável salvo com sucesso!','green');
+  document.getElementById('resp-id-edicao').value = '';
+  carregarResponsaveis();
+});
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', async () => {
+  await Promise.all([
+    carregarEmpresas('empregadora'),
+    carregarContratantes(),
+    carregarResponsaveis(),
+  ]);
+});
+</script>
+</body>
+</html>
