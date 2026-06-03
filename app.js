@@ -14,10 +14,10 @@ const itensPorPagina = 8;
 let chartOS = null, chartCrit = null, chartOSG = null;
 let modoRecuperacao = false;
 
-// Canvas assinatura
-let canvas = document.getElementById('canvas-sandbox');
-canvas = document.getElementById('canvas-assinatura');
-let ctx = canvas ? canvas.getContext('2d') : null;
+// Canvas assinatura — variáveis de escopo módulo (sem acesso ao DOM na raiz)
+// A inicialização real ocorre dentro de inicializarCanvasAssinatura()
+let canvas = null;
+let ctx    = null;
 let desenhando = false;
 
 // ===================== UTILITÁRIOS =====================
@@ -162,14 +162,12 @@ function toggleModoRecuperacao(ativar) {
 }
 
 function inicializarCanvasAssinatura() {
+  // ── ORDEM 1B: Cláusula guardiã — aborta silenciosamente se elemento ausente na página ──
   canvas = document.getElementById('canvas-assinatura');
   if (!canvas) return;
 
   ctx = canvas.getContext('2d');
 
-  // Ajusta o buffer interno do canvas ao tamanho CSS real UMA vez.
-  // IMPORTANTE: atribuir canvas.width/height apaga todo o conteúdo —
-  // isso só pode acontecer na inicialização e no resize, NUNCA durante o desenho.
   function aplicarEstiloCtx() {
     ctx.lineWidth   = 2.5;
     ctx.strokeStyle = '#1a202c';
@@ -182,19 +180,38 @@ function inicializarCanvasAssinatura() {
     if (rect.width === 0) return;
     canvas.width  = Math.round(rect.width);
     canvas.height = Math.round(rect.height);
-    aplicarEstiloCtx(); // contexto é resetado ao redimensionar
+    aplicarEstiloCtx();
   }
 
   sincronizarTamanho();
 
-  // No resize só ressincroniza se a largura mudou de fato (evita apagar em scroll)
+  // ── ORDEM 1C: Resize com preservação do conteúdo gráfico ──
+  // Em navegadores móveis, o redimensionamento ao rolar apagava os traços.
+  // Agora: captura → buffer virtual → resize → restaura.
   let larguraAnterior = canvas.width;
   window.addEventListener('resize', () => {
     const novaLargura = Math.round(canvas.getBoundingClientRect().width);
-    if (novaLargura !== larguraAnterior && novaLargura > 0) {
-      larguraAnterior = novaLargura;
-      sincronizarTamanho();
-    }
+    if (novaLargura === larguraAnterior || novaLargura <= 0) return;
+    larguraAnterior = novaLargura;
+
+    // a) Captura dimensões atuais do canvas físico
+    const wAtual = canvas.width;
+    const hAtual = canvas.height;
+
+    // b) Canvas virtual em memória como buffer de preservação
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width  = wAtual;
+    tempCanvas.height = hAtual;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // c) Copia o estado gráfico atual para o buffer virtual
+    tempCtx.drawImage(canvas, 0, 0);
+
+    // d) Reajusta o buffer físico (apaga o canvas real — inevitável)
+    sincronizarTamanho();
+
+    // e) Restaura o conteúdo salvo de volta ao canvas redimensionado
+    ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
   });
 
   // getPos: converte coordenadas de tela para coordenadas do buffer interno.
@@ -350,7 +367,7 @@ function filtrarEquipamentos(delta) {
       <td><strong>${eq.produto || '—'}</strong><br><small style="color:#a0aec0">${eq.marca || ''}</small></td>
       <td>${eq.bloco || '—'} / ${eq.setor || '—'}<br><small style="color:#a0aec0">${eq.sala || ''}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></td>
-      <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${eq.qrcode_token}','${eq.tag}')">👁️ QR</button>` : '—'}</td>
+      <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="verAtivo('${eq.id}')">👁️ QR</button>` : '—'}</td>
       <td><button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button> <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button></td>
     </tr>`;
   }).join('');
@@ -945,16 +962,21 @@ async function carregarCentralUnificadaOS() {
     status:  d.status_os  || '—',
   }));
 
-  const linhasFAC = (g || []).map(d => ({
-    codigo:  'OSG-' + d.id.toString().slice(0, 5).toUpperCase(),
-    data:    d.created_at,
-    origem:  '🏢 Facilities',
-    tipo:    d.tipo_manutencao  || d.areas_envolvidas || '—',
-    resumo:  d.servico_requisitado
-      ? d.servico_requisitado.slice(0, 60) + (d.servico_requisitado.length > 60 ? '…' : '')
-      : '—',
-    status:  d.status_os || '—',
-  }));
+  // ── ORDEM 2: Trunca "Categoria" para 25 chars — impede distorção de layout ──
+  const linhasFAC = (g || []).map(d => {
+    const tipoRaw = [d.tipo_manutencao, d.areas_envolvidas].filter(Boolean).join(' · ') || '—';
+    const tipo    = tipoRaw.length > 25 ? tipoRaw.slice(0, 25) + '…' : tipoRaw;
+    const resumoRaw = d.servico_requisitado || '—';
+    const resumo  = resumoRaw.length > 60 ? resumoRaw.slice(0, 60) + '…' : resumoRaw;
+    return {
+      codigo: 'OSG-' + d.id.toString().slice(0, 5).toUpperCase(),
+      data:   d.created_at,
+      origem: '🏢 Facilities',
+      tipo,
+      resumo,
+      status: d.status_os || '—',
+    };
+  });
 
   const todas = [...linhasAC, ...linhasFAC]
     .sort((a, b) => new Date(b.data) - new Date(a.data));
@@ -1158,29 +1180,35 @@ function imprimir(areaId, html) {
 </head>
 <body>
   ${html}
-  <script src="qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
-    // ── CORREÇÃO 5B: renderiza QR Codes localmente ANTES de window.print() ──
-    window.addEventListener('load', function() {
-      document.querySelectorAll('canvas[data-qr-text]').forEach(function(canvas) {
-        var texto = decodeURIComponent(canvas.dataset.qrText || '');
-        if (!texto) return;
-        try {
-          new QRCode(canvas, {
-            text:         texto,
-            width:        parseInt(canvas.width,  10) || 120,
-            height:       parseInt(canvas.height, 10) || 120,
-            colorDark:    '#1a202c',
-            colorLight:   '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M,
-          });
-        } catch(e) { console.warn('[QR print] Falha:', e.message); }
-      });
-      // Aguarda QR (síncrono) + fontes web (async) antes de imprimir
+    // ── PATCH 3: DOMContentLoaded garante execução imediata após parse do DOM ──
+    // Evita dependência de fontes externas pesadas (Google Fonts) que atrasam 'load'
+    // e podem causar canvas em branco na janela de impressão.
+    window.addEventListener('DOMContentLoaded', function() {
+      try {
+        // ── PATCH 2: 'elCanvas' evita shadowing da variável global 'canvas' do módulo ──
+        document.querySelectorAll('canvas[data-qr-text]').forEach(function(elCanvas) {
+          var texto = decodeURIComponent(elCanvas.dataset.qrText || '');
+          if (!texto) return;
+          try {
+            new QRCode(elCanvas, {
+              text:         texto,
+              width:        parseInt(elCanvas.width,  10) || 120,
+              height:       parseInt(elCanvas.height, 10) || 120,
+              colorDark:    '#1a202c',
+              colorLight:   '#ffffff',
+              correctLevel: QRCode.CorrectLevel.M,
+            });
+          } catch(eQr) { console.warn('[QR print] Canvas falhou:', eQr.message); }
+        });
+      } catch(eVarr) { console.warn('[QR print] Varredura falhou:', eVarr.message); }
+
+      // Delay mínimo para garantir que o canvas QR seja pintado antes do print dialog
       setTimeout(function() {
         window.print();
         window.addEventListener('afterprint', function() { window.close(); });
-      }, 600);
+      }, 400);
     });
   </script>
 </body>
