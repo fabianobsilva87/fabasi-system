@@ -3,267 +3,373 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Concredur — Verificação de Documento</title>
+  <title>Concredur — Informações do Equipamento</title>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', Arial, sans-serif; background: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 32px 16px; color: #1a202c; }
+    body { font-family: 'Inter', Arial, sans-serif; background: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px 12px 40px; color: #1a202c; }
 
-    .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); max-width: 560px; width: 100%; overflow: hidden; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.10); max-width: 600px; width: 100%; overflow: hidden; }
 
-    /* Header */
-    .header { background: #1a56db; color: #fff; padding: 24px 28px; display: flex; align-items: center; gap: 14px; }
-    .header-icon { font-size: 32px; }
-    .header h1 { font-size: 18px; font-weight: 700; }
-    .header p  { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    /* HEADER */
+    .v-header { background: #1a2e5a; color: #fff; padding: 0; }
+    .v-header-top { display: flex; align-items: center; gap: 14px; padding: 20px 22px 16px; }
+    .v-header-logo { flex-shrink: 0; }
+    .v-header-info { flex: 1; }
+    .v-header-info h1 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .65; margin-bottom: 3px; }
+    .v-header-tag  { font-size: 22px; font-weight: 900; letter-spacing: 1.5px; font-family: Arial Black, sans-serif; line-height: 1; }
+    .v-header-sub  { font-size: 12px; opacity: .7; margin-top: 3px; }
 
-    /* Status banner */
-    .status-banner { display: flex; align-items: center; gap: 12px; padding: 16px 28px; font-weight: 700; font-size: 15px; }
+    /* STATUS BANNER */
+    .status-banner { display: flex; align-items: center; gap: 10px; padding: 11px 22px; font-weight: 700; font-size: 13px; }
     .status-banner.valido   { background: #d1fae5; color: #065f46; border-bottom: 2px solid #6ee7b7; }
     .status-banner.invalido { background: #fee2e2; color: #991b1b; border-bottom: 2px solid #fca5a5; }
     .status-banner.loading  { background: #f1f5f9; color: #64748b; border-bottom: 2px solid #e2e8f0; }
-    .status-icon { font-size: 22px; }
 
-    /* Body */
-    .body { padding: 22px 28px; }
+    /* INFO GRID DO ATIVO */
+    .ativo-info { padding: 18px 22px 0; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+    .info-item label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 2px; }
+    .info-item span  { font-size: 13px; font-weight: 600; color: #1a202c; }
+    .info-item.full  { grid-column: span 2; }
+    .crit-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 800; }
+    .crit-alta  { background: #fee2e2; color: #991b1b; }
+    .crit-media { background: #fef3c7; color: #92400e; }
+    .crit-baixa { background: #d1fae5; color: #065f46; }
 
-    .field-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-bottom: 16px; }
-    .field { }
-    .field label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 2px; }
-    .field span  { font-size: 14px; font-weight: 600; color: #1a202c; }
-    .field.full  { grid-column: span 2; }
+    /* ABAS */
+    .tabs { display: flex; border-bottom: 2px solid #e2e8f0; margin: 18px 22px 0; gap: 0; }
+    .tab-btn { flex: 1; padding: 10px 6px; font-size: 12px; font-weight: 700; color: #718096; background: none; border: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .15s; letter-spacing: .02em; }
+    .tab-btn.active { color: #1a2e5a; border-bottom-color: #1a2e5a; }
+    .tab-btn:hover:not(.active) { color: #1a2e5a; background: #f8fafc; }
+    .tab-count { display: inline-block; background: #e2e8f0; color: #4a5568; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 7px; margin-left: 5px; }
+    .tab-btn.active .tab-count { background: #1a2e5a; color: #fff; }
 
-    .divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+    /* CONTEÚDO DAS ABAS */
+    .tab-content { display: none; padding: 16px 22px 20px; }
+    .tab-content.active { display: block; }
 
-    .tag-tipo { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-    .tag-pmoc { background: #dbeafe; color: #1e40af; }
-    .tag-os   { background: #ede9fe; color: #5b21b6; }
+    /* CARDS DE OS / PMOC */
+    .registro-card { border: 1.5px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+    .registro-card:last-child { margin-bottom: 0; }
+    .reg-header { background: #f8fafc; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; }
+    .reg-codigo { font-size: 13px; font-weight: 800; color: #1a2e5a; }
+    .reg-data   { font-size: 11px; color: #94a3b8; font-weight: 600; }
+    .reg-body   { padding: 12px 14px; }
+    .reg-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-bottom: 10px; }
+    .reg-field label { font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 1px; }
+    .reg-field span  { font-size: 12px; font-weight: 600; color: #1a202c; }
 
-    .checklist-mini { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-    .checklist-mini th { background: #f1f5f9; color: #64748b; padding: 5px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
-    .checklist-mini td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
-    .ok  { color: #059669; font-weight: 700; }
-    .nok { color: #dc2626; font-weight: 700; }
-    .na  { color: #a0aec0; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .badge-pmoc { background: #dbeafe; color: #1e40af; }
+    .badge-os   { background: #ede9fe; color: #5b21b6; }
+    .badge-ok   { background: #d1fae5; color: #065f46; }
+    .badge-aberta { background: #fef3c7; color: #92400e; }
+    .badge-andamento { background: #dbeafe; color: #1e40af; }
 
-    .assinatura-row { display: flex; gap: 24px; margin-top: 16px; }
-    .assinatura-box { flex: 1; text-align: center; }
-    .assinatura-box img { max-width: 160px; max-height: 55px; display: block; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 4px; }
-    .assinatura-box .linha { border-top: 1px solid #64748b; margin-top: 6px; padding-top: 4px; font-size: 10px; color: #64748b; }
+    /* CHECKLIST COMPACTO */
+    .chk-grid { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .chk-item { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+    .chk-c  { background: #d1fae5; color: #065f46; }
+    .chk-nc { background: #fee2e2; color: #991b1b; }
+    .chk-na { background: #f1f5f9; color: #94a3b8; }
 
-    .footer { padding: 14px 28px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
-    .footer a { color: #1a56db; text-decoration: none; }
+    /* LAUDO / DEFEITO */
+    .reg-texto { font-size: 12px; color: #374151; line-height: 1.6; background: #f8fafc; border-radius: 6px; padding: 8px 10px; margin-top: 8px; border-left: 3px solid #c7d5f0; }
 
-    .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #1a56db; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 32px auto; }
+    /* ASSINATURA */
+    .assinatura-mini { margin-top: 10px; border-top: 1px solid #f1f5f9; padding-top: 10px; display: flex; align-items: center; gap: 10px; }
+    .assinatura-mini img { max-height: 40px; max-width: 120px; border: 1px solid #e2e8f0; border-radius: 4px; }
+    .assinatura-mini .nome { font-size: 11px; font-weight: 700; color: #1a2e5a; }
+    .assinatura-mini .cargo { font-size: 10px; color: #94a3b8; }
+
+    /* VAZIO */
+    .vazio { text-align: center; padding: 30px 16px; color: #94a3b8; }
+    .vazio-icon { font-size: 36px; margin-bottom: 10px; }
+    .vazio p { font-size: 13px; font-weight: 600; }
+
+    /* SPINNER */
+    .spinner { width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #1a2e5a; border-radius: 50%; animation: spin .8s linear infinite; margin: 30px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    @media (max-width: 500px) {
-      .field-group { grid-template-columns: 1fr; }
-      .field.full  { grid-column: span 1; }
-      .assinatura-row { flex-direction: column; }
+    /* FOOTER */
+    .v-footer { padding: 12px 22px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
+    .v-footer a { color: #1a2e5a; font-weight: 700; text-decoration: none; }
+
+    hr.div { border: none; border-top: 1px solid #f1f5f9; margin: 10px 0; }
+
+    @media (max-width: 480px) {
+      .info-grid, .reg-grid { grid-template-columns: 1fr; }
+      .info-item.full { grid-column: span 1; }
     }
   </style>
 </head>
 <body>
 
-<div class="card">
-  <div class="header">
-    <div class="header-icon">🏗️</div>
-    <div>
-      <h1>Concredur — Verificação de Autenticidade</h1>
-      <p>Sistema de Gestão de Manutenção</p>
+<div class="card" id="card-principal">
+  <!-- Header preenchido via JS -->
+  <div id="v-header-wrapper">
+    <div class="v-header">
+      <div class="v-header-top">
+        <div class="v-header-logo">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAYAAADoByY0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyNpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ4OCwgMjAyMC8wNy8xMC0yMjowNjo1MyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIyLjAgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjM4MEYxMjVBNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjM4MEYxMjVCNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MzgwRjEyNTg1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6MzgwRjEyNTk1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6klSGIAAAP7ElEQVR42uxdCXQV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" alt="UNIVAG" style="display:block;width:120px;height:49px;">
+        </div>
+        <div class="v-header-info">
+          <h1>Manutenção Ar Condicionado</h1>
+          <div class="v-header-tag" id="header-tag">—</div>
+          <div class="v-header-sub" id="header-sub">Carregando...</div>
+        </div>
+      </div>
+    </div>
+    <div id="status-banner" class="status-banner loading">
+      <span>⏳</span><span id="status-texto">Consultando base de dados...</span>
     </div>
   </div>
 
-  <div id="status-banner" class="status-banner loading">
-    <span class="status-icon">⏳</span>
-    <span id="status-texto">Consultando base de dados...</span>
+  <!-- CORPO -->
+  <div id="corpo-principal">
+    <div class="spinner"></div>
   </div>
 
-  <div class="body" id="corpo">
-    <div class="spinner" id="spinner"></div>
-  </div>
-
-  <div class="footer">
-    Documento verificado em <strong id="data-verificacao"></strong> &nbsp;·&nbsp;
+  <div class="v-footer">
+    Verificado em <strong id="data-verificacao"></strong> &nbsp;·&nbsp;
     <a href="dashboard.html">Acessar o Sistema</a>
   </div>
 </div>
 
 <script>
-  const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
+  const SUPABASE_URL      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
   const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   document.getElementById('data-verificacao').textContent = new Date().toLocaleString('pt-BR');
 
   const params = new URLSearchParams(window.location.search);
-  const id     = params.get('id');
-  const tipo   = params.get('tipo'); // 'pmoc' ou 'os'
+  const id   = params.get('id');
+  const tipo = params.get('tipo');
+
+  const fmtDate = d => d ? new Date(d.includes('T') ? d : d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const fmtDateTime = d => d ? new Date(d).toLocaleString('pt-BR') : '—';
+
+  function setStatus(tipo, txt) {
+    const el = document.getElementById('status-banner');
+    el.className = 'status-banner ' + tipo;
+    document.getElementById('status-texto').textContent = txt;
+  }
 
   function mostrarErro(msg) {
-    document.getElementById('spinner').remove();
-    document.getElementById('status-banner').className = 'status-banner invalido';
-    document.getElementById('status-texto').textContent = msg;
-    document.getElementById('corpo').innerHTML = `
-      <p style="color:#991b1b; font-size:13px; text-align:center; padding: 20px 0;">
-        ⚠️ Não foi possível verificar este documento.<br>
-        <span style="font-size:11px; color:#a0aec0; margin-top:6px; display:block;">ID: ${id || 'não informado'} · Tipo: ${tipo || 'não informado'}</span>
-      </p>`;
+    setStatus('invalido', '⚠️ ' + msg);
+    document.getElementById('corpo-principal').innerHTML =
+      `<div class="vazio"><div class="vazio-icon">❌</div><p>${msg}</p></div>`;
   }
 
-  function fmtDate(d) {
-    if (!d) return '—';
-    return new Date(d).toLocaleDateString('pt-BR');
+  // ─────────────────────────────────────────────
+  //  MODO EQUIPAMENTO — página principal do QR
+  // ─────────────────────────────────────────────
+  async function carregarEquipamento() {
+    // Busca equipamento
+    const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', id).single();
+    if (error || !eq) { mostrarErro('Equipamento não encontrado na base de dados.'); return; }
+
+    // Busca OS e PMOC em paralelo
+    const [{ data: listaOS }, { data: listaPMOC }] = await Promise.all([
+      db.from('ordens_servico')
+        .select('*, colaboradores(nome, assinatura_digital)')
+        .eq('equipamento_id', id)
+        .order('created_at', { ascending: false }),
+      db.from('fichas_pmoc')
+        .select('*, colaboradores:tecnico_nome')
+        .eq('equipamento_id', id)
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const os   = listaOS   || [];
+    const pmoc = listaPMOC || [];
+
+    // Preenche header
+    document.getElementById('header-tag').textContent = eq.tag;
+    document.getElementById('header-sub').textContent =
+      [eq.produto, eq.marca].filter(Boolean).join(' · ') || 'Ativo cadastrado';
+    setStatus('valido', '✅ Ativo localizado e autenticado — ' + eq.tag);
+
+    const critCls = eq.criticidade === 'Alta' ? 'crit-alta' : eq.criticidade === 'Baixa' ? 'crit-baixa' : 'crit-media';
+    const catLabel = { AC:'❄️ Ar Condicionado', BEB:'💧 Bebedouro', CLIM:'🌀 Climatizador', VEN:'💨 Ventilador/Exaustor', OUT:'🔧 Outros' };
+
+    const corpo = document.getElementById('corpo-principal');
+    corpo.innerHTML = `
+      <!-- DADOS DO ATIVO -->
+      <div class="ativo-info">
+        <div class="info-grid">
+          <div class="info-item"><label>Categoria</label><span>${catLabel[eq.categoria] || '—'}</span></div>
+          <div class="info-item"><label>Criticidade</label><span class="crit-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></div>
+          <div class="info-item"><label>Marca / Fabricante</label><span>${eq.marca || '—'}</span></div>
+          <div class="info-item"><label>Modelo / Produto</label><span>${eq.produto || '—'}</span></div>
+          <div class="info-item"><label>Nº de Série</label><span>${eq.nr_serie || '—'}</span></div>
+          <div class="info-item"><label>Patrimônio</label><span>${eq.patrimonio || '—'}</span></div>
+          <div class="info-item full"><label>Localização</label><span>${[eq.bloco, eq.setor, eq.sala, eq.instituicao].filter(Boolean).join(' › ') || '—'}</span></div>
+        </div>
+      </div>
+
+      <!-- ABAS -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="trocarAba('pmoc')">
+          📋 Laudos PMOC <span class="tab-count" id="cnt-pmoc">${pmoc.length}</span>
+        </button>
+        <button class="tab-btn" onclick="trocarAba('os')">
+          🛠️ Ordens de Serviço <span class="tab-count" id="cnt-os">${os.length}</span>
+        </button>
+      </div>
+
+      <!-- ABA PMOC -->
+      <div class="tab-content active" id="tab-pmoc">
+        ${pmoc.length === 0
+          ? `<div class="vazio"><div class="vazio-icon">📋</div><p>Nenhum laudo PMOC registrado para este ativo.</p></div>`
+          : pmoc.map(f => renderCardPMOC(f)).join('')}
+      </div>
+
+      <!-- ABA OS -->
+      <div class="tab-content" id="tab-os">
+        ${os.length === 0
+          ? `<div class="vazio"><div class="vazio-icon">🛠️</div><p>Nenhuma Ordem de Serviço registrada para este ativo.</p></div>`
+          : os.map(o => renderCardOS(o)).join('')}
+      </div>
+    `;
   }
 
-  async function verificar() {
-    if (!id || !tipo) { mostrarErro('Parâmetros de verificação inválidos ou ausentes.'); return; }
+  // ─── CARD PMOC ───
+  function renderCardPMOC(f) {
+    const codigo   = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
+    const matchData  = (f.observacoes||'').match(/\[DataInspecao:\s*([^\]]+)\]/);
+    const matchFreq  = (f.observacoes||'').match(/\[Frequencia:\s*([^\]]+)\]/);
+    const matchChk   = (f.observacoes||'').match(/\[Checklist:\s*([^\]]+)\]/);
+    const matchFiscal= (f.observacoes||'').match(/\[FiscalNome:\s*([^\]]+)\]/);
+    const obsLimpa   = (f.observacoes||'').replace(/\[[^\]]+\]/g,'').trim();
+    const dataInsp   = matchData ? matchData[1] : fmtDate(f.created_at);
+    const freq       = matchFreq ? matchFreq[1] : '—';
+    const fiscal     = matchFiscal ? matchFiscal[1].trim() : '—';
+    const checklist  = matchChk ? (() => { try { return JSON.parse(matchChk[1]); } catch(e){ return {}; } })() : {};
 
-    try {
-      if (tipo === 'pmoc') {
-        const { data: f, error } = await db
-          .from('fichas_pmoc')
-          .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
-          .eq('id', id)
-          .single();
+    const labelChk = {
+      'limpeza-filtro':'Filtro','limpeza-evaporadora':'Evaporadora','limpeza-condensadora':'Condensadora',
+      'verificacao-dreno':'Dreno','verificacao-eletrica':'Elétrica','verificacao-fluido':'Fluido',
+      'teste-operacao':'Operação','verificacao-ruidos':'Ruídos','limpeza-geral':'Limpeza Geral',
+    };
+    const chkHtml = Object.entries(checklist).length
+      ? `<hr class="div"><div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Checklist</div>
+         <div class="chk-grid">${Object.entries(checklist).map(([k,v]) =>
+           `<span class="chk-item chk-${v.toLowerCase()}">${labelChk[k]||k}: ${v}</span>`
+         ).join('')}</div>` : '';
 
-        if (error || !f) { mostrarErro('Laudo PMOC não encontrado na base de dados.'); return; }
+    const assinaturaHTML = f.assinatura_digital?.startsWith('data:image')
+      ? `<div class="assinatura-mini"><img src="${f.assinatura_digital}" alt="Assinatura"><div><div class="nome">${f.tecnico_nome||'—'}</div><div class="cargo">Técnico Executor</div></div></div>`
+      : `<div class="assinatura-mini"><div style="width:100px;height:36px;border-bottom:1px dashed #cbd5e0;"></div><div><div class="nome">${f.tecnico_nome||'—'}</div><div class="cargo">Técnico Executor</div></div></div>`;
 
-        const matchData  = (f.observacoes || '').match(/\[DataInspecao:\s*([^\]]+)\]/);
-        const matchFreq  = (f.observacoes || '').match(/\[Frequencia:\s*([^\]]+)\]/);
-        const matchTipo  = (f.observacoes || '').match(/\[TipoEquipamento:\s*([^\]]+)\]/);
-        const matchChk   = (f.observacoes || '').match(/\[Checklist:\s*([^\]]+)\]/);
-        const matchFiscal = (f.observacoes || '').match(/\[FiscalNome:\s*([^\]]+)\]/);
-        const checklist  = matchChk ? (() => { try { return JSON.parse(matchChk[1]); } catch(e) { return {}; } })() : {};
-        const dataInsp   = matchData ? matchData[1] : fmtDate(f.created_at);
-        const freq       = matchFreq ? matchFreq[1] : '—';
-        const tipo_eq    = matchTipo ? matchTipo[1] : '—';
-        const fiscalNome = matchFiscal ? matchFiscal[1].trim() : '—';
-        const eq         = f.equipamentos || {};
-        const codigo     = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
-
-        const labelChk = {
-          'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora','limpeza-condensadora':'Limpeza Condensadora',
-          'verificacao-dreno':'Verificação de Dreno','verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
-          'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos','limpeza-geral':'Limpeza Geral',
-        };
-        const statusChk = { 'OK':'<span class="ok">✓ OK</span>', 'NOK':'<span class="nok">✗ NOK</span>', 'NA':'<span class="na">N/A</span>' };
-        const chkRows = Object.entries(checklist).map(([k,v]) =>
-          `<tr><td>${labelChk[k] || k}</td><td style="text-align:center;">${statusChk[v] || v}</td></tr>`
-        ).join('');
-
-        const assinaturaTecnicoHTML = f.assinatura_digital?.startsWith('data:image')
-          ? `<img src="${f.assinatura_digital}" alt="Assinatura Técnico">`
-          : `<div style="height:45px;border-bottom:1px dashed #94a3b8;"></div>`;
-        const assinaturaFiscalHTML = f.assinatura_fiscal?.startsWith('data:image')
-          ? `<img src="${f.assinatura_fiscal}" alt="Assinatura Fiscal">`
-          : `<div style="height:45px;border-bottom:1px dashed #94a3b8;"></div>`;
-
-        document.getElementById('status-banner').className = 'status-banner valido';
-        document.getElementById('status-texto').textContent = `✅ Documento autêntico — ${codigo}`;
-        document.getElementById('spinner').remove();
-        document.getElementById('corpo').innerHTML = `
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-            <span class="tag-tipo tag-pmoc">📋 PMOC</span>
-            <strong style="font-size:15px;">${codigo}</strong>
-            <span style="font-size:11px;color:#94a3b8;margin-left:auto;">Emitido em ${fmtDate(f.created_at)}</span>
+    return `
+      <div class="registro-card">
+        <div class="reg-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="badge badge-pmoc">📋 PMOC</span>
+            <span class="reg-codigo">${codigo}</span>
           </div>
-
-          <div class="field-group">
-            <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
-            <div class="field"><label>Equipamento</label><span>${eq.produto || tipo_eq}</span></div>
-            <div class="field"><label>Marca</label><span>${eq.marca || '—'}</span></div>
-            <div class="field"><label>Localização</label><span>${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—'}</span></div>
-            <div class="field"><label>Técnico Executor</label><span>${f.tecnico_nome}</span></div>
-            <div class="field"><label>Data da Inspeção</label><span>${dataInsp}</span></div>
-            <div class="field"><label>Frequência</label><span>${freq}</span></div>
-            <div class="field"><label>Fiscal / Validador</label><span>${fiscalNome}</span></div>
+          <span class="reg-data">${fmtDateTime(f.created_at)}</span>
+        </div>
+        <div class="reg-body">
+          <div class="reg-grid">
+            <div class="reg-field"><label>Data da Inspeção</label><span>${dataInsp}</span></div>
+            <div class="reg-field"><label>Frequência</label><span>${freq}</span></div>
+            <div class="reg-field"><label>Técnico Executor</label><span>${f.tecnico_nome||'—'}</span></div>
+            <div class="reg-field"><label>Fiscal / Validador</label><span>${fiscal}</span></div>
           </div>
+          ${obsLimpa ? `<div class="reg-texto">${obsLimpa}</div>` : ''}
+          ${chkHtml}
+          ${assinaturaHTML}
+        </div>
+      </div>`;
+  }
 
-          ${chkRows ? `
-          <hr class="divider">
-          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Checklist de Manutenção</div>
-          <table class="checklist-mini">
-            <thead><tr><th>Item</th><th style="text-align:center;">Status</th></tr></thead>
-            <tbody>${chkRows}</tbody>
-          </table>` : ''}
+  // ─── CARD OS ───
+  function renderCardOS(o) {
+    const codigo = 'OS-AC-' + o.id.toString().slice(0,5).toUpperCase();
+    const col    = o.colaboradores || {};
+    const stCls  = o.status_os === 'Concluída' ? 'badge-ok' : o.status_os === 'Em Andamento' ? 'badge-andamento' : 'badge-aberta';
 
-          <hr class="divider">
-          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinaturas</div>
-          <div class="assinatura-row">
-            <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${f.tecnico_nome}<br>Técnico Executor</div></div>
-            <div class="assinatura-box">${assinaturaFiscalHTML}<div class="linha">${fiscalNome}<br>Fiscal / Validador</div></div>
+    const assinaturaHTML = col.assinatura_digital?.startsWith('data:image')
+      ? `<div class="assinatura-mini"><img src="${col.assinatura_digital}" alt="Assinatura"><div><div class="nome">${col.nome||'—'}</div><div class="cargo">Técnico Responsável</div></div></div>`
+      : `<div class="assinatura-mini"><div style="width:100px;height:36px;border-bottom:1px dashed #cbd5e0;"></div><div><div class="nome">${col.nome||'—'}</div><div class="cargo">Técnico Responsável</div></div></div>`;
+
+    return `
+      <div class="registro-card">
+        <div class="reg-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="badge badge-os">🛠️ O.S.</span>
+            <span class="reg-codigo">${codigo}</span>
           </div>
-        `;
-
-      } else if (tipo === 'os') {
-        const { data: os, error } = await db
-          .from('ordens_servico')
-          .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
-          .eq('id', id)
-          .single();
-
-        if (error || !os) { mostrarErro('Ordem de Serviço não encontrada na base de dados.'); return; }
-
-        const col    = os.colaboradores || {};
-        const eq     = os.equipamentos  || {};
-        const codigo = `OS-AC-${os.id.toString().slice(0,5).toUpperCase()}`;
-
-        const statusCor = { 'Aberta':'#fef3c7','Em Andamento':'#dbeafe','Concluída':'#d1fae5' };
-        const statusTxt = { 'Aberta':'#92400e','Em Andamento':'#1e40af','Concluída':'#065f46' };
-        const st = os.status_os || 'Aberta';
-
-        const assinaturaTecnicoHTML = col.assinatura_digital?.startsWith('data:image')
-          ? `<img src="${col.assinatura_digital}" alt="Assinatura Técnico">`
-          : `<div style="height:45px;border-bottom:1px dashed #94a3b8;"></div>`;
-
-        document.getElementById('status-banner').className = 'status-banner valido';
-        document.getElementById('status-texto').textContent = `✅ Documento autêntico — ${codigo}`;
-        document.getElementById('spinner').remove();
-        document.getElementById('corpo').innerHTML = `
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-            <span class="tag-tipo tag-os">🛠️ O.S.</span>
-            <strong style="font-size:15px;">${codigo}</strong>
-            <span style="font-size:11px; font-weight:700; padding:2px 10px; border-radius:12px; margin-left:auto; background:${statusCor[st]||'#f1f5f9'}; color:${statusTxt[st]||'#374151'}">${st}</span>
+          <span class="reg-data">${fmtDateTime(o.created_at)}</span>
+        </div>
+        <div class="reg-body">
+          <div class="reg-grid">
+            <div class="reg-field"><label>Tipo de Manutenção</label><span>${o.tipo_os||'—'}</span></div>
+            <div class="reg-field"><label>Status</label><span class="badge ${stCls}">${o.status_os||'—'}</span></div>
+            <div class="reg-field"><label>Técnico Responsável</label><span>${col.nome||'—'}</span></div>
+            <div class="reg-field"><label>Data de Abertura</label><span>${fmtDate(o.created_at)}</span></div>
           </div>
+          ${o.descricao_defeito ? `<div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 3px;">Ocorrência</div><div class="reg-texto">${o.descricao_defeito}</div>` : ''}
+          ${o.laudo_tecnico    ? `<div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 3px;">Diagnóstico / Ações</div><div class="reg-texto">${o.laudo_tecnico}</div>` : ''}
+          ${assinaturaHTML}
+        </div>
+      </div>`;
+  }
 
-          <div class="field-group">
-            <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
-            <div class="field"><label>Equipamento</label><span>${eq.produto || '—'}</span></div>
-            <div class="field"><label>Localização</label><span>${[eq.bloco, eq.setor].filter(Boolean).join(' › ') || '—'}</span></div>
-            <div class="field"><label>Nº Série</label><span>${eq.nr_serie || '—'}</span></div>
-            <div class="field"><label>Técnico Responsável</label><span>${col.nome || '—'}</span></div>
-            <div class="field"><label>Tipo de Manutenção</label><span>${os.tipo_os || '—'}</span></div>
-            <div class="field full"><label>Abertura da O.S.</label><span>${fmtDate(os.created_at)}</span></div>
-          </div>
+  // ─── TROCA DE ABA ───
+  function trocarAba(aba) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-' + aba).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
 
-          ${os.descricao_defeito ? `
-          <hr class="divider">
-          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Descrição da Ocorrência</div>
-          <p style="font-size:12px;line-height:1.6;color:#374151;">${os.descricao_defeito}</p>` : ''}
+  // ─── MODO PMOC / OS (links diretos de documentos) ───
+  async function verificarDocumento() {
+    // redireciona para modo legado inline...
+    const { data: f, error } = tipo === 'pmoc'
+      ? await db.from('fichas_pmoc').select('*, equipamentos(tag,produto,marca,bloco,setor,sala)').eq('id', id).single()
+      : await db.from('ordens_servico').select('*, equipamentos(tag,produto,bloco,setor,nr_serie), colaboradores(nome,assinatura_digital)').eq('id', id).single();
 
-          ${os.laudo_tecnico ? `
-          <hr class="divider">
-          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Diagnóstico / Ações</div>
-          <p style="font-size:12px;line-height:1.6;color:#374151;">${os.laudo_tecnico}</p>` : ''}
+    if (error || !f) { mostrarErro('Documento não encontrado na base de dados.'); return; }
 
-          <hr class="divider">
-          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinatura do Técnico</div>
-          <div class="assinatura-row">
-            <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${col.nome || '—'}<br>Técnico Executor</div></div>
-          </div>
-        `;
-      } else {
-        mostrarErro('Tipo de documento desconhecido.');
-      }
-
-    } catch (err) {
-      mostrarErro('Erro ao consultar: ' + err.message);
+    if (tipo === 'pmoc') {
+      const eq = f.equipamentos || {};
+      const matchData  = (f.observacoes||'').match(/\[DataInspecao:\s*([^\]]+)\]/);
+      const matchFreq  = (f.observacoes||'').match(/\[Frequencia:\s*([^\]]+)\]/);
+      const matchFiscal= (f.observacoes||'').match(/\[FiscalNome:\s*([^\]]+)\]/);
+      const codigo = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
+      document.getElementById('header-tag').textContent = eq.tag || codigo;
+      document.getElementById('header-sub').textContent = 'Laudo PMOC — ' + (eq.produto||'Equipamento');
+      setStatus('valido', '✅ Documento autêntico — ' + codigo);
+      document.getElementById('corpo-principal').innerHTML = renderCardPMOC(f);
+    } else {
+      const eq = f.equipamentos || {};
+      const codigo = 'OS-AC-' + f.id.toString().slice(0,5).toUpperCase();
+      document.getElementById('header-tag').textContent = eq.tag || codigo;
+      document.getElementById('header-sub').textContent = 'Ordem de Serviço — ' + (eq.produto||'Equipamento');
+      setStatus('valido', '✅ Documento autêntico — ' + codigo);
+      document.getElementById('corpo-principal').innerHTML = renderCardOS(f);
     }
   }
 
-  verificar();
+  // ─── ROTEAMENTO ───
+  async function init() {
+    if (!id) { mostrarErro('ID não informado na URL.'); return; }
+    if (tipo === 'equipamento') {
+      await carregarEquipamento();
+    } else if (tipo === 'pmoc' || tipo === 'os') {
+      await verificarDocumento();
+    } else {
+      mostrarErro('Tipo de documento desconhecido: ' + (tipo||'não informado'));
+    }
+  }
+
+  init();
 </script>
 </body>
 </html>
