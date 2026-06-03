@@ -315,10 +315,21 @@ if ($('btn-salvar')) {
     if ($('eq-potencia')?.value) payload.potencia = $('eq-potencia').value.trim();
     if ($('eq-validade')?.value) payload.validade = $('eq-validade').value.trim();
 
-    const { error } = await db.from('equipamentos').insert([payload]);
+    const { data: novoEq, error } = await db.from('equipamentos').insert([payload]).select().single();
     if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
-    msgForm('msg-equipamento', '✓ Equipamento salvo!', 'green');
-    setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
+
+    // Gera o token de QR e salva no registro
+    const qrToken = `EQ-${novoEq.id}`;
+    await db.from('equipamentos').update({ qrcode_token: qrToken }).eq('id', novoEq.id);
+
+    msgForm('msg-equipamento', '✓ Equipamento salvo com sucesso!', 'green');
+
+    // Exibe etiqueta se a função existir (página equipamentos.html)
+    if (typeof exibirEtiqueta === 'function') {
+      exibirEtiqueta({ ...novoEq, ...payload, id: novoEq.id, qrcode_token: qrToken });
+    } else {
+      setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
+    }
   });
 }
 

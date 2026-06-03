@@ -331,9 +331,130 @@
           <p id="msg-equipamento" class="msg-form"></p>
 
         </div><!-- .card -->
+
+        <!-- ===== ETIQUETA QR-CODE (exibida após salvar) ===== -->
+        <div id="secao-etiqueta" style="display:none;" class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+            <h3 class="card-title" style="margin:0;">🏷️ Etiqueta do Equipamento</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-primary" onclick="imprimirEtiqueta()">🖨️ Imprimir Etiqueta</button>
+              <button class="btn-secondary" onclick="location.href='gerir-equipamentos.html'">⚙️ Ver Inventário</button>
+              <button class="btn-secondary" onclick="novoEquipamento()">➕ Novo Equipamento</button>
+            </div>
+          </div>
+
+          <!-- Preview da etiqueta na tela -->
+          <div style="display:flex;justify-content:center;padding:16px 0;">
+            <div id="etiqueta-preview" class="etiqueta-wrapper">
+              <!-- Preenchida via JS após salvar -->
+            </div>
+          </div>
+
+          <p style="font-size:12px;color:#718096;text-align:center;margin-top:8px;">
+            📱 Aponte a câmera do celular para o QR-Code para acessar as informações do equipamento.
+          </p>
+        </div>
+
       </div><!-- .section-content -->
     </main>
   </div>
+
+  <style>
+    /* ===== ETIQUETA ESTILO UNIVAG ===== */
+    .etiqueta-wrapper {
+      width: 380px;
+      border: 3px solid #1a2e5a;
+      border-radius: 10px;
+      overflow: hidden;
+      font-family: 'Inter', Arial, sans-serif;
+      background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,.15);
+    }
+    .etiqueta-header {
+      background: #1a2e5a;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0;
+      border-bottom: 2px solid #2563eb;
+      min-height: 72px;
+    }
+    .etiqueta-header-logo-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 14px;
+      flex-shrink: 0;
+    }
+    .etiqueta-header-divider {
+      width: 2px; align-self: stretch; background: rgba(255,255,255,.35); margin: 8px 0;
+    }
+    .etiqueta-header-title {
+      font-size: 14px; font-weight: 800; line-height: 1.25; text-transform: uppercase;
+      letter-spacing: .04em; padding: 10px 14px; flex: 1;
+    }
+    .etiqueta-body {
+      padding: 14px 16px 12px;
+    }
+    .etiqueta-tag-row {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+    }
+    .etiqueta-tag-badge {
+      background: #1a2e5a; color: #fff; font-size: 20px; font-weight: 800;
+      padding: 4px 16px; border-radius: 6px; letter-spacing: 1px;
+      font-family: 'Rajdhani', sans-serif;
+    }
+    .etiqueta-cat-badge {
+      font-size: 11px; font-weight: 700; color: #1a2e5a; background: #e8edf8;
+      padding: 3px 10px; border-radius: 20px; border: 1.5px solid #c7d5f0;
+    }
+    .etiqueta-info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 12px;
+    }
+    .etiqueta-info-item { display: flex; flex-direction: column; }
+    .etiqueta-info-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      color: #718096; margin-bottom: 1px;
+    }
+    .etiqueta-info-value {
+      font-size: 12px; font-weight: 600; color: #1a202c;
+    }
+    .etiqueta-divider {
+      height: 1.5px; background: linear-gradient(90deg, #1a2e5a 60%, transparent);
+      border-radius: 2px; margin: 10px 0;
+    }
+    .etiqueta-qr-row {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .etiqueta-qr-img {
+      border: 2px solid #1a2e5a; border-radius: 6px; padding: 3px; background: #fff;
+      flex-shrink: 0;
+    }
+    .etiqueta-qr-info { flex: 1; }
+    .etiqueta-qr-title {
+      font-size: 11px; font-weight: 800; color: #1a2e5a; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: 4px;
+    }
+    .etiqueta-qr-desc {
+      font-size: 10px; color: #4a5568; line-height: 1.4;
+    }
+    .etiqueta-footer {
+      background: #1a2e5a; color: rgba(255,255,255,.7);
+      font-size: 9px; text-align: center; padding: 5px 10px;
+      letter-spacing: .04em;
+    }
+    /* Print */
+    @media print {
+      .no-print, .sidebar, .topbar { display: none !important; }
+      .main-content { margin: 0 !important; padding: 0 !important; }
+      .section-content { padding: 0 !important; }
+      #secao-etiqueta { display: block !important; border: none !important; box-shadow: none !important; }
+      #secao-etiqueta > div:first-child { display: none !important; }
+      .card:not(#secao-etiqueta) { display: none !important; }
+      .etiqueta-wrapper { box-shadow: none !important; margin: 0 auto; }
+    }
+  </style>
 
   <script src="app.js"></script>
   <script>
@@ -341,6 +462,101 @@
     window.addEventListener('DOMContentLoaded', () => {
       toggleCamposEquipamento();
     });
+
+    const EQ_CAT_ICONE = { AC: '❄️', BEB: '💧', CLIM: '🌀', VEN: '💨', OUT: '🔧' };
+    const EQ_CAT_NOME  = { AC: 'Ar Condicionado', BEB: 'Bebedouro', CLIM: 'Climatizador', VEN: 'Ventilador/Exaustor', OUT: 'Outros' };
+
+    function exibirEtiqueta(eq) {
+      const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
+      const urlVerificar = `${baseUrl}/verificar.html?id=${eq.id}&tipo=equipamento`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(urlVerificar)}&format=png&margin=4&color=1a2e5a`;
+      const criCor = eq.criticidade === 'Alta' ? '#dc2626' : eq.criticidade === 'Baixa' ? '#059669' : '#d97706';
+      const dataCadastro = new Date().toLocaleDateString('pt-BR');
+      const cat = eq.categoria || 'OUT';
+
+      const html = `
+        <div class="etiqueta-header">
+          <div class="etiqueta-header-logo-area">
+            <!-- Logo UNIVAG recriada em SVG fiel ao original -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 56" width="140" height="56" aria-label="UNIVAG">
+              <!-- Elipse externa (borda branca) -->
+              <ellipse cx="70" cy="28" rx="68" ry="26" fill="none" stroke="white" stroke-width="3.2"/>
+              <!-- Elipse interna (linha branca decorativa) -->
+              <ellipse cx="70" cy="28" rx="63" ry="21" fill="none" stroke="white" stroke-width="1.2"/>
+              <!-- Texto UNIVAG em negrito branco, centralizado -->
+              <text x="70" y="36"
+                font-family="Arial Black, Arial, sans-serif"
+                font-size="24"
+                font-weight="900"
+                fill="white"
+                text-anchor="middle"
+                letter-spacing="1">UNIVAG</text>
+            </svg>
+          </div>
+          <div class="etiqueta-header-divider"></div>
+          <div class="etiqueta-header-title">Manutenção<br>Ar Condicionado</div>
+        </div>
+        <div class="etiqueta-body">
+          <div class="etiqueta-tag-row">
+            <span class="etiqueta-tag-badge">${eq.tag}</span>
+            <span class="etiqueta-cat-badge">${EQ_CAT_ICONE[cat] || '🔧'} ${EQ_CAT_NOME[cat] || 'Equipamento'}</span>
+          </div>
+          <div class="etiqueta-info-grid">
+            <div class="etiqueta-info-item">
+              <span class="etiqueta-info-label">Marca / Fabricante</span>
+              <span class="etiqueta-info-value">${eq.marca || '—'}</span>
+            </div>
+            <div class="etiqueta-info-item">
+              <span class="etiqueta-info-label">Modelo / Produto</span>
+              <span class="etiqueta-info-value">${eq.produto || '—'}</span>
+            </div>
+            <div class="etiqueta-info-item">
+              <span class="etiqueta-info-label">Localização</span>
+              <span class="etiqueta-info-value">${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—'}</span>
+            </div>
+            <div class="etiqueta-info-item">
+              <span class="etiqueta-info-label">Criticidade</span>
+              <span class="etiqueta-info-value" style="color:${criCor};font-weight:800;">Classe ${eq.criticidade || 'Média'}</span>
+            </div>
+            ${eq.nr_serie ? `<div class="etiqueta-info-item"><span class="etiqueta-info-label">Nº de Série</span><span class="etiqueta-info-value">${eq.nr_serie}</span></div>` : ''}
+            <div class="etiqueta-info-item">
+              <span class="etiqueta-info-label">Cadastro</span>
+              <span class="etiqueta-info-value">${dataCadastro}</span>
+            </div>
+          </div>
+          <div class="etiqueta-divider"></div>
+          <div class="etiqueta-qr-row">
+            <img class="etiqueta-qr-img" src="${qrUrl}" width="110" height="110" alt="QR Code">
+            <div class="etiqueta-qr-info">
+              <div class="etiqueta-qr-title">📱 Informações do Ativo</div>
+              <div class="etiqueta-qr-desc">
+                Aponte a câmera do celular para verificar histórico de manutenções, especificações técnicas e dados completos deste equipamento.
+              </div>
+              <div style="margin-top:6px;font-size:9px;color:#a0aec0;word-break:break-all;">${urlVerificar}</div>
+            </div>
+          </div>
+        </div>
+        <div class="etiqueta-footer">
+          Sistema Concredur · Gestão de Manutenção · ${dataCadastro}
+        </div>
+      `;
+
+      document.getElementById('etiqueta-preview').innerHTML = html;
+      document.getElementById('secao-etiqueta').style.display = 'block';
+      document.getElementById('secao-etiqueta').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function imprimirEtiqueta() {
+      window.print();
+    }
+
+    function novoEquipamento() {
+      document.getElementById('secao-etiqueta').style.display = 'none';
+      document.getElementById('eq-categoria').value = '';
+      toggleCamposEquipamento();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('msg-equipamento').innerText = '';
+    }
   </script>
 </body>
 </html>
