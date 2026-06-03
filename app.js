@@ -315,37 +315,16 @@ if ($('btn-salvar')) {
     if ($('eq-potencia')?.value) payload.potencia = $('eq-potencia').value.trim();
     if ($('eq-validade')?.value) payload.validade = $('eq-validade').value.trim();
 
-    const { data: novoEq, error } = await db.from('equipamentos').insert([payload]).select().single();
+    const { error } = await db.from('equipamentos').insert([payload]);
     if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
-
-    // Gera o token de QR e salva no registro
-    const qrToken = `EQ-${novoEq.id}`;
-    await db.from('equipamentos').update({ qrcode_token: qrToken }).eq('id', novoEq.id);
-
-    msgForm('msg-equipamento', '✓ Equipamento salvo com sucesso!', 'green');
-
-    // Exibe etiqueta se a função existir (página equipamentos.html)
-    if (typeof exibirEtiqueta === 'function') {
-      exibirEtiqueta({ ...novoEq, ...payload, id: novoEq.id, qrcode_token: qrToken });
-    } else {
-      setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
-    }
+    msgForm('msg-equipamento', '✓ Equipamento salvo!', 'green');
+    setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
   });
 }
 
 async function carregarEquipamentos() {
   const { data } = await db.from('equipamentos').select('*').order('tag', { ascending: true });
-  globalEquipamentos = data || [];
-
-  // Gera qrcode_token para equipamentos que ainda não têm
-  const semToken = (data || []).filter(e => !e.qrcode_token);
-  for (const eq of semToken) {
-    const token = 'EQ-' + eq.id;
-    await db.from('equipamentos').update({ qrcode_token: token }).eq('id', eq.id);
-    eq.qrcode_token = token; // atualiza local também
-  }
-
-  filtrarEquipamentos(0); atualizarSelectEquipamentos();
+  globalEquipamentos = data || []; filtrarEquipamentos(0); atualizarSelectEquipamentos();
 }
 
 function filtrarEquipamentos(delta) {
@@ -366,21 +345,13 @@ function filtrarEquipamentos(delta) {
   if (!slice.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum ativo encontrado.</td></tr>'; return; }
   tbody.innerHTML = slice.map(eq => {
     const critCls = eq.criticidade === 'Alta' ? 'danger' : eq.criticidade === 'Baixa' ? 'success' : '';
-    const btnEtiqueta = eq.qrcode_token
-      ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;background:#0f6e56;" onclick="imprimirEtiquetaGerenciamento(globalEquipamentos.find(e=>e.id==='${eq.id}'))">🖨️</button>`
-      : '';
     return `<tr>
       <td><span class="tag-badge">${eq.tag}</span></td>
       <td><strong>${eq.produto || '—'}</strong><br><small style="color:#a0aec0">${eq.marca || ''}</small></td>
       <td>${eq.bloco || '—'} / ${eq.setor || '—'}<br><small style="color:#a0aec0">${eq.sala || ''}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></td>
       <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${eq.qrcode_token}','${eq.tag}')">👁️ QR</button>` : '—'}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap;">
-        <button class="btn-primary" style="padding:3px 8px;font-size:11px;background:#2563eb;" onclick="verAtivo('${eq.id}')">👁️ Ver</button>
-        ${btnEtiqueta}
-        <button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✏️</button>
-        <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button>
-      </td>
+      <td><button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button> <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -389,11 +360,19 @@ async function excluirEquipamento(id) { if (confirm('Remover ativo?')) { await d
 function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id; }
 
 async function atualizarSelectEquipamentos() {
+  // ── CORREÇÃO 2B: inclui osg-equipamento no ciclo de população ──
   const { data } = await db.from('equipamentos').select('id, tag, produto, categoria');
-  ['pmoc-equipamento', 'os-equipamento'].map($).filter(Boolean).forEach(sel => {
-    sel.innerHTML = '<option value="">-- Selecione o Ativo --</option>';
+  ['pmoc-equipamento', 'os-equipamento', 'osg-equipamento'].map($).filter(Boolean).forEach(sel => {
+    const isOSG = sel.id === 'osg-equipamento';
+    sel.innerHTML = isOSG
+      ? '<option value="">-- Nenhum / Não aplicável --</option>'
+      : '<option value="">-- Selecione o Ativo --</option>';
     (data || []).forEach(e => {
-      const opt = document.createElement('option'); opt.value = e.id; opt.textContent = `${e.tag} — ${e.produto || ''}`; opt.dataset.categoria = e.categoria || 'OUT'; sel.appendChild(opt);
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      opt.textContent = `${e.tag} — ${e.produto || ''}`;
+      opt.dataset.categoria = e.categoria || 'OUT';
+      sel.appendChild(opt);
     });
   });
 }
@@ -481,7 +460,11 @@ if ($('btn-salvar-colaborador')) {
   $('btn-salvar-colaborador').addEventListener('click', async () => {
     const nome = $('colab-nome')?.value.trim();
     const cpf  = $('colab-cpf')?.value.trim();
-    if (!nome || !cpf || !validarCPF(cpf)) { msgForm('msg-colaborador', 'Verifique o nome e o CPF informado.', 'red'); return; }
+    // ── CORREÇÃO 4B: rejeição defensiva — exige mínimo 11 dígitos numéricos antes de validar ──
+    const cpfDigitos = cpf ? cpf.replace(/\D/g, '') : '';
+    if (!nome) { msgForm('msg-colaborador', 'Informe o nome do colaborador.', 'red'); return; }
+    if (cpfDigitos.length < 11) { msgForm('msg-colaborador', 'CPF incompleto — informe os 11 dígitos.', 'red'); return; }
+    if (!validarCPF(cpf)) { msgForm('msg-colaborador', 'CPF inválido — verifique os dígitos informados.', 'red'); return; }
 
     msgForm('msg-colaborador', 'Salvando...', 'blue');
 
@@ -557,7 +540,15 @@ if ($('btn-salvar-ficha')) {
     }
     
     const obsCompleto = `[DataInspecao: ${dataInsp}]\n[Frequencia: ${freq === 'M' ? 'Mensal' : freq === 'T' ? 'Trimestral' : freq === 'S' ? 'Semestral' : 'Anual'}]\n[TipoEquipamento: ${cat}]\n[Checklist: ${JSON.stringify(checklistResult)}]\n[FiscalNome: ${fiscal_nome}]\n${$('pmoc-obs')?.value.trim() || ''}`;
-    const foto_url = await uploadFoto($('pmoc-foto')?.files[0], 'pmoc', 'msg-ficha');
+    // ── CORREÇÃO 1: Isola acesso a .files — evita TypeError em páginas sem o input ──
+    const _inputFotoPMOC = $('pmoc-foto');
+    const foto_url = await uploadFoto(
+      (_inputFotoPMOC && _inputFotoPMOC.files && _inputFotoPMOC.files.length > 0)
+        ? _inputFotoPMOC.files[0]
+        : null,
+      'pmoc',
+      'msg-ficha'
+    );
     const { data: colab } = await db.from('colaboradores').select('nome, assinatura_digital').eq('id', tecnico_id).single();
     const { data: { user } } = await db.auth.getUser();
 
@@ -663,13 +654,10 @@ function emitirRelatorioPMOC(b64) {
 
   const html = `
   <div class="laudo-wrapper">
-    <div class="laudo-header" style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAYAAADoByY0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyNpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ4OCwgMjAyMC8wNy8xMC0yMjowNjo1MyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIyLjAgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjM4MEYxMjVBNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjM4MEYxMjVCNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MzgwRjEyNTg1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6MzgwRjEyNTk1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6klSGIAAAP7ElEQVR42uxdCXQV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" alt="UNIVAG" style="display:block;width:130px;height:53px;flex-shrink:0;">
-        <div>
-          <div style="font-size:15px;font-weight:800;line-height:1.2;">Manutenção Ar Condicionado</div>
-          <div style="font-size:11px;opacity:.8;margin-top:2px;">Plano de Manutenção, Operação e Controle — PMOC</div>
-        </div>
+    <div class="laudo-header">
+      <div>
+        <h1>🏗️ PMOC — CONCREDUR</h1>
+        <p>Plano de Manutenção, Operação e Controle</p>
       </div>
       <div class="laudo-header-meta">
         <strong>Código: L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}</strong><br>
@@ -766,13 +754,10 @@ function emitirRelatorioOS(os) {
 
   const html = `
   <div class="laudo-wrapper">
-    <div class="laudo-header" style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAYAAADoByY0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyNpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ4OCwgMjAyMC8wNy8xMC0yMjowNjo1MyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIyLjAgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjM4MEYxMjVBNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjM4MEYxMjVCNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MzgwRjEyNTg1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6MzgwRjEyNTk1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6klSGIAAAP7ElEQVR42uxdCXQV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" alt="UNIVAG" style="display:block;width:130px;height:53px;flex-shrink:0;">
-        <div>
-          <div style="font-size:15px;font-weight:800;line-height:1.2;">Manutenção Ar Condicionado</div>
-          <div style="font-size:11px;opacity:.8;margin-top:2px;">Ordem de Serviço — Registro Técnico de Manutenção</div>
-        </div>
+    <div class="laudo-header">
+      <div>
+        <h1>🛠️ Ordem de Serviço — CONCREDUR</h1>
+        <p>Registro Técnico de Manutenção</p>
       </div>
       <div class="laudo-header-meta">
         <strong>Código: ${codigoOS}</strong><br>
@@ -873,9 +858,45 @@ async function carregarOrdensServico() {
 // ===================== FACILITIES =====================
 if ($('btn-salvar-osg')) {
   $('btn-salvar-osg').addEventListener('click', async () => {
-    const payload = { setor: $('osg-setor').value, servico_requisitado: $('osg-requisitado').value, falha_relatada: $('osg-falha').value, status_os: $('osg-status').value };
-    const { error } = await db.from('ordens_servico_geral').insert([payload]);
-    if (!error) { resetarFormOSG(); carregarOSGeral(); carregarCentralUnificadaOS(); }
+    // ── CORREÇÃO 2C: payload completo com tipo (radio), áreas (checkboxes) e FK de equipamento ──
+
+    // Captura o radio marcado para tipo de intervenção
+    const tipoMarcado = document.querySelector('input[name="osg-tipo"]:checked');
+    const tipo_manutencao = tipoMarcado ? tipoMarcado.value : null;
+
+    // Captura todos os checkboxes de área marcados e converte em string CSV
+    const areasMarcadas = Array.from(
+      document.querySelectorAll('input[name="osg-area"]:checked')
+    ).map(cb => cb.value);
+    const areas_envolvidas = areasMarcadas.length > 0 ? areasMarcadas.join(', ') : null;
+
+    // Captura a FK do equipamento a partir do <select>
+    const equipamentoSelectOSG = $('osg-equipamento');
+    const equipamento_id = (equipamentoSelectOSG && equipamentoSelectOSG.value)
+      ? equipamentoSelectOSG.value
+      : null;
+
+    const payload = {
+      setor:               $('osg-setor')?.value?.trim()       || null,
+      servico_requisitado: $('osg-requisitado')?.value?.trim() || null,
+      falha_relatada:      $('osg-falha')?.value?.trim()       || null,
+      status_os:           $('osg-status')?.value              || 'Aberta',
+      tipo_manutencao,
+      areas_envolvidas,
+      equipamento_id,
+      colaborador_id:      ($('osg-tecnico')?.value)           || null,
+    };
+
+    const idEd = $('osg-id-edicao')?.value;
+    const { error } = idEd
+      ? await db.from('ordens_servico_geral').update(payload).eq('id', idEd)
+      : await db.from('ordens_servico_geral').insert([payload]);
+
+    if (error) { msgForm('msg-osg', 'Erro: ' + error.message, 'red'); return; }
+    msgForm('msg-osg', idEd ? '✓ O.S. Facilities atualizada!' : '✓ Ordem Facilities registrada!', 'green');
+    resetarFormOSG();
+    carregarOSGeral();
+    carregarCentralUnificadaOS();
   });
 }
 async function carregarOSGeral() {
@@ -894,11 +915,64 @@ async function carregarOSGeral() {
 }
 
 async function carregarCentralUnificadaOS() {
-  const tbody = $('tbody-central-unificada-os'); if (!tbody) return;
-  const { data: ac } = await db.from('ordens_servico').select('id,created_at,tipo_os,status_os,descricao_defeito').limit(20);
-  const { data: g } = await db.from('ordens_servico_geral').select('id,created_at,tipo_manutencao,status_os,servico_requisitado,numero_os').limit(20);
-  const linhas = [...(ac || []).map(d => ({ id:'OS-AC-'+d.id.toString().slice(0,5).toUpperCase(), data:d.created_at, mod:'Refrigeração', cat:d.tipo_os, st:d.status_os })), ...(g || []).map(d => ({ id:d.numero_os||'OSG', data:d.created_at, mod:'Facilities', cat:d.tipo_manutencao, st:d.status_os }))].sort((a,b) => new Date(b.data) - new Date(a.data));
-  tbody.innerHTML = linhas.map(l => `<tr><td><strong>${l.id}</strong></td><td>${fmtDate(l.data)}</td><td>${l.mod}</td><td>${l.cat || '—'}</td><td>${statusBadge(l.st)}</td></tr>`).join('');
+  // ── CORREÇÃO 3: query limpa (sem colunas inexistentes) + exatamente 6 <td> simétricas ──
+  const tbody = $('tbody-central-unificada-os');
+  if (!tbody) return;
+
+  // Colunas garantidamente existentes em ordens_servico
+  const { data: ac } = await db
+    .from('ordens_servico')
+    .select('id, created_at, tipo_os, status_os, descricao_defeito')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  // Colunas garantidamente existentes em ordens_servico_geral
+  const { data: g } = await db
+    .from('ordens_servico_geral')
+    .select('id, created_at, status_os, servico_requisitado, tipo_manutencao, areas_envolvidas')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  // Normaliza as duas fontes para o mesmo shape de 6 campos
+  const linhasAC = (ac || []).map(d => ({
+    codigo:  'OS-AC-' + d.id.toString().slice(0, 5).toUpperCase(),
+    data:    d.created_at,
+    origem:  '❄️ Climatização',
+    tipo:    d.tipo_os    || '—',
+    resumo:  d.descricao_defeito
+      ? d.descricao_defeito.slice(0, 60) + (d.descricao_defeito.length > 60 ? '…' : '')
+      : '—',
+    status:  d.status_os  || '—',
+  }));
+
+  const linhasFAC = (g || []).map(d => ({
+    codigo:  'OSG-' + d.id.toString().slice(0, 5).toUpperCase(),
+    data:    d.created_at,
+    origem:  '🏢 Facilities',
+    tipo:    d.tipo_manutencao  || d.areas_envolvidas || '—',
+    resumo:  d.servico_requisitado
+      ? d.servico_requisitado.slice(0, 60) + (d.servico_requisitado.length > 60 ? '…' : '')
+      : '—',
+    status:  d.status_os || '—',
+  }));
+
+  const todas = [...linhasAC, ...linhasFAC]
+    .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  if (!todas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum registro encontrado.</td></tr>';
+    return;
+  }
+
+  // Exatamente 6 <td> por linha — simétrico com os 6 <th> do cabeçalho em os.html
+  tbody.innerHTML = todas.map(l => `<tr>
+    <td><strong>${l.codigo}</strong></td>
+    <td>${fmtDate(l.data)}</td>
+    <td>${l.origem}</td>
+    <td>${l.tipo}</td>
+    <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${l.resumo}">${l.resumo}</td>
+    <td>${statusBadge(l.status)}</td>
+  </tr>`).join('');
 }
 
 // ===================== GESTÃO DE USUÁRIOS (ROTA MÓVEL WHATSAPP) =====================
@@ -976,12 +1050,52 @@ function alternarSubAbasPMOC(m) { if($('sub-pmoc-form'))$('sub-pmoc-form').style
 function alternarSubAbasOS(m) { if($('sub-os-ac'))$('sub-os-ac').style.display=m==='ac'?'block':'none'; if($('sub-os-fac'))$('sub-os-fac').style.display=m==='fac'?'block':'none'; if($('sub-os-central'))$('sub-os-central').style.display=m==='central'?'block':'none'; if(m==='central')carregarCentralUnificadaOS(); }
 function alternarSubAbasRH(m) { if($('sub-rh-usuarios'))$('sub-rh-usuarios').style.display=m==='usuarios'?'block':'none'; if($('sub-rh-colab'))$('sub-rh-colab').style.display=m==='colab'?'block':'none'; if($('sub-rh-cargo'))$('sub-rh-cargo').style.display=m==='cargo'?'block':'none'; }
 function resetarFormOS() { ['os-defeito','os-laudo','os-id-edicao'].forEach(id => { if($(id)) $(id).value=''; }); }
-function resetarFormOSG() { ['osg-setor','osg-requisitado','osg-falha'].forEach(id => { if($(id)) $(id).value=''; }); }
+function resetarFormOSG() {
+  // ── CORREÇÃO 2D: reseta todos os campos do formulário OSG ──
+  ['osg-setor', 'osg-requisitado', 'osg-falha', 'osg-id-edicao'].forEach(id => {
+    if ($(id)) $(id).value = '';
+  });
+  // Reseta radios de tipo — volta ao padrão "Preventiva"
+  document.querySelectorAll('input[name="osg-tipo"]').forEach(r => {
+    r.checked = (r.value === 'Preventiva');
+  });
+  // Desmarca checkboxes de área
+  document.querySelectorAll('input[name="osg-area"]').forEach(cb => { cb.checked = false; });
+  // Reseta select de equipamento e status
+  if ($('osg-equipamento')) $('osg-equipamento').value = '';
+  if ($('osg-status'))      $('osg-status').value      = 'Aberta';
+  if ($('osg-tecnico'))     $('osg-tecnico').value      = '';
+}
 
+// ── CORREÇÃO 5A: QR Code 100% local/offline — sem dependência de api.qrserver.com ──
 function gerarQrCodeSVG(texto, tamanho = 120) {
-  // QR Code gerado via API pública — sem dependência extra no bundle
-  const url = `https://api.qrserver.com/v1/create-qr-code/?size=${tamanho}x${tamanho}&data=${encodeURIComponent(texto)}&format=svg&margin=4`;
-  return `<img src="${url}" width="${tamanho}" height="${tamanho}" alt="QR Code de Validação" style="display:block;border:1px solid #e2e8f0;border-radius:4px;background:#fff;">`;
+  // Gera um <canvas> com data-attr para ser hidratado por renderizarQRCodesLocais()
+  // O uid garante que múltiplos QR codes na mesma janela não colidam
+  const uid = 'qr-' + Math.random().toString(36).slice(2, 9);
+  return `<canvas id="${uid}" width="${tamanho}" height="${tamanho}"
+    data-qr-text="${encodeURIComponent(texto)}"
+    style="display:block;border:1px solid #e2e8f0;border-radius:4px;background:#fff;">
+  </canvas>`;
+}
+
+// Hidrata todos os <canvas data-qr-text> de um documento (janela de impressão ou página principal)
+function renderizarQRCodesLocais(docNode) {
+  (docNode || document).querySelectorAll('canvas[data-qr-text]').forEach(canvas => {
+    const texto = decodeURIComponent(canvas.dataset.qrText || '');
+    if (!texto) return;
+    try {
+      new QRCode(canvas, {
+        text:         texto,
+        width:        parseInt(canvas.width,  10) || 120,
+        height:       parseInt(canvas.height, 10) || 120,
+        colorDark:    '#1a202c',
+        colorLight:   '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+    } catch (err) {
+      console.warn('[QR local] Falha ao renderizar QR Code:', err.message);
+    }
+  });
 }
 
 function gerarUrlValidacao(id, tipo) {
@@ -1044,13 +1158,29 @@ function imprimir(areaId, html) {
 </head>
 <body>
   ${html}
+  <script src="qrcode.min.js"></script>
   <script>
-    // Aguarda fontes e imagens carregarem antes de imprimir
+    // ── CORREÇÃO 5B: renderiza QR Codes localmente ANTES de window.print() ──
     window.addEventListener('load', function() {
+      document.querySelectorAll('canvas[data-qr-text]').forEach(function(canvas) {
+        var texto = decodeURIComponent(canvas.dataset.qrText || '');
+        if (!texto) return;
+        try {
+          new QRCode(canvas, {
+            text:         texto,
+            width:        parseInt(canvas.width,  10) || 120,
+            height:       parseInt(canvas.height, 10) || 120,
+            colorDark:    '#1a202c',
+            colorLight:   '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+          });
+        } catch(e) { console.warn('[QR print] Falha:', e.message); }
+      });
+      // Aguarda QR (síncrono) + fontes web (async) antes de imprimir
       setTimeout(function() {
         window.print();
         window.addEventListener('afterprint', function() { window.close(); });
-      }, 400);
+      }, 600);
     });
   </script>
 </body>
@@ -1520,3 +1650,14 @@ if ($('btn-cancelar-edicao-osg')) {
     if (btnCancelar) btnCancelar.style.display = 'none';
   });
 }
+
+// ===================== CORREÇÃO 4A: MÁSCARA GLOBAL COERCITIVA DE CPF =====================
+// Listener delegado no document — formata dinamicamente qualquer elemento com classe .input-cpf
+document.addEventListener('input', function (e) {
+  if (!e.target.classList.contains('input-cpf')) return;
+  let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+  if      (v.length > 9) v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{1,3})$/,        '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/^(\d{3})(\d{1,3})$/,               '$1.$2');
+  e.target.value = v;
+});
