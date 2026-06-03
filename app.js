@@ -3,8 +3,8 @@
 //   A ANON KEY abaixo é segura para o front-end pois é somente leitura pública.
 //   O acesso real aos dados é controlado por Row Level Security (RLS) no Supabase.
 //   NUNCA exponha a SERVICE_ROLE_KEY no front-end.
-const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
+const SUPABASE_URL      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===================== ESTADO GLOBAL =====================
