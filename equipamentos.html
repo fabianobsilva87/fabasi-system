@@ -608,8 +608,95 @@
 
   <script src="app.js"></script>
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       toggleCamposEquipamento();
+      const params = new URLSearchParams(window.location.search);
+      const editId = params.get('edit');
+      if (!editId) return;
+
+      // Modo edição: carregar dados do equipamento
+      document.querySelector('.topbar h2').textContent = '✏️ Editar Ativo / Equipamento';
+      document.getElementById('btn-salvar').textContent = '💾 Salvar Alterações';
+
+      // Aguarda o Supabase estar pronto
+      await new Promise(r => setTimeout(r, 600));
+      const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', editId).single();
+      if (error || !eq) { alert('Equipamento não encontrado.'); return; }
+
+      // Preenche campos principais
+      const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+      set('eq-categoria', eq.categoria);
+      toggleCamposEquipamento(); // mostrar campos do tipo certo
+
+      set('eq-tag', eq.tag);
+      set('eq-marca', eq.marca);
+      set('eq-produto', eq.produto);
+      set('eq-serie', eq.nr_serie);
+      set('eq-patrimonio', eq.patrimonio);
+      set('eq-bloco', eq.bloco);
+      set('eq-setor', eq.setor);
+      set('eq-sala', eq.sala);
+      set('eq-instituicao', eq.instituicao);
+      if (eq.potencia) set('eq-potencia', eq.potencia);
+      if (eq.validade) set('eq-validade', eq.validade);
+
+      // Extras técnicos
+      if (eq.extras_tecnico) {
+        Object.entries(eq.extras_tecnico).forEach(([k, v]) => {
+          const el = document.getElementById('eq-' + k);
+          if (el) el.value = v;
+        });
+      }
+
+      // Criticidade
+      if (eq.criticidade) {
+        const c = eq.criticidade;
+        if (c === 'Alta') {
+          set('crit-interrupcao', 'sim');
+          set('crit-reserva', 'nao');
+        } else if (c === 'Baixa') {
+          set('crit-interrupcao', 'nao');
+          set('crit-seguranca', 'nao');
+          set('crit-operacao', 'nao');
+        }
+        calcularCriticidadeFluxograma();
+      }
+
+      // Trocar behavior do botão salvar para UPDATE
+      const btnSalvar = document.getElementById('btn-salvar');
+      const novoBtn = btnSalvar.cloneNode(true);
+      btnSalvar.parentNode.replaceChild(novoBtn, btnSalvar);
+      novoBtn.addEventListener('click', async () => {
+        const tag = document.getElementById('eq-tag')?.value.trim();
+        const cat = document.getElementById('eq-categoria')?.value;
+        if (!tag || !cat) { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
+        msgForm('msg-equipamento', 'Salvando...', 'blue');
+        const payload = {
+          tag, categoria: cat,
+          marca: document.getElementById('eq-marca')?.value.trim()||null,
+          produto: document.getElementById('eq-produto')?.value.trim()||null,
+          nr_serie: document.getElementById('eq-serie')?.value.trim()||null,
+          patrimonio: document.getElementById('eq-patrimonio')?.value.trim()||null,
+          bloco: document.getElementById('eq-bloco')?.value.trim()||null,
+          setor: document.getElementById('eq-setor')?.value.trim()||null,
+          sala: document.getElementById('eq-sala')?.value.trim()||null,
+          instituicao: document.getElementById('eq-instituicao')?.value.trim()||null,
+          criticidade: calcularCriticidadeFluxograma(),
+        };
+        const extras = {};
+        (EQ_CAMPOS_EXTRAS[cat] || []).forEach(id => {
+          const el = document.getElementById(id); if (!el || !el.value.trim()) return;
+          extras[id.replace('eq-','')] = el.value.trim();
+        });
+        if (Object.keys(extras).length) payload.extras_tecnico = extras;
+        if (document.getElementById('eq-potencia')?.value) payload.potencia = document.getElementById('eq-potencia').value.trim();
+        if (document.getElementById('eq-validade')?.value) payload.validade = document.getElementById('eq-validade').value.trim();
+
+        const { error } = await db.from('equipamentos').update(payload).eq('id', editId);
+        if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
+        msgForm('msg-equipamento', '✓ Ativo atualizado com sucesso!', 'green');
+        setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
+      });
     });
 
     const EQ_CAT_ICONE = { AC: '❄️', BEB: '💧', CLIM: '🌀', VEN: '💨', OUT: '🔧' };
@@ -658,7 +745,22 @@
     }
 
     function imprimirEtiqueta() {
-      window.print();
+      const html = document.getElementById('etiqueta-preview').innerHTML;
+      const estilos = document.querySelector('style').outerHTML;
+      const win = window.open('', '_blank', 'width=520,height=500');
+      if (!win) { alert('Permita pop-ups para imprimir.'); return; }
+      win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        ${estilos}
+        <style>
+          body { margin: 0; padding: 20px; background: #fff; display: flex; justify-content: center; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head><body>
+        <div class="etiqueta-wrapper">${html}</div>
+        <script>window.onload = function(){ window.print(); window.close(); }<\/script>
+      </body></html>`);
+      win.document.close();
     }
 
     function novoEquipamento() {

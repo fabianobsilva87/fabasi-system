@@ -356,13 +356,21 @@ function filtrarEquipamentos(delta) {
   if (!slice.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum ativo encontrado.</td></tr>'; return; }
   tbody.innerHTML = slice.map(eq => {
     const critCls = eq.criticidade === 'Alta' ? 'danger' : eq.criticidade === 'Baixa' ? 'success' : '';
+    const btnEtiqueta = eq.qrcode_token
+      ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;background:#0f6e56;" onclick="imprimirEtiquetaGerenciamento(globalEquipamentos.find(e=>e.id==='${eq.id}'))">🖨️</button>`
+      : '';
     return `<tr>
       <td><span class="tag-badge">${eq.tag}</span></td>
       <td><strong>${eq.produto || '—'}</strong><br><small style="color:#a0aec0">${eq.marca || ''}</small></td>
       <td>${eq.bloco || '—'} / ${eq.setor || '—'}<br><small style="color:#a0aec0">${eq.sala || ''}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></td>
       <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${eq.qrcode_token}','${eq.tag}')">👁️ QR</button>` : '—'}</td>
-      <td><button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button> <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button></td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn-primary" style="padding:3px 8px;font-size:11px;background:#2563eb;" onclick="verAtivo('${eq.id}')">👁️ Ver</button>
+        ${btnEtiqueta}
+        <button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✏️</button>
+        <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button>
+      </td>
     </tr>`;
   }).join('');
 }
