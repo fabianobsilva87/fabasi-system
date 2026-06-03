@@ -164,19 +164,73 @@ function toggleModoRecuperacao(ativar) {
 function inicializarCanvasAssinatura() {
   canvas = document.getElementById('canvas-assinatura');
   if (!canvas) return;
-  ctx = canvas.getContext('2d');
-  ctx.lineWidth = 2; ctx.strokeStyle = '#1a202c'; ctx.lineCap = 'round';
-  const getPos = (e) => {
+
+  // Sincroniza o tamanho interno do canvas com o tamanho CSS renderizado.
+  // Sem isso, o canvas interno fica em 420×110 enquanto o CSS o estica para
+  // 100% do container, causando descalibração total das coordenadas de desenho.
+  function sincronizarTamanhoCanvas() {
     const rect = canvas.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    if (rect.width > 0 && (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height))) {
+      canvas.width  = Math.round(rect.width);
+      canvas.height = Math.round(rect.height);
+      // Reaplica estilos do traço após redimensionar (redimensionar limpa o contexto)
+      ctx.lineWidth   = 2;
+      ctx.strokeStyle = '#1a202c';
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+    }
+  }
+
+  ctx = canvas.getContext('2d');
+  ctx.lineWidth = 2; ctx.strokeStyle = '#1a202c'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // Sincroniza imediatamente e a cada redimensionamento de janela
+  sincronizarTamanhoCanvas();
+  window.addEventListener('resize', sincronizarTamanhoCanvas);
+
+  // getPos calcula coordenadas relativas ao canvas já escalonado
+  const getPos = (e) => {
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const src    = e.touches ? e.touches[0] : e;
+    return {
+      x: (src.clientX - rect.left) * scaleX,
+      y: (src.clientY - rect.top)  * scaleY,
+    };
   };
-  canvas.addEventListener('mousedown', (e) => { desenhando = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); });
-  canvas.addEventListener('mousemove', (e) => { if (!desenhando) return; e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
-  window.addEventListener('mouseup', () => desenhando = false);
-  canvas.addEventListener('touchstart', (e) => { desenhando = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); }, { passive: true });
-  canvas.addEventListener('touchmove', (e) => { if (!desenhando) return; e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }, { passive: false });
-  window.addEventListener('touchend', () => desenhando = false);
+
+  canvas.addEventListener('mousedown', (e) => {
+    sincronizarTamanhoCanvas();
+    desenhando = true;
+    ctx.beginPath();
+    const p = getPos(e);
+    ctx.moveTo(p.x, p.y);
+  });
+  canvas.addEventListener('mousemove', (e) => {
+    if (!desenhando) return;
+    e.preventDefault();
+    const p = getPos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  window.addEventListener('mouseup', () => { desenhando = false; });
+
+  canvas.addEventListener('touchstart', (e) => {
+    sincronizarTamanhoCanvas();
+    desenhando = true;
+    ctx.beginPath();
+    const p = getPos(e);
+    ctx.moveTo(p.x, p.y);
+  }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => {
+    if (!desenhando) return;
+    e.preventDefault();
+    const p = getPos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }, { passive: false });
+  window.addEventListener('touchend', () => { desenhando = false; });
 }
 function limparCanvasAssinatura() { if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
