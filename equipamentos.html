@@ -747,46 +747,49 @@
     function imprimirEtiqueta() {
       const wrapper = document.getElementById('etiqueta-preview');
       if (!wrapper || !wrapper.innerHTML.trim()) {
-        alert('Nenhuma etiqueta gerada para imprimir.');
-        return;
+        alert('Nenhuma etiqueta gerada para imprimir.'); return;
       }
-
-      // Pega todos os estilos da página
-      const allStyles = Array.from(document.styleSheets).map(ss => {
-        try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); }
-        catch(e) { return ''; }
-      }).join('\n');
-
-      const win = window.open('', '_blank', 'width=500,height=460');
+      const win = window.open('', '_blank', 'width=520,height=500');
       if (!win) { alert('Permita pop-ups para imprimir.'); return; }
-
       win.document.write(`<!DOCTYPE html><html><head>
         <meta charset="UTF-8">
-        <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
         <style>
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-          body { background: #fff; display: flex; justify-content: center; align-items: flex-start; padding: 16px; font-family: 'Inter', Arial, sans-serif; }
-          ${allStyles}
+          body { background: #fff; display: flex; justify-content: center; padding: 20px; font-family: Arial, sans-serif; }
+          .etiqueta-wrapper { width: 420px; border: 3px solid #1a2e5a; border-radius: 10px; overflow: hidden; }
+          .etq-header { background: #1a2e5a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; display: flex; align-items: stretch; min-height: 78px; }
+          .etq-header-logo { display: flex; align-items: center; justify-content: center; padding: 10px 16px; flex-shrink: 0; background: #1a2e5a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .etq-header-sep { width: 2px; background: rgba(255,255,255,.38) !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin: 10px 0; flex-shrink: 0; }
+          .etq-header-title { display: flex; align-items: center; padding: 10px 18px; color: #fff !important; font-size: 17px; font-weight: 900; line-height: 1.2; text-transform: uppercase; letter-spacing: .04em; flex: 1; background: #1a2e5a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .etq-tag-bar { background: #f0f4ff; border-bottom: 2px solid #c7d5f0; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; }
+          .etq-tag-badge { background: #1a2e5a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #fff !important; font-size: 18px; font-weight: 900; padding: 5px 18px; border-radius: 7px; letter-spacing: 1.5px; }
+          .etq-cat-pill { font-size: 11px; font-weight: 700; color: #1a2e5a; background: #fff; padding: 4px 12px; border-radius: 20px; border: 1.5px solid #1a2e5a; }
+          .etq-qr-area { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+          .etq-qr-img { border: 2px solid #1a2e5a; border-radius: 6px; padding: 3px; background: #fff; flex-shrink: 0; }
+          .etq-qr-text { flex: 1; }
+          .etq-qr-title { font-size: 10px; font-weight: 800; color: #1a2e5a; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+          .etq-qr-desc { font-size: 9.5px; color: #4a5568; line-height: 1.45; }
+          .etq-qr-url { font-size: 8px; color: #a0aec0; word-break: break-all; margin-top: 4px; }
           @media print {
             body { padding: 0; }
-            @page { margin: 8mm; }
+            @page { margin: 6mm; size: 148mm 100mm landscape; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           }
         </style>
       </head><body>
-        <div class="etiqueta-wrapper">${wrapper.innerHTML}</div>
+        <div class="etiqueta-wrapper">\${wrapper.innerHTML}</div>
         <script>
-          // Aguarda imagens (logo base64 + QR) carregarem antes de imprimir
-          window.addEventListener('load', function() {
-            var imgs = document.images;
-            var loaded = 0;
-            if (imgs.length === 0) { setTimeout(function(){ window.print(); window.close(); }, 300); return; }
-            for (var i = 0; i < imgs.length; i++) {
-              if (imgs[i].complete) { loaded++; if (loaded === imgs.length) { setTimeout(function(){ window.print(); window.close(); }, 400); } }
-              else { imgs[i].onload = imgs[i].onerror = function() { loaded++; if (loaded === imgs.length) { setTimeout(function(){ window.print(); window.close(); }, 400); } }; }
+          var imgs = document.images, total = imgs.length, done = 0;
+          function tryPrint() { window.focus(); window.print(); setTimeout(function(){ window.close(); }, 500); }
+          if (total === 0) { setTimeout(tryPrint, 500); }
+          else {
+            for (var i = 0; i < total; i++) {
+              if (imgs[i].complete) { if (++done === total) setTimeout(tryPrint, 600); }
+              else { imgs[i].onload = imgs[i].onerror = function(){ if (++done === total) setTimeout(tryPrint, 600); }; }
             }
-          });
+          }
         <\/script>
-      </body></html>`);
+      </body></html>\`);
       win.document.close();
     }
 
