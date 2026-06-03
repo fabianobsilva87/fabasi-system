@@ -745,20 +745,47 @@
     }
 
     function imprimirEtiqueta() {
-      const html = document.getElementById('etiqueta-preview').innerHTML;
-      const estilos = document.querySelector('style').outerHTML;
-      const win = window.open('', '_blank', 'width=520,height=500');
+      const wrapper = document.getElementById('etiqueta-preview');
+      if (!wrapper || !wrapper.innerHTML.trim()) {
+        alert('Nenhuma etiqueta gerada para imprimir.');
+        return;
+      }
+
+      // Pega todos os estilos da página
+      const allStyles = Array.from(document.styleSheets).map(ss => {
+        try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); }
+        catch(e) { return ''; }
+      }).join('\n');
+
+      const win = window.open('', '_blank', 'width=500,height=460');
       if (!win) { alert('Permita pop-ups para imprimir.'); return; }
-      win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-        ${estilos}
+
+      win.document.write(`<!DOCTYPE html><html><head>
+        <meta charset="UTF-8">
+        <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
         <style>
-          body { margin: 0; padding: 20px; background: #fff; display: flex; justify-content: center; }
-          @media print { body { padding: 0; } }
+          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+          body { background: #fff; display: flex; justify-content: center; align-items: flex-start; padding: 16px; font-family: 'Inter', Arial, sans-serif; }
+          ${allStyles}
+          @media print {
+            body { padding: 0; }
+            @page { margin: 8mm; }
+          }
         </style>
       </head><body>
-        <div class="etiqueta-wrapper">${html}</div>
-        <script>window.onload = function(){ window.print(); window.close(); }<\/script>
+        <div class="etiqueta-wrapper">${wrapper.innerHTML}</div>
+        <script>
+          // Aguarda imagens (logo base64 + QR) carregarem antes de imprimir
+          window.addEventListener('load', function() {
+            var imgs = document.images;
+            var loaded = 0;
+            if (imgs.length === 0) { setTimeout(function(){ window.print(); window.close(); }, 300); return; }
+            for (var i = 0; i < imgs.length; i++) {
+              if (imgs[i].complete) { loaded++; if (loaded === imgs.length) { setTimeout(function(){ window.print(); window.close(); }, 400); } }
+              else { imgs[i].onload = imgs[i].onerror = function() { loaded++; if (loaded === imgs.length) { setTimeout(function(){ window.print(); window.close(); }, 400); } }; }
+            }
+          });
+        <\/script>
       </body></html>`);
       win.document.close();
     }

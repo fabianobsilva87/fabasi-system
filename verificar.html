@@ -168,8 +168,24 @@
   // ─────────────────────────────────────────────
   async function carregarEquipamento() {
     // Busca equipamento
-    const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', id).single();
-    if (error || !eq) { mostrarErro('Equipamento não encontrado na base de dados.'); return; }
+    // Tenta por UUID primeiro; se falhar, tenta por qrcode_token (ex: "EQ-<uuid>")
+    let eq = null;
+    const { data: eq1 } = await db.from('equipamentos').select('*').eq('id', id).maybeSingle();
+    if (eq1) {
+      eq = eq1;
+    } else {
+      // Fallback: busca por qrcode_token (caso o id na URL seja o token e não o UUID)
+      const tokenBusca = id.startsWith('EQ-') ? id : 'EQ-' + id;
+      const { data: eq2 } = await db.from('equipamentos').select('*').eq('qrcode_token', tokenBusca).maybeSingle();
+      if (!eq2) {
+        // Último fallback: busca por qrcode_token exato como veio na URL
+        const { data: eq3 } = await db.from('equipamentos').select('*').eq('qrcode_token', id).maybeSingle();
+        eq = eq3;
+      } else {
+        eq = eq2;
+      }
+    }
+    if (!eq) { mostrarErro('Equipamento não encontrado na base de dados.'); return; }
 
     // Busca OS e PMOC em paralelo
     const [{ data: listaOS }, { data: listaPMOC }] = await Promise.all([

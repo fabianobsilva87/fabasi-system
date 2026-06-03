@@ -335,7 +335,17 @@ if ($('btn-salvar')) {
 
 async function carregarEquipamentos() {
   const { data } = await db.from('equipamentos').select('*').order('tag', { ascending: true });
-  globalEquipamentos = data || []; filtrarEquipamentos(0); atualizarSelectEquipamentos();
+  globalEquipamentos = data || [];
+
+  // Gera qrcode_token para equipamentos que ainda não têm
+  const semToken = (data || []).filter(e => !e.qrcode_token);
+  for (const eq of semToken) {
+    const token = 'EQ-' + eq.id;
+    await db.from('equipamentos').update({ qrcode_token: token }).eq('id', eq.id);
+    eq.qrcode_token = token; // atualiza local também
+  }
+
+  filtrarEquipamentos(0); atualizarSelectEquipamentos();
 }
 
 function filtrarEquipamentos(delta) {
