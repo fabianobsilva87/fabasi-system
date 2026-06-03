@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Diagnóstico — Concredur</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: monospace; background: #0f172a; color: #e2e8f0; padding: 30px; }
+    h2 { color: #38bdf8; }
+    .step { margin: 12px 0; padding: 12px 16px; border-radius: 6px; background: #1e293b; border-left: 4px solid #475569; }
+    .ok   { border-color: #22c55e; color: #86efac; }
+    .fail { border-color: #ef4444; color: #fca5a5; }
+    .warn { border-color: #f59e0b; color: #fcd34d; }
+    .run  { border-color: #38bdf8; color: #7dd3fc; }
+    input { background:#0f172a; border:1px solid #334155; color:#e2e8f0; padding:8px 12px; border-radius:4px; width:280px; margin:4px 0; display:block; font-size:14px; }
+    button { margin-top:12px; padding:10px 24px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:14px; }
+    button:hover { background:#1d4ed8; }
+    #resultado { margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h2>🔍 Diagnóstico de Login — Concredur</h2>
+  <p style="color:#94a3b8;">Preencha as credenciais e clique em Testar. O resultado mostra exatamente onde o login falha.</p>
+
+  <input type="email" id="d-email" placeholder="seu@email.com">
+  <input type="password" id="d-senha" placeholder="sua senha">
+  <button onclick="rodarDiagnostico()">▶ Testar Agora</button>
+
+  <div id="resultado"></div>
+
+  <script>
+    const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function log(msg, tipo = 'run') {
+      const div = document.createElement('div');
+      div.className = `step ${tipo}`;
+      div.innerHTML = msg;
+      document.getElementById('resultado').appendChild(div);
+    }
+
+    async function rodarDiagnostico() {
+      document.getElementById('resultado').innerHTML = '';
+      const email = document.getElementById('d-email').value.trim();
+      const senha  = document.getElementById('d-senha').value;
+
+      if (!email || !senha) { log('⚠️ Preencha e-mail e senha antes de testar.', 'warn'); return; }
+
+      // PASSO 1: Conectividade com Supabase
+      log('⏳ Passo 1 — Testando conectividade com o Supabase...', 'run');
+      try {
+        const resp = await fetch(SUPABASE_URL + '/auth/v1/settings', {
+          headers: { apikey: SUPABASE_ANON_KEY }
+        });
+        if (resp.ok) {
+          log('✅ Passo 1 — Supabase acessível. Status HTTP: ' + resp.status, 'ok');
+        } else {
+          log('❌ Passo 1 — Supabase retornou erro HTTP: ' + resp.status + '. Verifique a URL e a chave.', 'fail');
+          return;
+        }
+      } catch(e) {
+        log('❌ Passo 1 — Falha de rede ao acessar o Supabase: ' + e.message, 'fail');
+        return;
+      }
+
+      // PASSO 2: Sessão atual
+      log('⏳ Passo 2 — Verificando sessão existente em cache...', 'run');
+      const { data: { user: userAtual } } = await db.auth.getUser();
+      if (userAtual) {
+        log('⚠️ Passo 2 — Sessão ativa encontrada em cache para: <strong>' + userAtual.email + '</strong>. Fazendo signOut antes de logar...', 'warn');
+        await db.auth.signOut();
+        log('✅ Passo 2 — signOut concluído.', 'ok');
+      } else {
+        log('✅ Passo 2 — Sem sessão em cache. Tudo limpo.', 'ok');
+      }
+
+      // PASSO 3: Tentativa de login
+      log('⏳ Passo 3 — Tentando signInWithPassword com <strong>' + email + '</strong>...', 'run');
+      const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+
+      if (error) {
+        log(`❌ Passo 3 — Login FALHOU.<br>
+          <br><strong>Código:</strong> ${error.status || 'N/A'}
+          <br><strong>Mensagem:</strong> ${error.message}
+          <br><br>
+          ${error.message.includes('Invalid login') ? '👉 <strong>Causa:</strong> E-mail ou senha incorretos no Supabase Auth.' : ''}
+          ${error.message.includes('Email not confirmed') ? '👉 <strong>Causa:</strong> O e-mail ainda não foi confirmado. Vá em Authentication → Users no Supabase e clique em "Confirm" manualmente.' : ''}
+          ${error.message.includes('User not found') ? '👉 <strong>Causa:</strong> Usuário não existe no Supabase Auth. Crie em Authentication → Add User.' : ''}
+          ${error.message.includes('rate limit') ? '👉 <strong>Causa:</strong> Muitas tentativas. Aguarde alguns minutos.' : ''}
+        `, 'fail');
+        return;
+      }
+
+      log('✅ Passo 3 — Login bem-sucedido! Usuário autenticado: <strong>' + data.user.email + '</strong>', 'ok');
+
+      // PASSO 4: Verifica tabela profiles
+      log('⏳ Passo 4 — Verificando registro na tabela <em>profiles</em>...', 'run');
+      const { data: perfil, error: errPerfil } = await db.from('profiles').select('*').eq('email', email).single();
+      if (errPerfil) {
+        log('⚠️ Passo 4 — Perfil não encontrado na tabela profiles (erro: ' + errPerfil.message + '). O login funciona, mas o perfil está ausente.', 'warn');
+      } else {
+        log('✅ Passo 4 — Perfil encontrado: <strong>' + (perfil.nome || perfil.email) + '</strong> | Role: ' + perfil.role + ' | Status: ' + perfil.status, 'ok');
+      }
+
+      // PASSO 5: Confirma redirecionamento
+      log('✅ Diagnóstico concluído — Login funcionando corretamente! Se o botão do index.html não redireciona, o problema é de cache do navegador ou o arquivo app.js antigo ainda está sendo servido.', 'ok');
+      log('👉 <strong>Solução:</strong> Pressione <strong>Ctrl+Shift+R</strong> (hard reload) na página de login e tente novamente.', 'warn');
+    }
+  </script>
+</body>
+</html>
