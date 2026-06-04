@@ -1,27 +1,11 @@
 // ===================== SUPABASE CONFIG =====================
-// 🔶 AMBIENTE: HOMOLOGAÇÃO
-//
-// Arquitetura dual-client:
-//   authClient → PROD (mqijbvcnalbfjbhhjjzx) — autenticação, sessão, usuários
-//   db         → HOMO (nweligwbglblbncaegir) — todos os dados operacionais
-//
-// Motivo: Supabase Auth é isolado por projeto. As credenciais dos
-// usuários existem no PROD. Separar Auth de Data permite testar
-// o banco HOMO sem precisar recriar contas em cada ambiente.
-//
-// Para produção: ambos apontam para PROD (remover esta seção dual).
-
-const SUPABASE_URL_PROD      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
-const SUPABASE_ANON_KEY_PROD = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
-
-const SUPABASE_URL_HOMO      = "https://nweligwbglblbncaegir.supabase.co";
-const SUPABASE_ANON_KEY_HOMO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
-
-// authClient: exclusivo para login/logout/sessão — aponta sempre para PROD
-const authClient = supabase.createClient(SUPABASE_URL_PROD, SUPABASE_ANON_KEY_PROD);
-
-// db: queries de dados operacionais — aponta para HOMO em homologação
-const db = supabase.createClient(SUPABASE_URL_HOMO, SUPABASE_ANON_KEY_HOMO);
+// ⚠️  SEGURANÇA:
+//   A ANON KEY abaixo é segura para o front-end pois é somente leitura pública.
+//   O acesso real aos dados é controlado por Row Level Security (RLS) no Supabase.
+//   NUNCA exponha a SERVICE_ROLE_KEY no front-end.
+const SUPABASE_URL      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===================== ESTADO GLOBAL =====================
 let globalEquipamentos = [];
@@ -30,10 +14,10 @@ const itensPorPagina = 8;
 let chartOS = null, chartCrit = null, chartOSG = null;
 let modoRecuperacao = false;
 
-// Canvas assinatura — variáveis de escopo módulo (sem acesso ao DOM na raiz)
-// A inicialização real ocorre dentro de inicializarCanvasAssinatura()
-let canvas = null;
-let ctx    = null;
+// Canvas assinatura
+let canvas = document.getElementById('canvas-sandbox');
+canvas = document.getElementById('canvas-assinatura');
+let ctx = canvas ? canvas.getContext('2d') : null;
 let desenhando = false;
 
 // ===================== UTILITÁRIOS =====================
@@ -131,44 +115,39 @@ async function verificarSessaoGlobal() {
     return;
   }
 
-  const { data: { user }, error } = await authClient.auth.getUser();
+  const { data: { user }, error } = await db.auth.getUser();
   if (!user || error) {
     window.location.href = 'index.html';
     return;
   }
 
-  // Exibe o nome do usuário — profiles sync é best-effort, nunca bloqueia o roteamento
-  try {
-    const { data: perfil } = await db
-      .from('profiles')
-      .select('nome, role, status')
-      .eq('id', user.id)
-      .maybeSingle();
+  // Carrega perfil da tabela profiles
+  const { data: perfil } = await db
+    .from('profiles')
+    .select('nome, role, status')
+    .eq('id', user.id)
+    .maybeSingle(); // ← maybeSingle nunca lança erro se não encontrar
 
-    if (perfil) {
-      const exibir = perfil.nome || user.email;
-      if ($('user-display-email')) $('user-display-email').innerText = exibir;
-    } else {
-      if ($('user-display-email')) $('user-display-email').innerText = user.email;
-      // Tenta criar perfil silenciosamente — ignora FK violation em HOMO
-      db.from('profiles').insert([{
-        id:     user.id,
-        email:  user.email,
-        nome:   user.user_metadata?.full_name || 'Administrador',
-        role:   'admin',
-        status: 'ativo',
-      }]).catch(() => {});
-    }
-  } catch (_) {
-    // Falha no profiles não impede acesso — exibe email como fallback
+  if (!perfil) {
+    // Perfil ausente — cria automaticamente como admin e continua
+    await db.from('profiles').insert([{
+      id:     user.id,
+      email:  user.email,
+      nome:   user.user_metadata?.full_name || 'Administrador',
+      role:   'admin',
+      status: 'ativo',
+    }]).select().maybeSingle();
     if ($('user-display-email')) $('user-display-email').innerText = user.email;
+  } else {
+    const exibir = perfil.nome ? `${perfil.nome}` : user.email;
+    if ($('user-display-email')) $('user-display-email').innerText = exibir;
   }
 }
 verificarSessaoGlobal();
 
 if ($('btn-logout')) {
   $('btn-logout').addEventListener('click', async () => {
-    if (confirm('Encerrar sessão?')) { await authClient.auth.signOut(); window.location.href = 'index.html'; }
+    if (confirm('Encerrar sessão?')) { await db.auth.signOut(); window.location.href = 'index.html'; }
   });
 }
 
@@ -183,12 +162,14 @@ function toggleModoRecuperacao(ativar) {
 }
 
 function inicializarCanvasAssinatura() {
-  // ── ORDEM 1B: Cláusula guardiã — aborta silenciosamente se elemento ausente na página ──
   canvas = document.getElementById('canvas-assinatura');
   if (!canvas) return;
 
   ctx = canvas.getContext('2d');
 
+  // Ajusta o buffer interno do canvas ao tamanho CSS real UMA vez.
+  // IMPORTANTE: atribuir canvas.width/height apaga todo o conteúdo —
+  // isso só pode acontecer na inicialização e no resize, NUNCA durante o desenho.
   function aplicarEstiloCtx() {
     ctx.lineWidth   = 2.5;
     ctx.strokeStyle = '#1a202c';
@@ -201,38 +182,19 @@ function inicializarCanvasAssinatura() {
     if (rect.width === 0) return;
     canvas.width  = Math.round(rect.width);
     canvas.height = Math.round(rect.height);
-    aplicarEstiloCtx();
+    aplicarEstiloCtx(); // contexto é resetado ao redimensionar
   }
 
   sincronizarTamanho();
 
-  // ── ORDEM 1C: Resize com preservação do conteúdo gráfico ──
-  // Em navegadores móveis, o redimensionamento ao rolar apagava os traços.
-  // Agora: captura → buffer virtual → resize → restaura.
+  // No resize só ressincroniza se a largura mudou de fato (evita apagar em scroll)
   let larguraAnterior = canvas.width;
   window.addEventListener('resize', () => {
     const novaLargura = Math.round(canvas.getBoundingClientRect().width);
-    if (novaLargura === larguraAnterior || novaLargura <= 0) return;
-    larguraAnterior = novaLargura;
-
-    // a) Captura dimensões atuais do canvas físico
-    const wAtual = canvas.width;
-    const hAtual = canvas.height;
-
-    // b) Canvas virtual em memória como buffer de preservação
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width  = wAtual;
-    tempCanvas.height = hAtual;
-    const tempCtx = tempCanvas.getContext('2d');
-
-    // c) Copia o estado gráfico atual para o buffer virtual
-    tempCtx.drawImage(canvas, 0, 0);
-
-    // d) Reajusta o buffer físico (apaga o canvas real — inevitável)
-    sincronizarTamanho();
-
-    // e) Restaura o conteúdo salvo de volta ao canvas redimensionado
-    ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+    if (novaLargura !== larguraAnterior && novaLargura > 0) {
+      larguraAnterior = novaLargura;
+      sincronizarTamanho();
+    }
   });
 
   // getPos: converte coordenadas de tela para coordenadas do buffer interno.
@@ -333,55 +295,29 @@ function toggleCamposEquipamento() {
 
 if ($('btn-salvar')) {
   $('btn-salvar').addEventListener('click', async () => {
-    const tag = $('eq-tag')?.value.trim();
-    const cat = $('eq-categoria')?.value;
-    if (!tag || !cat) { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
+    const tag = $('eq-tag')?.value.trim(); const cat = $('eq-categoria')?.value;
+    if (!tag || !cat)  { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
     msgForm('msg-equipamento', 'Salvando...', 'blue');
-
-    // BUG FIX 1: input type="month" retorna "YYYY-MM"; Postgres DATE exige "YYYY-MM-DD"
-    // Converte appending "-01" (primeiro dia do mês) antes de enviar ao Supabase
-    const rawValidade = $('eq-validade')?.value?.trim() || null;
-    const validadeISO = rawValidade
-      ? (rawValidade.length === 7 ? rawValidade + '-01' : rawValidade)
-      : null;
-
     const payload = {
       tag, categoria: cat,
-      marca:       $('eq-marca')?.value.trim()       || null,
-      produto:     $('eq-produto')?.value.trim()     || null,
-      nr_serie:    $('eq-serie')?.value.trim()       || null,
-      patrimonio:  $('eq-patrimonio')?.value.trim()  || null,
-      bloco:       $('eq-bloco')?.value.trim()       || null,
-      setor:       $('eq-setor')?.value.trim()       || null,
-      sala:        $('eq-sala')?.value.trim()        || null,
-      instituicao: $('eq-instituicao')?.value.trim() || null,
+      marca: $('eq-marca')?.value.trim()||null, produto: $('eq-produto')?.value.trim()||null,
+      nr_serie: $('eq-serie')?.value.trim()||null, patrimonio: $('eq-patrimonio')?.value.trim()||null,
+      bloco: $('eq-bloco')?.value.trim()||null, setor: $('eq-setor')?.value.trim()||null,
+      sala: $('eq-sala')?.value.trim()||null, instituicao: $('eq-instituicao')?.value.trim()||null,
       criticidade: calcularCriticidadeFluxograma(),
-      validade:    validadeISO,
     };
-
-    // Captura os campos técnicos extras da categoria selecionada
     const extras = {};
     (EQ_CAMPOS_EXTRAS[cat] || []).forEach(id => {
-      const el = $(id);
-      if (!el || !el.value.trim()) return;
-      // Campos de validade month também precisam ser convertidos
-      const chave = id.replace('eq-', '');
-      const val   = el.value.trim();
-      extras[chave] = (el.type === 'month' && val.length === 7) ? val + '-01' : val;
+      const el = $(id); if (!el || !el.value.trim()) return;
+      extras[id.replace('eq-','')] = el.value.trim();
     });
     if (Object.keys(extras).length) payload.extras_tecnico = extras;
     if ($('eq-potencia')?.value) payload.potencia = $('eq-potencia').value.trim();
+    if ($('eq-validade')?.value) payload.validade = $('eq-validade').value.trim();
 
-    // BUG FIX 2: suporte a edição — detecta ?edit=id na URL e faz UPDATE
-    const editId = new URLSearchParams(window.location.search).get('edit');
-    let error;
-    if (editId) {
-      ({ error } = await db.from('equipamentos').update(payload).eq('id', editId));
-    } else {
-      ({ error } = await db.from('equipamentos').insert([payload]));
-    }
+    const { error } = await db.from('equipamentos').insert([payload]);
     if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
-    msgForm('msg-equipamento', editId ? '✓ Ativo atualizado!' : '✓ Equipamento salvo!', 'green');
+    msgForm('msg-equipamento', '✓ Equipamento salvo!', 'green');
     setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
   });
 }
@@ -414,7 +350,7 @@ function filtrarEquipamentos(delta) {
       <td><strong>${eq.produto || '—'}</strong><br><small style="color:#a0aec0">${eq.marca || ''}</small></td>
       <td>${eq.bloco || '—'} / ${eq.setor || '—'}<br><small style="color:#a0aec0">${eq.sala || ''}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></td>
-      <td><button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="verAtivo('${eq.id}')">👁️ Ver / QR</button></td>
+      <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${eq.qrcode_token}','${eq.tag}')">👁️ QR</button>` : '—'}</td>
       <td><button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button> <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button></td>
     </tr>`;
   }).join('');
@@ -423,254 +359,12 @@ function mudarPaginaEquipamento(d) { filtrarEquipamentos(d); }
 async function excluirEquipamento(id) { if (confirm('Remover ativo?')) { await db.from('equipamentos').delete().eq('id', id); carregarEquipamentos(); } }
 function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id; }
 
-// ── BUG FIX 3A: verAtivo — visualiza ficha completa do ativo em modal ──
-// Lookup duplo: cobre UUID direto e string serializada pelo onclick do HTML
-async function verAtivo(id) {
-  const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
-  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
-
-  // Monta o conteúdo da ficha
-  const extras = eq.extras_tecnico || {};
-  const extraRows = Object.entries(extras)
-    .map(([k, v]) => `<tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">${k.replace(/-/g,' ')}</td><td style="font-weight:600;">${v}</td></tr>`)
-    .join('');
-
-  // tipo=pmoc: modal aponta para verificar.html que exibe fichas de manutenção do ativo
-  const urlValidacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=pmoc`;
-
-  // Cria ou reutiliza o modal
-  let modal = document.getElementById('modal-ver-ativo');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'modal-ver-ativo';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-    document.body.appendChild(modal);
-  }
-
-  modal.innerHTML = `
-    <div style="background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25);">
-      <div style="background:#1a56db;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-size:18px;font-weight:700;">📋 Ficha do Ativo</div>
-          <div style="font-size:11px;opacity:.8;margin-top:2px;">${eq.tag} — ${eq.produto || '—'}</div>
-        </div>
-        <button onclick="document.getElementById('modal-ver-ativo').remove()"
-          style="background:rgba(255,255,255,.2);border:none;color:#fff;font-size:18px;width:32px;height:32px;border-radius:6px;cursor:pointer;line-height:1;">✕</button>
-      </div>
-      <div style="padding:20px;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">TAG</td><td style="font-weight:700;color:#1a56db;">${eq.tag}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Categoria</td><td style="font-weight:600;">${eq.categoria || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Marca</td><td>${eq.marca || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Produto</td><td>${eq.produto || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Nº Série</td><td>${eq.nr_serie || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Patrimônio</td><td>${eq.patrimonio || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Localização</td><td>${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Instituição</td><td>${eq.instituicao || '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Criticidade</td><td><span style="font-weight:700;color:${eq.criticidade==='Alta'?'#dc2626':eq.criticidade==='Baixa'?'#059669':'#d97706'};">Classe ${eq.criticidade || '—'}</span></td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Validade</td><td>${eq.validade ? new Date(eq.validade+'T00:00:00').toLocaleDateString('pt-BR',{month:'2-digit',year:'numeric'}) : '—'}</td></tr>
-          ${extraRows}
-        </table>
-
-        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn-primary" onclick="imprimirEtiqueta('${eq.id}')"
-            style="flex:1;min-width:140px;">🏷️ Imprimir Etiqueta QR</button>
-          <button class="btn-secondary" onclick="editarEquipamento('${eq.id}')"
-            style="flex:1;min-width:120px;">✏️ Editar Ativo</button>
-          <button class="btn-secondary" onclick="document.getElementById('modal-ver-ativo').remove()"
-            style="flex:1;min-width:100px;">✕ Fechar</button>
-        </div>
-      </div>
-    </div>`;
-  modal.style.display = 'flex';
-  // Fecha ao clicar fora
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); }, { once: true });
-}
-
-// ── imprimirEtiqueta ──────────────────────────────────────────────────
-// Estratégia: renderiza o HTML da etiqueta → captura via html2canvas →
-// imprime APENAS a imagem resultante. Imagens nunca têm cor removida
-// pelo driver de impressão, eliminando o bug de fundo azul desaparecendo.
-function imprimirEtiqueta(id) {
-  const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
-  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
-
-  const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
-  const baseUrl     = window.location.origin
-    + window.location.pathname.replace(/\/[^/]*$/, '')
-    + '/verificar.html';
-
-  const eqId     = eq.id;
-  const eqTag    = (eq.tag    || '').replace(/"/g, '&quot;');
-  const eqMarca  = (eq.marca  || '');
-  const eqProd   = (eq.produto|| '—');
-  const eqSerie  = (eq.nr_serie   || '—');
-  const eqPatrim = (eq.patrimonio || '—');
-  const eqPot    = (eq.potencia   || '');
-  const eqCat    = (eq.categoria  || 'Ativo');
-
-  const win = window.open('', '_blank', 'width=560,height=500');
-  if (!win) { alert('Permita pop-ups para imprimir etiquetas.'); return; }
-
-  // CSS tela: preview da etiqueta + painel de instruções
-  var css = '';
-  css += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
-  css += 'body { font-family: Arial, sans-serif; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; padding: 20px 16px; gap: 14px; }';
-  css += '#etiqueta-wrapper { width: 302px; }';
-  css += '.etiqueta { width: 302px; border: 2px solid #1a56db; border-radius: 6px; overflow: hidden; background: #fff; }';
-  css += '.etq-header { background: #1a56db; color: #fff; padding: 7px 10px; display: flex; align-items: center; }';
-  css += '.etq-header-left { flex: 1; }';
-  css += '.etq-titulo { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #fff; opacity: .85; }';
-  css += '.etq-tag { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: .04em; line-height: 1.1; }';
-  css += '.etq-categoria { display: inline-block; background: rgba(255,255,255,.22); color: #fff; font-size: 7px; font-weight: 700; padding: 1px 7px; border-radius: 8px; margin-top: 3px; }';
-  css += '.etq-body { display: flex; padding: 7px 9px; gap: 9px; align-items: flex-start; background: #fff; }';
-  css += '.etq-qr canvas, .etq-qr img { display: block; }';
-  css += '.etq-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }';
-  css += '.etq-info-titulo { font-size: 7.5px; font-weight: 700; color: #1a56db; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }';
-  css += '.etq-info-desc { font-size: 7.5px; color: #374151; line-height: 1.45; }';
-  css += '.etq-url { font-size: 5.5px; color: #9ca3af; word-break: break-all; line-height: 1.3; margin-top: 4px; }';
-  css += '.etq-footer { background: #f1f5f9; border-top: 1px solid #e2e8f0; padding: 4px 9px; display: flex; justify-content: space-between; font-size: 6.5px; color: #6b7280; }';
-  // Painel de controle (tela)
-  css += '#painel { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; width:302px; font-size:12px; color:#374151; }';
-  css += '#painel h3 { font-size:13px; font-weight:700; color:#1a202c; margin-bottom:8px; }';
-  css += '#painel p  { font-size:11px; color:#6b7280; margin-bottom:10px; line-height:1.5; }';
-  css += '.btn-modo { display:block; width:100%; padding:9px 12px; border:none; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; margin-bottom:7px; text-align:left; }';
-  css += '.btn-etiqueta { background:#1a56db; color:#fff; }';
-  css += '.btn-a4      { background:#f1f5f9; color:#1a202c; border:1px solid #e2e8f0; }';
-  css += '#status-msg  { font-size:11px; color:#6b7280; text-align:center; min-height:18px; }';
-  // Área de impressão — invisível na tela, visível só ao imprimir
-  css += '#print-area { display:none; }';
-  // @media print: oculta tudo, exibe apenas a imagem capturada
-  css += '@media print {';
-  css += '  @page { margin: 0; }';
-  css += '  body > * { display:none !important; }';
-  css += '  #print-area { display:block !important; width:100%; height:100%; }';
-  // Modo etiqueta: imagem preenche exatamente o papel (label printer 80×50mm)
-  css += '  #print-area.modo-etiqueta img { width:100%; height:100%; object-fit:contain; display:block; }';
-  // Modo A4: imagem centralizada no topo com marcas de corte pontilhadas
-  css += '  #print-area.modo-a4 { display:flex !important; justify-content:center; padding-top:20mm; }';
-  css += '  #print-area.modo-a4 img { width:80mm; height:auto; outline:1px dashed #aaa; }';
-  css += '}';
-
-  var html = '<!DOCTYPE html><html lang="pt-BR"><head>';
-  html += '<meta charset="UTF-8">';
-  html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-  html += '<title>Etiqueta - ' + eqTag + '</title>';
-  // html2canvas: captura o DOM renderizado como canvas
-  html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><' + '/script>';
-  html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><' + '/script>';
-  html += '<style>' + css + '</style>';
-  html += '</head><body>';
-
-  // Preview da etiqueta (DOM real — capturado pelo html2canvas)
-  html += '<div id="etiqueta-wrapper">';
-  html += '<div class="etiqueta" data-base="' + baseUrl + '" data-eqid="' + eqId + '">';
-  html += '  <div class="etq-header"><div class="etq-header-left">';
-  html += '    <div class="etq-titulo">Concredur — Controle de Ativo</div>';
-  html += '    <div class="etq-tag">' + eqTag + '</div>';
-  html += '    <div class="etq-categoria">' + eqCat + '</div>';
-  html += '  </div></div>';
-  html += '  <div class="etq-body">';
-  html += '    <div class="etq-qr"><div id="qr-etiqueta"></div></div>';
-  html += '    <div class="etq-info">';
-  html += '      <div class="etq-info-titulo">Informações do Ativo</div>';
-  html += '      <div class="etq-info-desc">Aponte a câmera do celular para verificar histórico de manutenções, especificações técnicas e dados completos deste equipamento.</div>';
-  html += '      <div class="etq-url" id="url-texto"></div>';
-  if (eqPot) html += '      <div style="font-size:7px;color:#374151;margin-top:3px;font-weight:600;">Cap.: ' + eqPot + '</div>';
-  html += '    </div>';
-  html += '  </div>';
-  html += '  <div class="etq-footer">';
-  html += '    <span>Série: ' + eqSerie + '</span>';
-  html += '    <span>' + (eqMarca ? eqMarca + ' — ' : '') + eqProd + '</span>';
-  html += '    <span>Pat.: ' + eqPatrim + '</span>';
-  html += '  </div>';
-  html += '</div></div>';
-
-  // Painel de seleção de modo de impressão
-  html += '<div id="painel">';
-  html += '  <h3>🖨️ Como deseja imprimir?</h3>';
-  html += '  <p>Escolha o modo antes de imprimir. A etiqueta acima é o preview do resultado.</p>';
-  html += '  <button class="btn-modo btn-etiqueta" onclick="iniciarImpressao(\'etiqueta\')">';
-  html += '    🏷️ Impressora de Etiqueta &nbsp;<small style="font-weight:400;opacity:.8;">(80×50mm — preenche o papel)</small>';
-  html += '  </button>';
-  html += '  <button class="btn-modo btn-a4" onclick="iniciarImpressao(\'a4\')">';
-  html += '    📄 Papel A4 &nbsp;<small style="font-weight:400;color:#6b7280;">(centralizada para recortar)</small>';
-  html += '  </button>';
-  html += '  <div id="status-msg">⏳ Gerando imagem da etiqueta...</div>';
-  html += '</div>';
-
-  // Área de impressão (invisível na tela)
-  html += '<div id="print-area"></div>';
-
-  html += '<script>';
-  html += 'var _imgDataUrl = null;'; // cache da imagem capturada
-  html += 'window.addEventListener("DOMContentLoaded", function() {';
-  html += '  var el   = document.querySelector(".etiqueta");';
-  html += '  var base = el.getAttribute("data-base");';
-  html += '  var uid  = el.getAttribute("data-eqid");';
-  html += '  var url  = base + "?id=" + uid + "&tipo=equipamento";';
-  html += '  document.getElementById("url-texto").textContent = url;';
-  // Gera QR Code no DOM para ser capturado junto pela html2canvas
-  html += '  new QRCode(document.getElementById("qr-etiqueta"), {';
-  html += '    text: url, width: 72, height: 72,';
-  html += '    colorDark: "#1a202c", colorLight: "#ffffff",';
-  html += '    correctLevel: QRCode.CorrectLevel.H';
-  html += '  });';
-  // Captura automática após QR renderizar — armazena em cache
-  html += '  setTimeout(function() {';
-  html += '    html2canvas(document.getElementById("etiqueta-wrapper"), {';
-  html += '      scale: 3, useCORS: true, backgroundColor: "#ffffff"';
-  html += '    }).then(function(canvas) {';
-  html += '      _imgDataUrl = canvas.toDataURL("image/png");';
-  html += '      var msg = document.getElementById("status-msg");';
-  html += '      if (msg) msg.textContent = "✅ Pronto! Escolha o modo de impressão acima.";';
-  html += '    }).catch(function(err) {';
-  html += '      console.warn("html2canvas falhou:", err);';
-  html += '      var msg = document.getElementById("status-msg");';
-  html += '      if (msg) msg.textContent = "⚠️ Captura falhou — imprimindo HTML no fallback.";';
-  html += '      _imgDataUrl = "fallback";';
-  html += '    });';
-  html += '  }, 450);';
-  html += '});';
-
-  // Função chamada pelos botões de modo
-  html += 'function iniciarImpressao(modo) {';
-  html += '  if (!_imgDataUrl) { alert("Aguarde a etiqueta terminar de gerar."); return; }';
-  html += '  var printArea = document.getElementById("print-area");';
-  html += '  printArea.className = "modo-" + modo;';   // define a classe de layout
-  html += '  if (_imgDataUrl === "fallback") {';
-  // Fallback: imprime o HTML diretamente se html2canvas falhou
-  html += '    window.print();';
-  html += '    window.addEventListener("afterprint", function() { window.close(); });';
-  html += '    return;';
-  html += '  }';
-  html += '  printArea.innerHTML = "<img src=\'" + _imgDataUrl + "\' alt=\'Etiqueta\'>";';
-  html += '  setTimeout(function() {';
-  html += '    window.print();';
-  html += '    window.addEventListener("afterprint", function() { window.close(); });';
-  html += '  }, 200);';
-  html += '}';
-  html += '<' + '/script>';
-  html += '</body></html>';
-
-  win.document.write(html);
-  win.document.close();
-}
-
 async function atualizarSelectEquipamentos() {
-  // ── CORREÇÃO 2B: inclui osg-equipamento no ciclo de população ──
   const { data } = await db.from('equipamentos').select('id, tag, produto, categoria');
-  ['pmoc-equipamento', 'os-equipamento', 'osg-equipamento'].map($).filter(Boolean).forEach(sel => {
-    const isOSG = sel.id === 'osg-equipamento';
-    sel.innerHTML = isOSG
-      ? '<option value="">-- Nenhum / Não aplicável --</option>'
-      : '<option value="">-- Selecione o Ativo --</option>';
+  ['pmoc-equipamento', 'os-equipamento'].map($).filter(Boolean).forEach(sel => {
+    sel.innerHTML = '<option value="">-- Selecione o Ativo --</option>';
     (data || []).forEach(e => {
-      const opt = document.createElement('option');
-      opt.value = e.id;
-      opt.textContent = `${e.tag} — ${e.produto || ''}`;
-      opt.dataset.categoria = e.categoria || 'OUT';
-      sel.appendChild(opt);
+      const opt = document.createElement('option'); opt.value = e.id; opt.textContent = `${e.tag} — ${e.produto || ''}`; opt.dataset.categoria = e.categoria || 'OUT'; sel.appendChild(opt);
     });
   });
 }
@@ -758,11 +452,7 @@ if ($('btn-salvar-colaborador')) {
   $('btn-salvar-colaborador').addEventListener('click', async () => {
     const nome = $('colab-nome')?.value.trim();
     const cpf  = $('colab-cpf')?.value.trim();
-    // ── CORREÇÃO 4B: rejeição defensiva — exige mínimo 11 dígitos numéricos antes de validar ──
-    const cpfDigitos = cpf ? cpf.replace(/\D/g, '') : '';
-    if (!nome) { msgForm('msg-colaborador', 'Informe o nome do colaborador.', 'red'); return; }
-    if (cpfDigitos.length < 11) { msgForm('msg-colaborador', 'CPF incompleto — informe os 11 dígitos.', 'red'); return; }
-    if (!validarCPF(cpf)) { msgForm('msg-colaborador', 'CPF inválido — verifique os dígitos informados.', 'red'); return; }
+    if (!nome || !cpf || !validarCPF(cpf)) { msgForm('msg-colaborador', 'Verifique o nome e o CPF informado.', 'red'); return; }
 
     msgForm('msg-colaborador', 'Salvando...', 'blue');
 
@@ -838,17 +528,9 @@ if ($('btn-salvar-ficha')) {
     }
     
     const obsCompleto = `[DataInspecao: ${dataInsp}]\n[Frequencia: ${freq === 'M' ? 'Mensal' : freq === 'T' ? 'Trimestral' : freq === 'S' ? 'Semestral' : 'Anual'}]\n[TipoEquipamento: ${cat}]\n[Checklist: ${JSON.stringify(checklistResult)}]\n[FiscalNome: ${fiscal_nome}]\n${$('pmoc-obs')?.value.trim() || ''}`;
-    // ── CORREÇÃO 1: Isola acesso a .files — evita TypeError em páginas sem o input ──
-    const _inputFotoPMOC = $('pmoc-foto');
-    const foto_url = await uploadFoto(
-      (_inputFotoPMOC && _inputFotoPMOC.files && _inputFotoPMOC.files.length > 0)
-        ? _inputFotoPMOC.files[0]
-        : null,
-      'pmoc',
-      'msg-ficha'
-    );
+    const foto_url = await uploadFoto($('pmoc-foto')?.files[0], 'pmoc', 'msg-ficha');
     const { data: colab } = await db.from('colaboradores').select('nome, assinatura_digital').eq('id', tecnico_id).single();
-    const { data: { user } } = await authClient.auth.getUser();
+    const { data: { user } } = await db.auth.getUser();
 
     // Usa assinatura cadastrada do técnico; se não houver, usa o canvas do fiscal (fallback)
     const assinaturaTecnico = colab?.assinatura_digital || null;
@@ -1156,45 +838,9 @@ async function carregarOrdensServico() {
 // ===================== FACILITIES =====================
 if ($('btn-salvar-osg')) {
   $('btn-salvar-osg').addEventListener('click', async () => {
-    // ── CORREÇÃO 2C: payload completo com tipo (radio), áreas (checkboxes) e FK de equipamento ──
-
-    // Captura o radio marcado para tipo de intervenção
-    const tipoMarcado = document.querySelector('input[name="osg-tipo"]:checked');
-    const tipo_manutencao = tipoMarcado ? tipoMarcado.value : null;
-
-    // Captura todos os checkboxes de área marcados e converte em string CSV
-    const areasMarcadas = Array.from(
-      document.querySelectorAll('input[name="osg-area"]:checked')
-    ).map(cb => cb.value);
-    const areas_envolvidas = areasMarcadas.length > 0 ? areasMarcadas.join(', ') : null;
-
-    // Captura a FK do equipamento a partir do <select>
-    const equipamentoSelectOSG = $('osg-equipamento');
-    const equipamento_id = (equipamentoSelectOSG && equipamentoSelectOSG.value)
-      ? equipamentoSelectOSG.value
-      : null;
-
-    const payload = {
-      setor:               $('osg-setor')?.value?.trim()       || null,
-      servico_requisitado: $('osg-requisitado')?.value?.trim() || null,
-      falha_relatada:      $('osg-falha')?.value?.trim()       || null,
-      status_os:           $('osg-status')?.value              || 'Aberta',
-      tipo_manutencao,
-      areas_envolvidas,
-      equipamento_id,
-      colaborador_id:      ($('osg-tecnico')?.value)           || null,
-    };
-
-    const idEd = $('osg-id-edicao')?.value;
-    const { error } = idEd
-      ? await db.from('ordens_servico_geral').update(payload).eq('id', idEd)
-      : await db.from('ordens_servico_geral').insert([payload]);
-
-    if (error) { msgForm('msg-osg', 'Erro: ' + error.message, 'red'); return; }
-    msgForm('msg-osg', idEd ? '✓ O.S. Facilities atualizada!' : '✓ Ordem Facilities registrada!', 'green');
-    resetarFormOSG();
-    carregarOSGeral();
-    carregarCentralUnificadaOS();
+    const payload = { setor: $('osg-setor').value, servico_requisitado: $('osg-requisitado').value, falha_relatada: $('osg-falha').value, status_os: $('osg-status').value };
+    const { error } = await db.from('ordens_servico_geral').insert([payload]);
+    if (!error) { resetarFormOSG(); carregarOSGeral(); carregarCentralUnificadaOS(); }
   });
 }
 async function carregarOSGeral() {
@@ -1213,69 +859,11 @@ async function carregarOSGeral() {
 }
 
 async function carregarCentralUnificadaOS() {
-  // ── CORREÇÃO 3: query limpa (sem colunas inexistentes) + exatamente 6 <td> simétricas ──
-  const tbody = $('tbody-central-unificada-os');
-  if (!tbody) return;
-
-  // Colunas garantidamente existentes em ordens_servico
-  const { data: ac } = await db
-    .from('ordens_servico')
-    .select('id, created_at, tipo_os, status_os, descricao_defeito')
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  // Colunas garantidamente existentes em ordens_servico_geral
-  const { data: g } = await db
-    .from('ordens_servico_geral')
-    .select('id, created_at, status_os, servico_requisitado, tipo_manutencao, areas_envolvidas')
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  // Normaliza as duas fontes para o mesmo shape de 6 campos
-  const linhasAC = (ac || []).map(d => ({
-    codigo:  'OS-AC-' + d.id.toString().slice(0, 5).toUpperCase(),
-    data:    d.created_at,
-    origem:  '❄️ Climatização',
-    tipo:    d.tipo_os    || '—',
-    resumo:  d.descricao_defeito
-      ? d.descricao_defeito.slice(0, 60) + (d.descricao_defeito.length > 60 ? '…' : '')
-      : '—',
-    status:  d.status_os  || '—',
-  }));
-
-  // ── ORDEM 2: Trunca "Categoria" para 25 chars — impede distorção de layout ──
-  const linhasFAC = (g || []).map(d => {
-    const tipoRaw = [d.tipo_manutencao, d.areas_envolvidas].filter(Boolean).join(' · ') || '—';
-    const tipo    = tipoRaw.length > 25 ? tipoRaw.slice(0, 25) + '…' : tipoRaw;
-    const resumoRaw = d.servico_requisitado || '—';
-    const resumo  = resumoRaw.length > 60 ? resumoRaw.slice(0, 60) + '…' : resumoRaw;
-    return {
-      codigo: 'OSG-' + d.id.toString().slice(0, 5).toUpperCase(),
-      data:   d.created_at,
-      origem: '🏢 Facilities',
-      tipo,
-      resumo,
-      status: d.status_os || '—',
-    };
-  });
-
-  const todas = [...linhasAC, ...linhasFAC]
-    .sort((a, b) => new Date(b.data) - new Date(a.data));
-
-  if (!todas.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum registro encontrado.</td></tr>';
-    return;
-  }
-
-  // Exatamente 6 <td> por linha — simétrico com os 6 <th> do cabeçalho em os.html
-  tbody.innerHTML = todas.map(l => `<tr>
-    <td><strong>${l.codigo}</strong></td>
-    <td>${fmtDate(l.data)}</td>
-    <td>${l.origem}</td>
-    <td>${l.tipo}</td>
-    <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${l.resumo}">${l.resumo}</td>
-    <td>${statusBadge(l.status)}</td>
-  </tr>`).join('');
+  const tbody = $('tbody-central-unificada-os'); if (!tbody) return;
+  const { data: ac } = await db.from('ordens_servico').select('id,created_at,tipo_os,status_os,descricao_defeito').limit(20);
+  const { data: g } = await db.from('ordens_servico_geral').select('id,created_at,tipo_manutencao,status_os,servico_requisitado,numero_os').limit(20);
+  const linhas = [...(ac || []).map(d => ({ id:'OS-AC-'+d.id.toString().slice(0,5).toUpperCase(), data:d.created_at, mod:'Refrigeração', cat:d.tipo_os, st:d.status_os })), ...(g || []).map(d => ({ id:d.numero_os||'OSG', data:d.created_at, mod:'Facilities', cat:d.tipo_manutencao, st:d.status_os }))].sort((a,b) => new Date(b.data) - new Date(a.data));
+  tbody.innerHTML = linhas.map(l => `<tr><td><strong>${l.id}</strong></td><td>${fmtDate(l.data)}</td><td>${l.mod}</td><td>${l.cat || '—'}</td><td>${statusBadge(l.st)}</td></tr>`).join('');
 }
 
 // ===================== GESTÃO DE USUÁRIOS (ROTA MÓVEL WHATSAPP) =====================
@@ -1303,7 +891,7 @@ if ($('btn-admin-salvar-usuario')) {
 
 async function carregarUsuariosSistema() {
   const tbody = $('tbody-usuarios-sistema'); if (!tbody) return;
-  const { data: { user: userAtual } } = await authClient.auth.getUser();
+  const { data: { user: userAtual } } = await db.auth.getUser();
   const { data: perfis, error } = await db.from('profiles').select('*').order('email', { ascending: true });
 
   let lista = perfis || [];
@@ -1353,52 +941,12 @@ function alternarSubAbasPMOC(m) { if($('sub-pmoc-form'))$('sub-pmoc-form').style
 function alternarSubAbasOS(m) { if($('sub-os-ac'))$('sub-os-ac').style.display=m==='ac'?'block':'none'; if($('sub-os-fac'))$('sub-os-fac').style.display=m==='fac'?'block':'none'; if($('sub-os-central'))$('sub-os-central').style.display=m==='central'?'block':'none'; if(m==='central')carregarCentralUnificadaOS(); }
 function alternarSubAbasRH(m) { if($('sub-rh-usuarios'))$('sub-rh-usuarios').style.display=m==='usuarios'?'block':'none'; if($('sub-rh-colab'))$('sub-rh-colab').style.display=m==='colab'?'block':'none'; if($('sub-rh-cargo'))$('sub-rh-cargo').style.display=m==='cargo'?'block':'none'; }
 function resetarFormOS() { ['os-defeito','os-laudo','os-id-edicao'].forEach(id => { if($(id)) $(id).value=''; }); }
-function resetarFormOSG() {
-  // ── CORREÇÃO 2D: reseta todos os campos do formulário OSG ──
-  ['osg-setor', 'osg-requisitado', 'osg-falha', 'osg-id-edicao'].forEach(id => {
-    if ($(id)) $(id).value = '';
-  });
-  // Reseta radios de tipo — volta ao padrão "Preventiva"
-  document.querySelectorAll('input[name="osg-tipo"]').forEach(r => {
-    r.checked = (r.value === 'Preventiva');
-  });
-  // Desmarca checkboxes de área
-  document.querySelectorAll('input[name="osg-area"]').forEach(cb => { cb.checked = false; });
-  // Reseta select de equipamento e status
-  if ($('osg-equipamento')) $('osg-equipamento').value = '';
-  if ($('osg-status'))      $('osg-status').value      = 'Aberta';
-  if ($('osg-tecnico'))     $('osg-tecnico').value      = '';
-}
+function resetarFormOSG() { ['osg-setor','osg-requisitado','osg-falha'].forEach(id => { if($(id)) $(id).value=''; }); }
 
-// ── CORREÇÃO 5A: QR Code 100% local/offline — sem dependência de api.qrserver.com ──
 function gerarQrCodeSVG(texto, tamanho = 120) {
-  // Gera um <canvas> com data-attr para ser hidratado por renderizarQRCodesLocais()
-  // O uid garante que múltiplos QR codes na mesma janela não colidam
-  const uid = 'qr-' + Math.random().toString(36).slice(2, 9);
-  return `<canvas id="${uid}" width="${tamanho}" height="${tamanho}"
-    data-qr-text="${encodeURIComponent(texto)}"
-    style="display:block;border:1px solid #e2e8f0;border-radius:4px;background:#fff;">
-  </canvas>`;
-}
-
-// Hidrata todos os <canvas data-qr-text> de um documento (janela de impressão ou página principal)
-function renderizarQRCodesLocais(docNode) {
-  (docNode || document).querySelectorAll('canvas[data-qr-text]').forEach(canvas => {
-    const texto = decodeURIComponent(canvas.dataset.qrText || '');
-    if (!texto) return;
-    try {
-      new QRCode(canvas, {
-        text:         texto,
-        width:        parseInt(canvas.width,  10) || 120,
-        height:       parseInt(canvas.height, 10) || 120,
-        colorDark:    '#1a202c',
-        colorLight:   '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M,
-      });
-    } catch (err) {
-      console.warn('[QR local] Falha ao renderizar QR Code:', err.message);
-    }
-  });
+  // QR Code gerado via API pública — sem dependência extra no bundle
+  const url = `https://api.qrserver.com/v1/create-qr-code/?size=${tamanho}x${tamanho}&data=${encodeURIComponent(texto)}&format=svg&margin=4`;
+  return `<img src="${url}" width="${tamanho}" height="${tamanho}" alt="QR Code de Validação" style="display:block;border:1px solid #e2e8f0;border-radius:4px;background:#fff;">`;
 }
 
 function gerarUrlValidacao(id, tipo) {
@@ -1461,31 +1009,9 @@ function imprimir(areaId, html) {
 </head>
 <body>
   ${html}
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
-    // ── PATCH 3: DOMContentLoaded garante execução imediata após parse do DOM ──
-    // Evita dependência de fontes externas pesadas (Google Fonts) que atrasam 'load'
-    // e podem causar canvas em branco na janela de impressão.
-    window.addEventListener('DOMContentLoaded', function() {
-      try {
-        // ── PATCH 2: 'elCanvas' evita shadowing da variável global 'canvas' do módulo ──
-        document.querySelectorAll('canvas[data-qr-text]').forEach(function(elCanvas) {
-          var texto = decodeURIComponent(elCanvas.dataset.qrText || '');
-          if (!texto) return;
-          try {
-            new QRCode(elCanvas, {
-              text:         texto,
-              width:        parseInt(elCanvas.width,  10) || 120,
-              height:       parseInt(elCanvas.height, 10) || 120,
-              colorDark:    '#1a202c',
-              colorLight:   '#ffffff',
-              correctLevel: QRCode.CorrectLevel.M,
-            });
-          } catch(eQr) { console.warn('[QR print] Canvas falhou:', eQr.message); }
-        });
-      } catch(eVarr) { console.warn('[QR print] Varredura falhou:', eVarr.message); }
-
-      // Delay mínimo para garantir que o canvas QR seja pintado antes do print dialog
+    // Aguarda fontes e imagens carregarem antes de imprimir
+    window.addEventListener('load', function() {
       setTimeout(function() {
         window.print();
         window.addEventListener('afterprint', function() { window.close(); });
@@ -1506,7 +1032,7 @@ if ($('btn-login')) {
 
   (async () => {
     if (!paramsUrl.get('token')) {
-      try { await authClient.auth.signOut(); } catch(e) {}
+      try { await db.auth.signOut(); } catch(e) {}
     }
     if (paramsUrl.get('email') && paramsUrl.get('token') === 'ativar_direto') {
       fluxoAtivacaoDireta = true;
@@ -1531,23 +1057,23 @@ if ($('btn-login')) {
       if (!password || password.length < 6) { alert("A nova senha precisa conter no mínimo 6 dígitos."); return; }
       msgForm('mensagem', 'Autenticando canal de segurança silencioso...', 'blue');
       const senhaTemporariaPadrao = "Acesso@Provisorio123";
-      const { error: errorLoginProv } = await authClient.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senhaTemporariaPadrao });
+      const { error: errorLoginProv } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senhaTemporariaPadrao });
       if (errorLoginProv) {
-        const { error: errorLoginDireto } = await authClient.auth.signInWithPassword({ email: emailAlvoAtivacao, password });
+        const { error: errorLoginDireto } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password });
         if (!errorLoginDireto) {
           await db.from('profiles').update({ status: 'ativo' }).eq('email', emailAlvoAtivacao);
           window.location.href = "dashboard.html"; return;
         }
-        const { error: sError } = await authClient.auth.signUp({ email: emailAlvoAtivacao, password, options: { emailRedirectTo: null } });
+        const { error: sError } = await db.auth.signUp({ email: emailAlvoAtivacao, password, options: { emailRedirectTo: null } });
         if (sError) { msgForm('mensagem', 'Erro: ' + sError.message, 'red'); return; }
         await db.from('profiles').update({ status: 'ativo' }).eq('email', emailAlvoAtivacao);
         msgForm('mensagem', 'Conta ativada! Redirecionando...', 'green');
         setTimeout(() => { window.location.href = "dashboard.html"; }, 1000); return;
       }
-      const { error: errorUpdate } = await authClient.auth.updateUser({ password });
+      const { error: errorUpdate } = await db.auth.updateUser({ password });
       if (errorUpdate) { msgForm('mensagem', 'Erro ao salvar senha: ' + errorUpdate.message, 'red'); return; }
       // Garante que o perfil existe com upsert
-      const { data: { user: uAtivo } } = await authClient.auth.getUser();
+      const { data: { user: uAtivo } } = await db.auth.getUser();
       if (uAtivo) {
         await db.from('profiles').upsert({
           id: uAtivo.id, email: emailAlvoAtivacao, status: 'ativo'
@@ -1559,49 +1085,42 @@ if ($('btn-login')) {
 
     if (modoRecuperacao) {
       msgForm('mensagem', 'Processando requisição...', 'blue');
-      await authClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/index.html" });
+      await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/index.html" });
       msgForm('mensagem', 'Se o SMTP estiver ativo, as instruções chegarão no e-mail.', 'green');
     } else {
       if (!password) { alert("Por favor, informe sua senha."); return; }
       msgForm('mensagem', 'Verificando credenciais...', 'blue');
-
-      const { data: sessao, error: loginError } = await authClient.auth.signInWithPassword({ email, password });
-
+      const { error: loginError } = await db.auth.signInWithPassword({ email, password });
       if (loginError) {
-        const erroTraduzido = {
-          'Invalid login credentials': 'E-mail ou senha incorretos.',
-          'Email not confirmed':       'E-mail ainda não confirmado. Verifique sua caixa de entrada.',
-          'Too many requests':         'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
-          'User not found':            'Usuário não encontrado.',
-        }[loginError.message] || ('Erro: ' + loginError.message);
-        msgForm('mensagem', '⚠️ ' + erroTraduzido, 'red');
-        console.error('[login] Auth erro:', loginError.message);
-        return;
-      }
+        msgForm('mensagem', 'Acesso negado: ' + loginError.message, 'red');
+      } else {
+        msgForm('mensagem', 'Acesso autorizado! Carregando dashboard...', 'green');
 
-      // ── Login bem-sucedido ──
-      // Redireciona IMEDIATAMENTE — sem aguardar operações de profiles
-      msgForm('mensagem', '✓ Acesso autorizado! Carregando...', 'green');
-      window.location.href = 'dashboard.html';
-
-      // Sync de profiles em background — fire-and-forget, nunca bloqueia o login
-      // Envolto em try-catch duplo: erro de FK (UUID PROD vs HOMO) é ignorado silenciosamente
-      try {
-        const userLogado = sessao?.user;
+        // Verifica se o perfil existe; cria automaticamente se for o primeiro acesso do admin
+        const { data: { user: userLogado } } = await db.auth.getUser();
         if (userLogado) {
-          const { data: perfil } = await db
-            .from('profiles').select('id').eq('id', userLogado.id).maybeSingle();
-          if (!perfil) {
+          const { data: perfilExistente } = await db
+            .from('profiles')
+            .select('id')
+            .eq('id', userLogado.id)
+            .maybeSingle();
+
+          if (!perfilExistente) {
+            // Cria o perfil admin automaticamente — nunca bloqueia o login
             await db.from('profiles').insert([{
               id:     userLogado.id,
               email:  userLogado.email,
               nome:   userLogado.user_metadata?.full_name || 'Administrador',
               role:   'admin',
               status: 'ativo',
-            }]).catch(() => {}); // FK violation em HOMO é ignorada
+            }]);
+          } else {
+            await db.from('profiles').update({ status: 'ativo' }).eq('id', userLogado.id);
           }
         }
-      } catch (_) { /* silencioso — nunca impede o login */ }
+
+        setTimeout(() => { window.location.href = "dashboard.html"; }, 600);
+      }
     }
   });
 }
@@ -1966,14 +1485,3 @@ if ($('btn-cancelar-edicao-osg')) {
     if (btnCancelar) btnCancelar.style.display = 'none';
   });
 }
-
-// ===================== CORREÇÃO 4A: MÁSCARA GLOBAL COERCITIVA DE CPF =====================
-// Listener delegado no document — formata dinamicamente qualquer elemento com classe .input-cpf
-document.addEventListener('input', function (e) {
-  if (!e.target.classList.contains('input-cpf')) return;
-  let v = e.target.value.replace(/\D/g, '').slice(0, 11);
-  if      (v.length > 9) v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
-  else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{1,3})$/,        '$1.$2.$3');
-  else if (v.length > 3) v = v.replace(/^(\d{3})(\d{1,3})$/,               '$1.$2');
-  e.target.value = v;
-});
