@@ -38,14 +38,7 @@
     .tag-tipo { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
     .tag-pmoc { background: #dbeafe; color: #1e40af; }
     .tag-os   { background: #ede9fe; color: #5b21b6; }
-
-    /* Abas de banco */
-    .abas-banco { display: flex; gap: 6px; padding: 12px 28px 0; border-bottom: 1px solid #e2e8f0; }
-    .aba-btn { padding: 6px 16px; border: 1px solid #e2e8f0; border-bottom: none; border-radius: 6px 6px 0 0; font-size: 12px; font-weight: 600; cursor: pointer; background: #f8fafc; color: #64748b; transition: background 0.15s; }
-    .aba-btn.ativa { background: #fff; color: #1a56db; border-color: #1a56db; }
-    /* Painéis de conteúdo — ocultos por padrão; .active revela o alvo */
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    .tag-eq   { background: #f0fdf4; color: #166534; }
 
     .checklist-mini { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
     .checklist-mini th { background: #f1f5f9; color: #64748b; padding: 5px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
@@ -64,86 +57,6 @@
 
     .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #1a56db; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 32px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Modal de visualização de laudo/OS inline */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,.6);
-      z-index: 9999; display: flex; align-items: flex-start;
-      justify-content: center; padding: 20px 12px; overflow-y: auto;
-    }
-    .modal-box {
-      background: #fff; border-radius: 12px; width: 100%; max-width: 540px;
-      box-shadow: 0 8px 40px rgba(0,0,0,.3); animation: fadeUp .2s ease;
-    }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-    .modal-header {
-      background: #1a56db; color: #fff; padding: 14px 18px;
-      border-radius: 12px 12px 0 0; display: flex;
-      justify-content: space-between; align-items: center;
-    }
-    .modal-header h2 { font-size: 15px; font-weight: 700; }
-    .modal-header p  { font-size: 11px; opacity: .8; margin-top: 2px; }
-    .modal-close {
-      background: rgba(255,255,255,.2); border: none; color: #fff;
-      font-size: 18px; width: 32px; height: 32px; border-radius: 6px;
-      cursor: pointer; flex-shrink: 0;
-    }
-    .modal-body { padding: 18px; }
-    .modal-section { margin-bottom: 14px; }
-    .modal-section-title {
-      font-size: 9px; font-weight: 700; color: #1a56db;
-      text-transform: uppercase; letter-spacing: .08em;
-      border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;
-    }
-    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
-    .modal-field label { font-size: 9px; color: #718096; text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 2px; }
-    .modal-field span  { font-size: 13px; font-weight: 600; color: #1a202c; }
-    .modal-field.full  { grid-column: span 2; }
-    .chk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .chk-table th { background: #f1f5f9; color: #64748b; padding: 5px 8px; font-size: 10px; text-align: left; }
-    .chk-table td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; }
-    .chk-table tr:last-child td { border-bottom: none; }
-    .modal-foto img { max-width: 100%; border-radius: 6px; border: 1px solid #e2e8f0; }
-    .modal-assin { display: flex; gap: 16px; flex-wrap: wrap; }
-    .modal-assin-box { flex: 1; text-align: center; min-width: 120px; }
-    .modal-assin-box img { max-width: 150px; max-height: 50px; display: block; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 4px; }
-    .modal-assin-linha { border-top: 1px solid #64748b; margin-top: 6px; padding-top: 4px; font-size: 10px; color: #718096; }
-    .modal-obs { font-size: 12px; color: #4a5568; line-height: 1.6; white-space: pre-wrap; }
-    .btn-ver {
-      margin-top: 8px; padding: 5px 12px; font-size: 11px; font-weight: 600;
-      background: #1a56db; color: #fff; border: none; border-radius: 6px;
-      cursor: pointer; width: 100%;
-    }
-    .btn-ver:hover { background: #1e40af; }
-
-    /* Histórico do ativo — seções PMOC e OS */
-    .hist-section { margin-top: 20px; }
-    .hist-section-title {
-      font-size: 10px; font-weight: 700; color: #1a56db;
-      text-transform: uppercase; letter-spacing: 0.08em;
-      padding: 10px 0 6px; border-top: 2px solid #e2e8f0;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .hist-loading { font-size: 12px; color: #a0aec0; text-align: center; padding: 12px 0; }
-    .hist-card {
-      border: 1px solid #e2e8f0; border-radius: 8px;
-      padding: 10px 14px; margin-bottom: 8px;
-      background: #f8fafc; font-size: 12px;
-    }
-    .hist-card-header {
-      display: flex; justify-content: space-between;
-      align-items: center; gap: 8px; flex-wrap: wrap;
-      margin-bottom: 4px;
-    }
-    .hist-card-codigo { font-weight: 700; color: #1a202c; font-size: 13px; }
-    .hist-card-data   { font-size: 10px; color: #94a3b8; }
-    .hist-card-body   { color: #4a5568; line-height: 1.5; }
-    .hist-card-tecnico { font-size: 10px; color: #718096; margin-top: 4px; }
-    .badge-pmoc { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-    .badge-os   { background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-    .badge-ok   { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-    .badge-warn { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
-    .badge-info { background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
 
     @media (max-width: 500px) {
       .field-group { grid-template-columns: 1fr; }
@@ -179,26 +92,9 @@
 </div>
 
 <script>
-  // 🔶 AMBIENTE: HOMOLOGAÇÃO — Arquitetura dual-client
-  // authClient → PROD (autenticação/sessão)
-  // DB_HOMO/DB_PROD → dados operacionais
-
-  const SUPABASE_URL_HOMO      = "https://nweligwbglblbncaegir.supabase.co";
-  const SUPABASE_ANON_KEY_HOMO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
-
-  const SUPABASE_URL_PROD      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
-  const SUPABASE_ANON_KEY_PROD = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
-
-  // Em homologação: HOMO é primário para dados, PROD é fallback
-  const DB_PRIMARIO  = supabase.createClient(SUPABASE_URL_HOMO, SUPABASE_ANON_KEY_HOMO);
-  const DB_FALLBACK  = supabase.createClient(SUPABASE_URL_PROD, SUPABASE_ANON_KEY_PROD);
-
-  // Aliases mantidos para compatibilidade com o restante do código
-  const DB_HOMO = DB_PRIMARIO;
-  const DB_PROD = DB_FALLBACK;
-
-  // Ponteiro mutável — começa em HOMO para homologação
-  let db = DB_PRIMARIO;
+  const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   document.getElementById('data-verificacao').textContent = new Date().toLocaleString('pt-BR');
 
@@ -206,22 +102,8 @@
   const id     = params.get('id');
   const tipo   = params.get('tipo'); // 'pmoc' ou 'os'
 
-  // 🔶 HOMO-first em homologação
-  async function buscarEquipamento(eqId) {
-    const { data: dHomo } = await DB_HOMO
-      .from('equipamentos').select('id').eq('id', eqId).maybeSingle();
-    if (dHomo) return { found: true, banco: DB_HOMO };
-
-    const { data: dProd } = await DB_PROD
-      .from('equipamentos').select('id').eq('id', eqId).maybeSingle();
-    if (dProd) return { found: true, banco: DB_PROD };
-
-    return { found: false, banco: DB_HOMO };
-  }
-
   function mostrarErro(msg) {
-    const spinner = document.getElementById('spinner');
-    if (spinner) spinner.remove();
+    document.getElementById('spinner').remove();
     document.getElementById('status-banner').className = 'status-banner invalido';
     document.getElementById('status-texto').textContent = msg;
     document.getElementById('corpo').innerHTML = `
@@ -236,93 +118,40 @@
     return new Date(d).toLocaleDateString('pt-BR');
   }
 
-  // ── AJUSTE 1: trocarAba corrigida — sincronizada com IDs reais do documento ──
-  // Painéis identificados por id="tab-{aba}" e classe .tab-content
-  // Visibilidade controlada via .active (CSS), sem manipulação de style.display inline
-  function trocarAba(aba, btn) {
-    // 1. Remove estado ativo de todos os botões de aba
-    document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
-    // 2. Ativa o botão que originou o clique (ponteiro 'this' passado pelo HTML)
-    if (btn) btn.classList.add('ativa');
-    // 3. Oculta todos os painéis de conteúdo via classe CSS
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    // 4. Exibe somente o painel cujo ID corresponde ao padrão 'tab-{aba}'
-    const painelAlvo = document.getElementById('tab-' + aba);
-    if (painelAlvo) painelAlvo.classList.add('active');
-  }
-
   async function verificar() {
     if (!id || !tipo) { mostrarErro('Parâmetros de verificação inválidos ou ausentes.'); return; }
 
     try {
       if (tipo === 'pmoc') {
-        // ── ORDEM 4.1: select limpo — tecnico_nome é coluna TEXT, não relação ──
-        // Tenta PROD primeiro; se não achar, tenta HOMO e reaponta o ponteiro db
-        // 🔶 HOMO primário em homologação
-        let f;
-        { const { data: fHomo } = await DB_HOMO
-            .from('fichas_pmoc')
-            .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
-            .eq('id', id)
-            .maybeSingle();
-          if (fHomo) { f = fHomo; db = DB_HOMO; }
-        }
-        if (!f) {
-          const { data: fProd } = await DB_PROD
-            .from('fichas_pmoc')
-            .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
-            .eq('id', id)
-            .maybeSingle();
-          if (fProd) { f = fProd; db = DB_PROD; }
-        }
-        if (!f) { mostrarErro('Laudo PMOC não encontrado na base de dados.'); return; }
+        const { data: f, error } = await db
+          .from('fichas_pmoc')
+          .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
+          .eq('id', id)
+          .single();
 
-        const matchData   = (f.observacoes || '').match(/\[DataInspecao:\s*([^\]]+)\]/);
-        const matchFreq   = (f.observacoes || '').match(/\[Frequencia:\s*([^\]]+)\]/);
-        const matchTipo   = (f.observacoes || '').match(/\[TipoEquipamento:\s*([^\]]+)\]/);
-        const matchChk    = (f.observacoes || '').match(/\[Checklist:\s*([^\]]+)\]/);
+        if (error || !f) { mostrarErro('Laudo PMOC não encontrado na base de dados.'); return; }
+
+        const matchData  = (f.observacoes || '').match(/\[DataInspecao:\s*([^\]]+)\]/);
+        const matchFreq  = (f.observacoes || '').match(/\[Frequencia:\s*([^\]]+)\]/);
+        const matchTipo  = (f.observacoes || '').match(/\[TipoEquipamento:\s*([^\]]+)\]/);
+        const matchChk   = (f.observacoes || '').match(/\[Checklist:\s*([^\]]+)\]/);
         const matchFiscal = (f.observacoes || '').match(/\[FiscalNome:\s*([^\]]+)\]/);
-        const checklist   = matchChk ? (() => { try { return JSON.parse(matchChk[1]); } catch(e) { return {}; } })() : {};
-        const dataInsp    = matchData  ? matchData[1]        : fmtDate(f.created_at);
-        const freq        = matchFreq  ? matchFreq[1]        : '—';
-        const tipo_eq     = matchTipo  ? matchTipo[1]        : '—';
-        const fiscalNome  = matchFiscal ? matchFiscal[1].trim() : '—';
-        const eq          = f.equipamentos || {};
-        const codigo      = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
+        const checklist  = matchChk ? (() => { try { return JSON.parse(matchChk[1]); } catch(e) { return {}; } })() : {};
+        const dataInsp   = matchData ? matchData[1] : fmtDate(f.created_at);
+        const freq       = matchFreq ? matchFreq[1] : '—';
+        const tipo_eq    = matchTipo ? matchTipo[1] : '—';
+        const fiscalNome = matchFiscal ? matchFiscal[1].trim() : '—';
+        const eq         = f.equipamentos || {};
+        const codigo     = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
 
-        // CORREÇÃO 2: dicionário expandido + fallback para chaves não mapeadas
         const labelChk = {
-          // Chaves padrão do sistema
-          'limpeza-filtro':      'Limpeza de Filtro',
-          'limpeza-evaporadora': 'Limpeza Evaporadora',
-          'limpeza-condensadora':'Limpeza Condensadora',
-          'verificacao-dreno':   'Verificação de Dreno',
-          'verificacao-eletrica':'Verificação Elétrica',
-          'verificacao-fluido':  'Verificação de Fluido',
-          'teste-operacao':      'Teste de Operação',
-          'verificacao-ruidos':  'Verificação de Ruídos',
-          'limpeza-geral':       'Limpeza Geral',
-          // Chaves de checklist personalizado (formato código_sequência)
-          'fil_01':'Filtro — Item 01', 'fil_02':'Filtro — Item 02', 'fil_03':'Filtro — Item 03',
-          'bio_01':'Biológico — Item 01', 'bio_02':'Biológico — Item 02', 'bio_03':'Biológico — Item 03',
-          'mec_01':'Mecânico — Item 01', 'mec_02':'Mecânico — Item 02', 'mec_03':'Mecânico — Item 03',
-          'ele_01':'Elétrico — Item 01', 'ele_02':'Elétrico — Item 02', 'ele_03':'Elétrico — Item 03',
-          'hid_01':'Hidráulico — Item 01','hid_02':'Hidráulico — Item 02',
+          'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora','limpeza-condensadora':'Limpeza Condensadora',
+          'verificacao-dreno':'Verificação de Dreno','verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
+          'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos','limpeza-geral':'Limpeza Geral',
         };
-        // Fallback: formata a chave bruta substituindo _ por espaço e capitalizando
-        const labelFallback = (k) => labelChk[k] || k.replace(/_/g, ' ').replace(/\w/g, c => c.toUpperCase());
-
-        const statusChk = {
-          'OK': '<span class="ok">✓ OK</span>',
-          'NOK':'<span class="nok">✗ NOK</span>',
-          'NA': '<span class="na">N/A</span>',
-          // Compatibilidade com fichas que usam C/I/N
-          'C':  '<span class="ok">✓ Conforme</span>',
-          'I':  '<span class="nok">✗ Inconform.</span>',
-          'N':  '<span class="na">N/A</span>',
-        };
+        const statusChk = { 'OK':'<span class="ok">✓ OK</span>', 'NOK':'<span class="nok">✗ NOK</span>', 'NA':'<span class="na">N/A</span>' };
         const chkRows = Object.entries(checklist).map(([k,v]) =>
-          `<tr><td>${labelFallback(k)}</td><td style="text-align:center;">${statusChk[v] || v}</td></tr>`
+          `<tr><td>${labelChk[k] || k}</td><td style="text-align:center;">${statusChk[v] || v}</td></tr>`
         ).join('');
 
         const assinaturaTecnicoHTML = f.assinatura_digital?.startsWith('data:image')
@@ -334,65 +163,49 @@
 
         document.getElementById('status-banner').className = 'status-banner valido';
         document.getElementById('status-texto').textContent = `✅ Documento autêntico — ${codigo}`;
-        const spinner = document.getElementById('spinner');
-        if (spinner) spinner.remove();
+        document.getElementById('spinner').remove();
         document.getElementById('corpo').innerHTML = `
-          <!-- ── PATCH 1: Contêiner de aba PMOC — id="tab-pmoc" + .tab-content.active ── -->
-          <div class="tab-content active" id="tab-pmoc">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-              <span class="tag-tipo tag-pmoc">📋 PMOC</span>
-              <strong style="font-size:15px;">${codigo}</strong>
-              <span style="font-size:11px;color:#94a3b8;margin-left:auto;">Emitido em ${fmtDate(f.created_at)}</span>
-            </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <span class="tag-tipo tag-pmoc">📋 PMOC</span>
+            <strong style="font-size:15px;">${codigo}</strong>
+            <span style="font-size:11px;color:#94a3b8;margin-left:auto;">Emitido em ${fmtDate(f.created_at)}</span>
+          </div>
 
-            <div class="field-group">
-              <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
-              <div class="field"><label>Equipamento</label><span>${eq.produto || tipo_eq}</span></div>
-              <div class="field"><label>Marca</label><span>${eq.marca || '—'}</span></div>
-              <div class="field"><label>Localização</label><span>${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—'}</span></div>
-              <div class="field"><label>Técnico Executor</label><span>${f.tecnico_nome || '—'}</span></div>
-              <div class="field"><label>Data da Inspeção</label><span>${dataInsp}</span></div>
-              <div class="field"><label>Frequência</label><span>${freq}</span></div>
-              <div class="field"><label>Fiscal / Validador</label><span>${fiscalNome}</span></div>
-            </div>
+          <div class="field-group">
+            <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
+            <div class="field"><label>Equipamento</label><span>${eq.produto || tipo_eq}</span></div>
+            <div class="field"><label>Marca</label><span>${eq.marca || '—'}</span></div>
+            <div class="field"><label>Localização</label><span>${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—'}</span></div>
+            <div class="field"><label>Técnico Executor</label><span>${f.tecnico_nome}</span></div>
+            <div class="field"><label>Data da Inspeção</label><span>${dataInsp}</span></div>
+            <div class="field"><label>Frequência</label><span>${freq}</span></div>
+            <div class="field"><label>Fiscal / Validador</label><span>${fiscalNome}</span></div>
+          </div>
 
-            ${chkRows ? `
-            <hr class="divider">
-            <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Checklist de Manutenção</div>
-            <table class="checklist-mini">
-              <thead><tr><th>Item</th><th style="text-align:center;">Status</th></tr></thead>
-              <tbody>${chkRows}</tbody>
-            </table>` : ''}
+          ${chkRows ? `
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Checklist de Manutenção</div>
+          <table class="checklist-mini">
+            <thead><tr><th>Item</th><th style="text-align:center;">Status</th></tr></thead>
+            <tbody>${chkRows}</tbody>
+          </table>` : ''}
 
-            <hr class="divider">
-            <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinaturas</div>
-            <div class="assinatura-row">
-              <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${f.tecnico_nome || '—'}<br>Técnico Executor</div></div>
-              <div class="assinatura-box">${assinaturaFiscalHTML}<div class="linha">${fiscalNome}<br>Fiscal / Validador</div></div>
-            </div>
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinaturas</div>
+          <div class="assinatura-row">
+            <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${f.tecnico_nome}<br>Técnico Executor</div></div>
+            <div class="assinatura-box">${assinaturaFiscalHTML}<div class="linha">${fiscalNome}<br>Fiscal / Validador</div></div>
           </div>
         `;
 
       } else if (tipo === 'os') {
-        // Tenta PROD; se não achar, tenta HOMO
-        // 🔶 HOMO primário em homologação
-        let os;
-        { const { data: osHomo } = await DB_HOMO
-            .from('ordens_servico')
-            .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
-            .eq('id', id)
-            .maybeSingle();
-          if (osHomo) { os = osHomo; db = DB_HOMO; }
-        }
-        if (!os) {
-          const { data: osProd } = await DB_PROD
-            .from('ordens_servico')
-            .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
-            .eq('id', id)
-            .maybeSingle();
-          if (osProd) { os = osProd; db = DB_PROD; }
-        }
-        if (!os) { mostrarErro('Ordem de Serviço não encontrada na base de dados.'); return; }
+        const { data: os, error } = await db
+          .from('ordens_servico')
+          .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
+          .eq('id', id)
+          .single();
+
+        if (error || !os) { mostrarErro('Ordem de Serviço não encontrada na base de dados.'); return; }
 
         const col    = os.colaboradores || {};
         const eq     = os.equipamentos  || {};
@@ -408,413 +221,99 @@
 
         document.getElementById('status-banner').className = 'status-banner valido';
         document.getElementById('status-texto').textContent = `✅ Documento autêntico — ${codigo}`;
-        const spinner = document.getElementById('spinner');
-        if (spinner) spinner.remove();
+        document.getElementById('spinner').remove();
         document.getElementById('corpo').innerHTML = `
-          <!-- OS — contêiner estrutural direto; sem acoplamento às regras de aba (trocarAba não existe nesta view) -->
-          <div class="os-content-block">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-              <span class="tag-tipo tag-os">🛠️ O.S.</span>
-              <strong style="font-size:15px;">${codigo}</strong>
-              <span style="font-size:11px; font-weight:700; padding:2px 10px; border-radius:12px; margin-left:auto; background:${statusCor[st]||'#f1f5f9'}; color:${statusTxt[st]||'#374151'}">${st}</span>
-            </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <span class="tag-tipo tag-os">🛠️ O.S.</span>
+            <strong style="font-size:15px;">${codigo}</strong>
+            <span style="font-size:11px; font-weight:700; padding:2px 10px; border-radius:12px; margin-left:auto; background:${statusCor[st]||'#f1f5f9'}; color:${statusTxt[st]||'#374151'}">${st}</span>
+          </div>
 
-            <div class="field-group">
-              <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
-              <div class="field"><label>Equipamento</label><span>${eq.produto || '—'}</span></div>
-              <div class="field"><label>Localização</label><span>${[eq.bloco, eq.setor].filter(Boolean).join(' › ') || '—'}</span></div>
-              <div class="field"><label>Nº Série</label><span>${eq.nr_serie || '—'}</span></div>
-              <div class="field"><label>Técnico Responsável</label><span>${col.nome || '—'}</span></div>
-              <div class="field"><label>Tipo de Manutenção</label><span>${os.tipo_os || '—'}</span></div>
-              <div class="field full"><label>Abertura da O.S.</label><span>${fmtDate(os.created_at)}</span></div>
-            </div>
+          <div class="field-group">
+            <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
+            <div class="field"><label>Equipamento</label><span>${eq.produto || '—'}</span></div>
+            <div class="field"><label>Localização</label><span>${[eq.bloco, eq.setor].filter(Boolean).join(' › ') || '—'}</span></div>
+            <div class="field"><label>Nº Série</label><span>${eq.nr_serie || '—'}</span></div>
+            <div class="field"><label>Técnico Responsável</label><span>${col.nome || '—'}</span></div>
+            <div class="field"><label>Tipo de Manutenção</label><span>${os.tipo_os || '—'}</span></div>
+            <div class="field full"><label>Abertura da O.S.</label><span>${fmtDate(os.created_at)}</span></div>
+          </div>
 
-            ${os.descricao_defeito ? `
-            <hr class="divider">
-            <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Descrição da Ocorrência</div>
-            <p style="font-size:12px;line-height:1.6;color:#374151;">${os.descricao_defeito}</p>` : ''}
+          ${os.descricao_defeito ? `
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Descrição da Ocorrência</div>
+          <p style="font-size:12px;line-height:1.6;color:#374151;">${os.descricao_defeito}</p>` : ''}
 
-            ${os.laudo_tecnico ? `
-            <hr class="divider">
-            <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Diagnóstico / Ações</div>
-            <p style="font-size:12px;line-height:1.6;color:#374151;">${os.laudo_tecnico}</p>` : ''}
+          ${os.laudo_tecnico ? `
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Diagnóstico / Ações</div>
+          <p style="font-size:12px;line-height:1.6;color:#374151;">${os.laudo_tecnico}</p>` : ''}
 
-            <hr class="divider">
-            <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinatura do Técnico</div>
-            <div class="assinatura-row">
-              <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${col.nome || '—'}<br>Técnico Executor</div></div>
-            </div>
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinatura do Técnico</div>
+          <div class="assinatura-row">
+            <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${col.nome || '—'}<br>Técnico Executor</div></div>
           </div>
         `;
-
       } else if (tipo === 'equipamento') {
-        // Limpa spinner imediatamente
-        const spinnerEq = document.getElementById('spinner');
-        if (spinnerEq) spinnerEq.remove();
+        // Busca pelo qrcode_token — o UUID gerado no cadastro do ativo
+        const { data: eq, error } = await db
+          .from('equipamentos')
+          .select('*')
+          .eq('qrcode_token', id)
+          .single();
 
-        // Busca em PROD e HOMO em paralelo — o que responder primeiro com dados vence
-        // Execução paralela evita latência dupla de rede
-        let eq = null;
-        let banco = null;
+        if (error || !eq) { mostrarErro('Equipamento não encontrado na base de dados.'); return; }
 
-        // 🔶 HOMO é primário em homologação — ordem: HOMO → PROD
-        const [resHomo, resProd] = await Promise.all([
-          DB_HOMO.from('equipamentos').select('*').eq('id', id).maybeSingle(),
-          DB_PROD.from('equipamentos').select('*').eq('id', id).maybeSingle(),
-        ]);
+        const critCor = { Alta: { bg:'#fee2e2', txt:'#991b1b' }, Média: { bg:'#fef3c7', txt:'#92400e' }, Baixa: { bg:'#d1fae5', txt:'#065f46' } };
+        const crit    = eq.criticidade || 'Média';
+        const critStyle = critCor[crit] || critCor['Média'];
 
-        if (resHomo.data) {
-          eq    = resHomo.data;
-          banco = 'HOMO';
-          db    = DB_HOMO;
-        } else if (resProd.data) {
-          eq    = resProd.data;
-          banco = 'PROD';
-          db    = DB_PROD;
-        }
+        const catLabel = { AC:'❄️ Ar Condicionado', BEB:'💧 Bebedouro', CLIM:'🌀 Climatizador Evaporativo', VEN:'💨 Ventilador/Exaustor', OUT:'🔧 Outros' };
+        const codigo = `EQ-${(eq.tag || eq.id.toString().slice(0,6)).toUpperCase()}`;
 
-        // Debug: loga erros para auxiliar diagnóstico em campo
-        if (resHomo.error) console.warn('[verificar] HOMO erro:', resHomo.error.message);
-        if (resProd.error) console.warn('[verificar] PROD erro:', resProd.error.message);
-        if (!eq) {
-          const detHomo = resHomo.error ? ' HOMO: ' + resHomo.error.message : ' HOMO: sem resultado';
-          const detProd = resProd.error ? ' PROD: ' + resProd.error.message : ' PROD: sem resultado';
-          mostrarErro('Equipamento não encontrado. (' + detHomo + ' |' + detProd + ')');
-          return;
-        }
-        console.info('[verificar] Ativo encontrado em', banco, '— id:', eq.id);
+        // Monta extras técnicos se existir
+        const extras = eq.extras_tecnico || {};
+        const extraFields = Object.entries(extras).map(([k, v]) =>
+          `<div class="field"><label>${k.replace(/-/g,' ')}</label><span>${v}</span></div>`
+        ).join('');
 
-        // Monta extras técnicos como campos de formulário padrão
-        const extras    = eq.extras_tecnico || {};
-        const extraRows = Object.entries(extras)
-          .filter(([, v]) => v != null && String(v).trim() !== '')
-          .map(([k, v]) => `
-            <div class="field">
-              <label>${k.replace(/[-_]/g,' ')}</label>
-              <span>${v}</span>
-            </div>`)
-          .join('');
-
-        const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—';
-        const validadeStr = eq.validade
-          ? new Date(eq.validade + 'T00:00:00').toLocaleDateString('pt-BR', { month:'2-digit', year:'numeric' })
-          : '—';
-        const critCor = eq.criticidade === 'Alta' ? '#dc2626'
-                      : eq.criticidade === 'Baixa' ? '#059669' : '#d97706';
-
-        // Atualiza banner de status
         document.getElementById('status-banner').className = 'status-banner valido';
-        document.getElementById('status-texto').textContent = '✅ Ativo autenticado — ' + eq.tag;
-
-        // Injeta ficha técnica + placeholders de histórico
+        document.getElementById('status-texto').textContent = `✅ Ativo autêntico — ${codigo}`;
+        document.getElementById('spinner').remove();
         document.getElementById('corpo').innerHTML = `
-          <div class="os-content-block" id="ficha-ativo-verificado">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-              <span class="tag-tipo tag-pmoc">🏷️ Ativo</span>
-              <strong style="font-size:15px;">${eq.tag}</strong>
-              <span style="font-size:11px;color:#94a3b8;margin-left:auto;">${eq.categoria || '—'}</span>
-            </div>
-
-            <div class="field-group">
-              <div class="field"><label>TAG</label><span>${eq.tag}</span></div>
-              <div class="field"><label>Produto / Modelo</label><span>${eq.produto || '—'}</span></div>
-              <div class="field"><label>Marca</label><span>${eq.marca || '—'}</span></div>
-              <div class="field"><label>Nº Série</label><span>${eq.nr_serie || '—'}</span></div>
-              <div class="field"><label>Patrimônio</label><span>${eq.patrimonio || '—'}</span></div>
-              <div class="field"><label>Potência / Capacidade</label><span>${eq.potencia || '—'}</span></div>
-              <div class="field full"><label>Localização</label><span>${localizacao}</span></div>
-              <div class="field"><label>Instituição</label><span>${eq.instituicao || '—'}</span></div>
-              <div class="field"><label>Criticidade</label>
-                <span style="font-weight:700;color:${critCor};">Classe ${eq.criticidade || '—'}</span>
-              </div>
-              <div class="field"><label>Validade / Garantia</label><span>${validadeStr}</span></div>
-              ${extraRows}
-            </div>
-
-            <!-- Histórico PMOC -->
-            <div class="hist-section">
-              <div class="hist-section-title">📋 Laudos PMOC</div>
-              <div id="hist-pmoc"><div class="hist-loading">⏳ Carregando laudos...</div></div>
-            </div>
-
-            <!-- Histórico OS -->
-            <div class="hist-section">
-              <div class="hist-section-title">🛠️ Ordens de Serviço</div>
-              <div id="hist-os"><div class="hist-loading">⏳ Carregando ordens...</div></div>
-            </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+            <span class="tag-tipo" style="background:#f0fdf4;color:#166534;">🏷️ Ativo</span>
+            <strong style="font-size:15px;">${codigo}</strong>
+            <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;margin-left:auto;background:${critStyle.bg};color:${critStyle.txt};">Classe ${crit}</span>
           </div>
+
+          <div class="field-group">
+            <div class="field"><label>TAG do Ativo</label><span>${eq.tag || '—'}</span></div>
+            <div class="field"><label>Categoria</label><span>${catLabel[eq.categoria] || eq.categoria || '—'}</span></div>
+            <div class="field"><label>Equipamento / Produto</label><span>${eq.produto || '—'}</span></div>
+            <div class="field"><label>Marca</label><span>${eq.marca || '—'}</span></div>
+            <div class="field"><label>Nº de Série</label><span>${eq.nr_serie || '—'}</span></div>
+            <div class="field"><label>Patrimônio</label><span>${eq.patrimonio || '—'}</span></div>
+            <div class="field"><label>Potência</label><span>${eq.potencia || '—'}</span></div>
+            <div class="field"><label>Instituição</label><span>${eq.instituicao || '—'}</span></div>
+            <div class="field full"><label>Localização</label><span>${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—'}</span></div>
+          </div>
+
+          ${extraFields ? `
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Dados Técnicos Específicos</div>
+          <div class="field-group">${extraFields}</div>` : ''}
+
+          ${eq.validade ? `
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Validade / Próxima Troca</div>
+          <p style="font-size:13px;font-weight:600;color:#1a202c;">${fmtDate(eq.validade)}</p>` : ''}
+
+          <hr class="divider">
+          <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Registro do Ativo</div>
+          <p style="font-size:12px;color:#4a5568;">Cadastrado em: <strong>${fmtDate(eq.created_at)}</strong></p>
         `;
-
-        // Busca PMOC e OS em paralelo usando o banco já apontado (db = HOMO ou PROD)
-        // Busca completa — todos os campos necessários para o modal de visualização
-        const [resFichas, resOS] = await Promise.all([
-          db.from('fichas_pmoc')
-            .select('id, created_at, tecnico_nome, observacoes, foto_url, assinatura_digital, assinatura_fiscal')
-            .eq('equipamento_id', eq.id)
-            .order('created_at', { ascending: false })
-            .limit(10),
-          db.from('ordens_servico')
-            .select('id, created_at, tipo_os, status_os, descricao_defeito, laudo_tecnico, foto_url, colaboradores(nome, assinatura_digital)')
-            .eq('equipamento_id', eq.id)
-            .order('created_at', { ascending: false })
-            .limit(10),
-        ]);
-
-        // ── Helpers de modal ─────────────────────────────────────────
-        function abrirModal(htmlConteudo) {
-          fecharModal();
-          const overlay = document.createElement('div');
-          overlay.className = 'modal-overlay';
-          overlay.id = 'modal-laudo';
-          overlay.innerHTML = htmlConteudo;
-          document.body.appendChild(overlay);
-          overlay.addEventListener('click', e => { if (e.target === overlay) fecharModal(); });
-        }
-        function fecharModal() {
-          const m = document.getElementById('modal-laudo');
-          if (m) m.remove();
-        }
-
-        // Dicionário de labels do checklist (mesmo padrão do sistema)
-        const labelChkVer = {
-          'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora',
-          'limpeza-condensadora':'Limpeza Condensadora','verificacao-dreno':'Verificação de Dreno',
-          'verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
-          'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos',
-          'limpeza-geral':'Limpeza Geral',
-          'fil_01':'Filtro 01','fil_02':'Filtro 02','bio_01':'Biológico 01',
-          'bio_02':'Biológico 02','mec_01':'Mecânico 01','ele_01':'Elétrico 01',
-          'hid_01':'Hidráulico 01','hid_02':'Hidráulico 02',
-        };
-        const statusChkVer = {
-          'OK' :'<span class="ok">✓ OK</span>',
-          'NOK':'<span class="nok">✗ NOK</span>',
-          'NA' :'<span class="na">N/A</span>',
-          'C'  :'<span class="ok">✓ Conforme</span>',
-          'I'  :'<span class="nok">✗ Inconform.</span>',
-          'N'  :'<span class="na">N/A</span>',
-        };
-
-        // ── Função: abre modal do PMOC ────────────────────────────────
-        function verLaudoPMOC(fJson) {
-          const f = JSON.parse(decodeURIComponent(fJson));
-          const matchData   = (f.observacoes||'').match(/\[DataInspecao:\s*([^\]]+)\]/);
-          const matchFreq   = (f.observacoes||'').match(/\[Frequencia:\s*([^\]]+)\]/);
-          const matchTipo   = (f.observacoes||'').match(/\[TipoEquipamento:\s*([^\]]+)\]/);
-          const matchChk    = (f.observacoes||'').match(/\[Checklist:\s*([^\]]+)\]/);
-          const matchFiscal = (f.observacoes||'').match(/\[FiscalNome:\s*([^\]]+)\]/);
-          const obsLimpa    = (f.observacoes||'').replace(/\[[^\]]+\]/g,'').trim();
-          const checklist   = matchChk ? (()=>{ try{return JSON.parse(matchChk[1]);}catch(e){return{};} })() : {};
-          const dataInsp    = matchData  ? matchData[1]    : fmtDate(f.created_at);
-          const freq        = matchFreq  ? matchFreq[1]    : '—';
-          const tipo        = matchTipo  ? matchTipo[1]    : '—';
-          const fiscalNome  = matchFiscal? matchFiscal[1].trim() : '—';
-          const codigo      = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
-
-          const chkRows = Object.entries(checklist).map(([k,v]) =>
-            `<tr><td>${labelChkVer[k] || k.replace(/[-_]/g,' ')}</td>
-                 <td style="text-align:center;">${statusChkVer[v] || v}</td></tr>`
-          ).join('');
-
-          const assinTecnico = f.assinatura_digital?.startsWith('data:image')
-            ? `<img src="${f.assinatura_digital}" alt="Assinatura Técnico">`
-            : `<div style="height:40px;border-bottom:1px dashed #94a3b8;"></div>`;
-          const assinFiscal = f.assinatura_fiscal?.startsWith('data:image')
-            ? `<img src="${f.assinatura_fiscal}" alt="Assinatura Fiscal">`
-            : `<div style="height:40px;border-bottom:1px dashed #94a3b8;"></div>`;
-          const fotoHTML = f.foto_url
-            ? `<div class="modal-section"><div class="modal-section-title">Evidência Fotográfica</div>
-               <div class="modal-foto"><img src="${f.foto_url}" alt="Foto da inspeção"></div></div>`
-            : '';
-
-          abrirModal(`
-            <div class="modal-box">
-              <div class="modal-header">
-                <div>
-                  <h2>📋 ${codigo}</h2>
-                  <p>Laudo PMOC — ${freq} — ${dataInsp}</p>
-                </div>
-                <button class="modal-close" onclick="fecharModal()">✕</button>
-              </div>
-              <div class="modal-body">
-                <div class="modal-section">
-                  <div class="modal-section-title">Dados da Inspeção</div>
-                  <div class="modal-grid">
-                    <div class="modal-field"><label>Técnico Executor</label><span>${f.tecnico_nome || '—'}</span></div>
-                    <div class="modal-field"><label>Data da Inspeção</label><span>${dataInsp}</span></div>
-                    <div class="modal-field"><label>Frequência</label><span>${freq}</span></div>
-                    <div class="modal-field"><label>Tipo de Equipamento</label><span>${tipo}</span></div>
-                    <div class="modal-field full"><label>Fiscal / Validador</label><span>${fiscalNome}</span></div>
-                  </div>
-                </div>
-
-                ${chkRows ? `
-                <div class="modal-section">
-                  <div class="modal-section-title">Checklist de Manutenção</div>
-                  <table class="chk-table">
-                    <thead><tr><th>Item</th><th style="text-align:center;width:90px;">Status</th></tr></thead>
-                    <tbody>${chkRows}</tbody>
-                  </table>
-                </div>` : ''}
-
-                ${obsLimpa ? `
-                <div class="modal-section">
-                  <div class="modal-section-title">Observações Técnicas</div>
-                  <div class="modal-obs">${obsLimpa}</div>
-                </div>` : ''}
-
-                ${fotoHTML}
-
-                <div class="modal-section">
-                  <div class="modal-section-title">Assinaturas</div>
-                  <div class="modal-assin">
-                    <div class="modal-assin-box">
-                      ${assinTecnico}
-                      <div class="modal-assin-linha">${f.tecnico_nome || '—'}<br>Técnico Executor</div>
-                    </div>
-                    <div class="modal-assin-box">
-                      ${assinFiscal}
-                      <div class="modal-assin-linha">${fiscalNome}<br>Fiscal / Validador</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>`);
-        }
-
-        // ── Função: abre modal da OS ──────────────────────────────────
-        function verOrdemServico(osJson) {
-          const os = JSON.parse(decodeURIComponent(osJson));
-          const codigo = 'OS-AC-' + os.id.toString().slice(0,5).toUpperCase();
-          const statusCor = { 'Concluída':'#059669','Em Andamento':'#1a56db','Aberta':'#d97706' };
-          const cor = statusCor[os.status_os] || '#d97706';
-          const assinTecnico = os.colaboradores?.assinatura_digital?.startsWith('data:image')
-            ? `<img src="${os.colaboradores.assinatura_digital}" alt="Assinatura">`
-            : `<div style="height:40px;border-bottom:1px dashed #94a3b8;"></div>`;
-          const fotoHTML = os.foto_url
-            ? `<div class="modal-section"><div class="modal-section-title">Evidência Fotográfica</div>
-               <div class="modal-foto"><img src="${os.foto_url}" alt="Foto da OS"></div></div>`
-            : '';
-
-          abrirModal(`
-            <div class="modal-box">
-              <div class="modal-header">
-                <div>
-                  <h2>🛠️ ${codigo}</h2>
-                  <p>${os.tipo_os || '—'} — ${fmtDate(os.created_at)}</p>
-                </div>
-                <button class="modal-close" onclick="fecharModal()">✕</button>
-              </div>
-              <div class="modal-body">
-                <div class="modal-section">
-                  <div class="modal-section-title">Dados da Ordem</div>
-                  <div class="modal-grid">
-                    <div class="modal-field"><label>Técnico Responsável</label><span>${os.colaboradores?.nome || '—'}</span></div>
-                    <div class="modal-field"><label>Abertura</label><span>${fmtDate(os.created_at)}</span></div>
-                    <div class="modal-field"><label>Tipo</label><span>${os.tipo_os || '—'}</span></div>
-                    <div class="modal-field"><label>Status</label>
-                      <span style="font-weight:700;color:${cor};">${os.status_os || '—'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                ${os.descricao_defeito ? `
-                <div class="modal-section">
-                  <div class="modal-section-title">Descrição da Ocorrência</div>
-                  <div class="modal-obs">${os.descricao_defeito}</div>
-                </div>` : ''}
-
-                ${os.laudo_tecnico ? `
-                <div class="modal-section">
-                  <div class="modal-section-title">Diagnóstico / Ações Executadas</div>
-                  <div class="modal-obs">${os.laudo_tecnico}</div>
-                </div>` : ''}
-
-                ${fotoHTML}
-
-                <div class="modal-section">
-                  <div class="modal-section-title">Assinatura do Técnico</div>
-                  <div class="modal-assin">
-                    <div class="modal-assin-box">
-                      ${assinTecnico}
-                      <div class="modal-assin-linha">${os.colaboradores?.nome || '—'}<br>Técnico Executor</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>`);
-        }
-
-        // ── Renderiza PMOC ────────────────────────────────────────────
-        const elPMOC = document.getElementById('hist-pmoc');
-        if (elPMOC) {
-          const fichas = resFichas.data || [];
-          if (!fichas.length) {
-            elPMOC.innerHTML = '<div class="hist-loading">Nenhum laudo PMOC registrado para este ativo.</div>';
-          } else {
-            elPMOC.innerHTML = fichas.map(f => {
-              const matchData = (f.observacoes||'').match(/\[DataInspecao:\s*([^\]]+)\]/);
-              const matchFreq = (f.observacoes||'').match(/\[Frequencia:\s*([^\]]+)\]/);
-              const matchChk  = (f.observacoes||'').match(/\[Checklist:\s*([^\]]+)\]/);
-              const dataInsp  = matchData ? matchData[1] : fmtDate(f.created_at);
-              const freq      = matchFreq ? matchFreq[1] : '—';
-              const checklist = matchChk  ? (()=>{ try{return JSON.parse(matchChk[1]);}catch(e){return{};} })() : {};
-              const totalItens= Object.keys(checklist).length;
-              const itensOK   = Object.values(checklist).filter(v => v==='OK'||v==='C').length;
-              const codigo    = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
-              const badgeFreq = freq==='Mensal'?'badge-info':freq==='Trimestral'?'badge-warn':'badge-ok';
-              const fJson     = encodeURIComponent(JSON.stringify(f));
-              return `<div class="hist-card">
-                <div class="hist-card-header">
-                  <span class="hist-card-codigo">${codigo}</span>
-                  <span class="badge-pmoc">PMOC</span>
-                  <span class="${badgeFreq}">${freq}</span>
-                  <span class="hist-card-data">${dataInsp}</span>
-                </div>
-                <div class="hist-card-body">
-                  ${totalItens ? `Checklist: ${itensOK}/${totalItens} itens conformes` : 'Sem checklist registrado'}
-                </div>
-                <div class="hist-card-tecnico">👷 ${f.tecnico_nome || '—'}</div>
-                <button class="btn-ver" onclick="verLaudoPMOC('${fJson}')">🔍 Ver Laudo Completo</button>
-              </div>`;
-            }).join('');
-          }
-        }
-
-        // ── Renderiza OS ──────────────────────────────────────────────
-        const elOS = document.getElementById('hist-os');
-        if (elOS) {
-          const ordens = resOS.data || [];
-          if (!ordens.length) {
-            elOS.innerHTML = '<div class="hist-loading">Nenhuma ordem de serviço registrada para este ativo.</div>';
-          } else {
-            const statusCls = { 'Concluída':'badge-ok','Em Andamento':'badge-info','Aberta':'badge-warn' };
-            elOS.innerHTML = ordens.map(os => {
-              const codigo = 'OS-AC-' + os.id.toString().slice(0,5).toUpperCase();
-              const resumo = os.descricao_defeito
-                ? os.descricao_defeito.slice(0,80) + (os.descricao_defeito.length>80?'…':'')
-                : '—';
-              const cls   = statusCls[os.status_os] || 'badge-warn';
-              const osJson = encodeURIComponent(JSON.stringify(os));
-              return `<div class="hist-card">
-                <div class="hist-card-header">
-                  <span class="hist-card-codigo">${codigo}</span>
-                  <span class="badge-os">O.S.</span>
-                  <span class="${cls}">${os.status_os || '—'}</span>
-                  <span class="hist-card-data">${fmtDate(os.created_at)}</span>
-                </div>
-                <div class="hist-card-body">${os.tipo_os || '—'} — ${resumo}</div>
-                <div class="hist-card-tecnico">👷 ${os.colaboradores?.nome || '—'}</div>
-                <button class="btn-ver" onclick="verOrdemServico('${osJson}')">🔍 Ver O.S. Completa</button>
-              </div>`;
-            }).join('');
-          }
-        }
-
-        // Expõe as funções de modal ao escopo global da página
-        window.verLaudoPMOC    = verLaudoPMOC;
-        window.verOrdemServico = verOrdemServico;
-        window.fecharModal     = fecharModal;
 
       } else {
         mostrarErro('Tipo de documento desconhecido.');
