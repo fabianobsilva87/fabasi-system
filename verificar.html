@@ -65,6 +65,57 @@
     .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #1a56db; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 32px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Modal de visualização de laudo/OS inline */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      z-index: 9999; display: flex; align-items: flex-start;
+      justify-content: center; padding: 20px 12px; overflow-y: auto;
+    }
+    .modal-box {
+      background: #fff; border-radius: 12px; width: 100%; max-width: 540px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.3); animation: fadeUp .2s ease;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .modal-header {
+      background: #1a56db; color: #fff; padding: 14px 18px;
+      border-radius: 12px 12px 0 0; display: flex;
+      justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { font-size: 15px; font-weight: 700; }
+    .modal-header p  { font-size: 11px; opacity: .8; margin-top: 2px; }
+    .modal-close {
+      background: rgba(255,255,255,.2); border: none; color: #fff;
+      font-size: 18px; width: 32px; height: 32px; border-radius: 6px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .modal-body { padding: 18px; }
+    .modal-section { margin-bottom: 14px; }
+    .modal-section-title {
+      font-size: 9px; font-weight: 700; color: #1a56db;
+      text-transform: uppercase; letter-spacing: .08em;
+      border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;
+    }
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+    .modal-field label { font-size: 9px; color: #718096; text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 2px; }
+    .modal-field span  { font-size: 13px; font-weight: 600; color: #1a202c; }
+    .modal-field.full  { grid-column: span 2; }
+    .chk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .chk-table th { background: #f1f5f9; color: #64748b; padding: 5px 8px; font-size: 10px; text-align: left; }
+    .chk-table td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; }
+    .chk-table tr:last-child td { border-bottom: none; }
+    .modal-foto img { max-width: 100%; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .modal-assin { display: flex; gap: 16px; flex-wrap: wrap; }
+    .modal-assin-box { flex: 1; text-align: center; min-width: 120px; }
+    .modal-assin-box img { max-width: 150px; max-height: 50px; display: block; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 4px; }
+    .modal-assin-linha { border-top: 1px solid #64748b; margin-top: 6px; padding-top: 4px; font-size: 10px; color: #718096; }
+    .modal-obs { font-size: 12px; color: #4a5568; line-height: 1.6; white-space: pre-wrap; }
+    .btn-ver {
+      margin-top: 8px; padding: 5px 12px; font-size: 11px; font-weight: 600;
+      background: #1a56db; color: #fff; border: none; border-radius: 6px;
+      cursor: pointer; width: 100%;
+    }
+    .btn-ver:hover { background: #1e40af; }
+
     /* Histórico do ativo — seções PMOC e OS */
     .hist-section { margin-top: 20px; }
     .hist-section-title {
@@ -495,20 +546,206 @@
         `;
 
         // Busca PMOC e OS em paralelo usando o banco já apontado (db = HOMO ou PROD)
+        // Busca completa — todos os campos necessários para o modal de visualização
         const [resFichas, resOS] = await Promise.all([
           db.from('fichas_pmoc')
-            .select('id, created_at, tecnico_nome, observacoes')
+            .select('id, created_at, tecnico_nome, observacoes, foto_url, assinatura_digital, assinatura_fiscal')
             .eq('equipamento_id', eq.id)
             .order('created_at', { ascending: false })
             .limit(10),
           db.from('ordens_servico')
-            .select('id, created_at, tipo_os, status_os, descricao_defeito, colaboradores(nome)')
+            .select('id, created_at, tipo_os, status_os, descricao_defeito, laudo_tecnico, foto_url, colaboradores(nome, assinatura_digital)')
             .eq('equipamento_id', eq.id)
             .order('created_at', { ascending: false })
             .limit(10),
         ]);
 
-        // Renderiza PMOC
+        // ── Helpers de modal ─────────────────────────────────────────
+        function abrirModal(htmlConteudo) {
+          fecharModal();
+          const overlay = document.createElement('div');
+          overlay.className = 'modal-overlay';
+          overlay.id = 'modal-laudo';
+          overlay.innerHTML = htmlConteudo;
+          document.body.appendChild(overlay);
+          overlay.addEventListener('click', e => { if (e.target === overlay) fecharModal(); });
+        }
+        function fecharModal() {
+          const m = document.getElementById('modal-laudo');
+          if (m) m.remove();
+        }
+
+        // Dicionário de labels do checklist (mesmo padrão do sistema)
+        const labelChkVer = {
+          'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora',
+          'limpeza-condensadora':'Limpeza Condensadora','verificacao-dreno':'Verificação de Dreno',
+          'verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
+          'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos',
+          'limpeza-geral':'Limpeza Geral',
+          'fil_01':'Filtro 01','fil_02':'Filtro 02','bio_01':'Biológico 01',
+          'bio_02':'Biológico 02','mec_01':'Mecânico 01','ele_01':'Elétrico 01',
+          'hid_01':'Hidráulico 01','hid_02':'Hidráulico 02',
+        };
+        const statusChkVer = {
+          'OK' :'<span class="ok">✓ OK</span>',
+          'NOK':'<span class="nok">✗ NOK</span>',
+          'NA' :'<span class="na">N/A</span>',
+          'C'  :'<span class="ok">✓ Conforme</span>',
+          'I'  :'<span class="nok">✗ Inconform.</span>',
+          'N'  :'<span class="na">N/A</span>',
+        };
+
+        // ── Função: abre modal do PMOC ────────────────────────────────
+        function verLaudoPMOC(fJson) {
+          const f = JSON.parse(decodeURIComponent(fJson));
+          const matchData   = (f.observacoes||'').match(/\[DataInspecao:\s*([^\]]+)\]/);
+          const matchFreq   = (f.observacoes||'').match(/\[Frequencia:\s*([^\]]+)\]/);
+          const matchTipo   = (f.observacoes||'').match(/\[TipoEquipamento:\s*([^\]]+)\]/);
+          const matchChk    = (f.observacoes||'').match(/\[Checklist:\s*([^\]]+)\]/);
+          const matchFiscal = (f.observacoes||'').match(/\[FiscalNome:\s*([^\]]+)\]/);
+          const obsLimpa    = (f.observacoes||'').replace(/\[[^\]]+\]/g,'').trim();
+          const checklist   = matchChk ? (()=>{ try{return JSON.parse(matchChk[1]);}catch(e){return{};} })() : {};
+          const dataInsp    = matchData  ? matchData[1]    : fmtDate(f.created_at);
+          const freq        = matchFreq  ? matchFreq[1]    : '—';
+          const tipo        = matchTipo  ? matchTipo[1]    : '—';
+          const fiscalNome  = matchFiscal? matchFiscal[1].trim() : '—';
+          const codigo      = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
+
+          const chkRows = Object.entries(checklist).map(([k,v]) =>
+            `<tr><td>${labelChkVer[k] || k.replace(/[-_]/g,' ')}</td>
+                 <td style="text-align:center;">${statusChkVer[v] || v}</td></tr>`
+          ).join('');
+
+          const assinTecnico = f.assinatura_digital?.startsWith('data:image')
+            ? `<img src="${f.assinatura_digital}" alt="Assinatura Técnico">`
+            : `<div style="height:40px;border-bottom:1px dashed #94a3b8;"></div>`;
+          const assinFiscal = f.assinatura_fiscal?.startsWith('data:image')
+            ? `<img src="${f.assinatura_fiscal}" alt="Assinatura Fiscal">`
+            : `<div style="height:40px;border-bottom:1px dashed #94a3b8;"></div>`;
+          const fotoHTML = f.foto_url
+            ? `<div class="modal-section"><div class="modal-section-title">Evidência Fotográfica</div>
+               <div class="modal-foto"><img src="${f.foto_url}" alt="Foto da inspeção"></div></div>`
+            : '';
+
+          abrirModal(`
+            <div class="modal-box">
+              <div class="modal-header">
+                <div>
+                  <h2>📋 ${codigo}</h2>
+                  <p>Laudo PMOC — ${freq} — ${dataInsp}</p>
+                </div>
+                <button class="modal-close" onclick="fecharModal()">✕</button>
+              </div>
+              <div class="modal-body">
+                <div class="modal-section">
+                  <div class="modal-section-title">Dados da Inspeção</div>
+                  <div class="modal-grid">
+                    <div class="modal-field"><label>Técnico Executor</label><span>${f.tecnico_nome || '—'}</span></div>
+                    <div class="modal-field"><label>Data da Inspeção</label><span>${dataInsp}</span></div>
+                    <div class="modal-field"><label>Frequência</label><span>${freq}</span></div>
+                    <div class="modal-field"><label>Tipo de Equipamento</label><span>${tipo}</span></div>
+                    <div class="modal-field full"><label>Fiscal / Validador</label><span>${fiscalNome}</span></div>
+                  </div>
+                </div>
+
+                ${chkRows ? `
+                <div class="modal-section">
+                  <div class="modal-section-title">Checklist de Manutenção</div>
+                  <table class="chk-table">
+                    <thead><tr><th>Item</th><th style="text-align:center;width:90px;">Status</th></tr></thead>
+                    <tbody>${chkRows}</tbody>
+                  </table>
+                </div>` : ''}
+
+                ${obsLimpa ? `
+                <div class="modal-section">
+                  <div class="modal-section-title">Observações Técnicas</div>
+                  <div class="modal-obs">${obsLimpa}</div>
+                </div>` : ''}
+
+                ${fotoHTML}
+
+                <div class="modal-section">
+                  <div class="modal-section-title">Assinaturas</div>
+                  <div class="modal-assin">
+                    <div class="modal-assin-box">
+                      ${assinTecnico}
+                      <div class="modal-assin-linha">${f.tecnico_nome || '—'}<br>Técnico Executor</div>
+                    </div>
+                    <div class="modal-assin-box">
+                      ${assinFiscal}
+                      <div class="modal-assin-linha">${fiscalNome}<br>Fiscal / Validador</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>`);
+        }
+
+        // ── Função: abre modal da OS ──────────────────────────────────
+        function verOrdemServico(osJson) {
+          const os = JSON.parse(decodeURIComponent(osJson));
+          const codigo = 'OS-AC-' + os.id.toString().slice(0,5).toUpperCase();
+          const statusCor = { 'Concluída':'#059669','Em Andamento':'#1a56db','Aberta':'#d97706' };
+          const cor = statusCor[os.status_os] || '#d97706';
+          const assinTecnico = os.colaboradores?.assinatura_digital?.startsWith('data:image')
+            ? `<img src="${os.colaboradores.assinatura_digital}" alt="Assinatura">`
+            : `<div style="height:40px;border-bottom:1px dashed #94a3b8;"></div>`;
+          const fotoHTML = os.foto_url
+            ? `<div class="modal-section"><div class="modal-section-title">Evidência Fotográfica</div>
+               <div class="modal-foto"><img src="${os.foto_url}" alt="Foto da OS"></div></div>`
+            : '';
+
+          abrirModal(`
+            <div class="modal-box">
+              <div class="modal-header">
+                <div>
+                  <h2>🛠️ ${codigo}</h2>
+                  <p>${os.tipo_os || '—'} — ${fmtDate(os.created_at)}</p>
+                </div>
+                <button class="modal-close" onclick="fecharModal()">✕</button>
+              </div>
+              <div class="modal-body">
+                <div class="modal-section">
+                  <div class="modal-section-title">Dados da Ordem</div>
+                  <div class="modal-grid">
+                    <div class="modal-field"><label>Técnico Responsável</label><span>${os.colaboradores?.nome || '—'}</span></div>
+                    <div class="modal-field"><label>Abertura</label><span>${fmtDate(os.created_at)}</span></div>
+                    <div class="modal-field"><label>Tipo</label><span>${os.tipo_os || '—'}</span></div>
+                    <div class="modal-field"><label>Status</label>
+                      <span style="font-weight:700;color:${cor};">${os.status_os || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                ${os.descricao_defeito ? `
+                <div class="modal-section">
+                  <div class="modal-section-title">Descrição da Ocorrência</div>
+                  <div class="modal-obs">${os.descricao_defeito}</div>
+                </div>` : ''}
+
+                ${os.laudo_tecnico ? `
+                <div class="modal-section">
+                  <div class="modal-section-title">Diagnóstico / Ações Executadas</div>
+                  <div class="modal-obs">${os.laudo_tecnico}</div>
+                </div>` : ''}
+
+                ${fotoHTML}
+
+                <div class="modal-section">
+                  <div class="modal-section-title">Assinatura do Técnico</div>
+                  <div class="modal-assin">
+                    <div class="modal-assin-box">
+                      ${assinTecnico}
+                      <div class="modal-assin-linha">${os.colaboradores?.nome || '—'}<br>Técnico Executor</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>`);
+        }
+
+        // ── Renderiza PMOC ────────────────────────────────────────────
         const elPMOC = document.getElementById('hist-pmoc');
         if (elPMOC) {
           const fichas = resFichas.data || [];
@@ -516,16 +753,17 @@
             elPMOC.innerHTML = '<div class="hist-loading">Nenhum laudo PMOC registrado para este ativo.</div>';
           } else {
             elPMOC.innerHTML = fichas.map(f => {
-              const matchData  = (f.observacoes || '').match(/\[DataInspecao:\s*([^\]]+)\]/);
-              const matchFreq  = (f.observacoes || '').match(/\[Frequencia:\s*([^\]]+)\]/);
-              const matchChk   = (f.observacoes || '').match(/\[Checklist:\s*([^\]]+)\]/);
-              const dataInsp   = matchData ? matchData[1] : fmtDate(f.created_at);
-              const freq       = matchFreq ? matchFreq[1] : '—';
-              const checklist  = matchChk  ? (() => { try { return JSON.parse(matchChk[1]); } catch(e) { return {}; } })() : {};
-              const totalItens = Object.keys(checklist).length;
-              const itensOK    = Object.values(checklist).filter(v => v === 'OK' || v === 'C').length;
-              const codigo     = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
-              const badgeFreq  = freq === 'Mensal' ? 'badge-info' : freq === 'Trimestral' ? 'badge-warn' : 'badge-ok';
+              const matchData = (f.observacoes||'').match(/\[DataInspecao:\s*([^\]]+)\]/);
+              const matchFreq = (f.observacoes||'').match(/\[Frequencia:\s*([^\]]+)\]/);
+              const matchChk  = (f.observacoes||'').match(/\[Checklist:\s*([^\]]+)\]/);
+              const dataInsp  = matchData ? matchData[1] : fmtDate(f.created_at);
+              const freq      = matchFreq ? matchFreq[1] : '—';
+              const checklist = matchChk  ? (()=>{ try{return JSON.parse(matchChk[1]);}catch(e){return{};} })() : {};
+              const totalItens= Object.keys(checklist).length;
+              const itensOK   = Object.values(checklist).filter(v => v==='OK'||v==='C').length;
+              const codigo    = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
+              const badgeFreq = freq==='Mensal'?'badge-info':freq==='Trimestral'?'badge-warn':'badge-ok';
+              const fJson     = encodeURIComponent(JSON.stringify(f));
               return `<div class="hist-card">
                 <div class="hist-card-header">
                   <span class="hist-card-codigo">${codigo}</span>
@@ -537,25 +775,27 @@
                   ${totalItens ? `Checklist: ${itensOK}/${totalItens} itens conformes` : 'Sem checklist registrado'}
                 </div>
                 <div class="hist-card-tecnico">👷 ${f.tecnico_nome || '—'}</div>
+                <button class="btn-ver" onclick="verLaudoPMOC('${fJson}')">🔍 Ver Laudo Completo</button>
               </div>`;
             }).join('');
           }
         }
 
-        // Renderiza OS
+        // ── Renderiza OS ──────────────────────────────────────────────
         const elOS = document.getElementById('hist-os');
         if (elOS) {
           const ordens = resOS.data || [];
           if (!ordens.length) {
             elOS.innerHTML = '<div class="hist-loading">Nenhuma ordem de serviço registrada para este ativo.</div>';
           } else {
-            const statusCls = { 'Concluída': 'badge-ok', 'Em Andamento': 'badge-info', 'Aberta': 'badge-warn' };
+            const statusCls = { 'Concluída':'badge-ok','Em Andamento':'badge-info','Aberta':'badge-warn' };
             elOS.innerHTML = ordens.map(os => {
-              const codigo  = 'OS-AC-' + os.id.toString().slice(0,5).toUpperCase();
-              const resumo  = os.descricao_defeito
-                ? os.descricao_defeito.slice(0, 80) + (os.descricao_defeito.length > 80 ? '…' : '')
+              const codigo = 'OS-AC-' + os.id.toString().slice(0,5).toUpperCase();
+              const resumo = os.descricao_defeito
+                ? os.descricao_defeito.slice(0,80) + (os.descricao_defeito.length>80?'…':'')
                 : '—';
-              const cls = statusCls[os.status_os] || 'badge-warn';
+              const cls   = statusCls[os.status_os] || 'badge-warn';
+              const osJson = encodeURIComponent(JSON.stringify(os));
               return `<div class="hist-card">
                 <div class="hist-card-header">
                   <span class="hist-card-codigo">${codigo}</span>
@@ -565,10 +805,16 @@
                 </div>
                 <div class="hist-card-body">${os.tipo_os || '—'} — ${resumo}</div>
                 <div class="hist-card-tecnico">👷 ${os.colaboradores?.nome || '—'}</div>
+                <button class="btn-ver" onclick="verOrdemServico('${osJson}')">🔍 Ver O.S. Completa</button>
               </div>`;
             }).join('');
           }
         }
+
+        // Expõe as funções de modal ao escopo global da página
+        window.verLaudoPMOC    = verLaudoPMOC;
+        window.verOrdemServico = verOrdemServico;
+        window.fecharModal     = fecharModal;
 
       } else {
         mostrarErro('Tipo de documento desconhecido.');
