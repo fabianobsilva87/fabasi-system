@@ -65,6 +65,35 @@
     .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #1a56db; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 32px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Histórico do ativo — seções PMOC e OS */
+    .hist-section { margin-top: 20px; }
+    .hist-section-title {
+      font-size: 10px; font-weight: 700; color: #1a56db;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 10px 0 6px; border-top: 2px solid #e2e8f0;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .hist-loading { font-size: 12px; color: #a0aec0; text-align: center; padding: 12px 0; }
+    .hist-card {
+      border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 10px 14px; margin-bottom: 8px;
+      background: #f8fafc; font-size: 12px;
+    }
+    .hist-card-header {
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .hist-card-codigo { font-weight: 700; color: #1a202c; font-size: 13px; }
+    .hist-card-data   { font-size: 10px; color: #94a3b8; }
+    .hist-card-body   { color: #4a5568; line-height: 1.5; }
+    .hist-card-tecnico { font-size: 10px; color: #718096; margin-top: 4px; }
+    .badge-pmoc { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+    .badge-os   { background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+    .badge-ok   { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+    .badge-warn { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+    .badge-info { background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+
     @media (max-width: 500px) {
       .field-group { grid-template-columns: 1fr; }
       .field.full  { grid-column: span 1; }
@@ -99,20 +128,26 @@
 </div>
 
 <script>
-  // ── ORDEM 4.2: Arquitetura Multibanco ──
-  // DB_PROD: banco principal de produção
-  const SUPABASE_URL_PROD      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
-  const SUPABASE_ANON_KEY_PROD = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
+  // 🔶 AMBIENTE: HOMOLOGAÇÃO
+  // Banco primário: HOMO (nweligwbglblbncaegir)
+  // Para produção, inverter a ordem: DB_PROD como primário, DB_HOMO como fallback.
 
-  // DB_HOMO: banco de homologação/legado (QR Codes antigos apontam para cá)
   const SUPABASE_URL_HOMO      = "https://nweligwbglblbncaegir.supabase.co";
   const SUPABASE_ANON_KEY_HOMO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
 
-  const DB_PROD = supabase.createClient(SUPABASE_URL_PROD, SUPABASE_ANON_KEY_PROD);
-  const DB_HOMO = supabase.createClient(SUPABASE_URL_HOMO, SUPABASE_ANON_KEY_HOMO);
+  const SUPABASE_URL_PROD      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
+  const SUPABASE_ANON_KEY_PROD = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
 
-  // Ponteiro mutável — começa em PROD; pode ser redirecionado para HOMO
-  let db = DB_PROD;
+  // Em homologação: HOMO é primário, PROD é fallback
+  const DB_PRIMARIO  = supabase.createClient(SUPABASE_URL_HOMO, SUPABASE_ANON_KEY_HOMO);
+  const DB_FALLBACK  = supabase.createClient(SUPABASE_URL_PROD, SUPABASE_ANON_KEY_PROD);
+
+  // Aliases mantidos para compatibilidade com o restante do código
+  const DB_HOMO = DB_PRIMARIO;
+  const DB_PROD = DB_FALLBACK;
+
+  // Ponteiro mutável — começa em HOMO para homologação
+  let db = DB_PRIMARIO;
 
   document.getElementById('data-verificacao').textContent = new Date().toLocaleString('pt-BR');
 
@@ -120,18 +155,17 @@
   const id     = params.get('id');
   const tipo   = params.get('tipo'); // 'pmoc' ou 'os'
 
-  // ── ORDEM 4.2a: Busca o equipamento em ambos os bancos ──
-  // Retorna { found: true/false, banco: DB_PROD|DB_HOMO }
+  // 🔶 HOMO-first em homologação
   async function buscarEquipamento(eqId) {
-    const { data: dProd } = await DB_PROD
-      .from('equipamentos').select('id').eq('id', eqId).maybeSingle();
-    if (dProd) return { found: true, banco: DB_PROD };
-
     const { data: dHomo } = await DB_HOMO
       .from('equipamentos').select('id').eq('id', eqId).maybeSingle();
     if (dHomo) return { found: true, banco: DB_HOMO };
 
-    return { found: false, banco: DB_PROD };
+    const { data: dProd } = await DB_PROD
+      .from('equipamentos').select('id').eq('id', eqId).maybeSingle();
+    if (dProd) return { found: true, banco: DB_PROD };
+
+    return { found: false, banco: DB_HOMO };
   }
 
   function mostrarErro(msg) {
@@ -173,25 +207,24 @@
       if (tipo === 'pmoc') {
         // ── ORDEM 4.1: select limpo — tecnico_nome é coluna TEXT, não relação ──
         // Tenta PROD primeiro; se não achar, tenta HOMO e reaponta o ponteiro db
-        let f, erroProd;
-        ({ data: f, error: erroProd } = await DB_PROD
-          .from('fichas_pmoc')
-          .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
-          .eq('id', id)
-          .maybeSingle());
-
-        if (!f) {
-          // ── ORDEM 4.2b: redireciona para DB_HOMO e busca histórico no banco correto ──
-          const { data: fHomo } = await DB_HOMO
+        // 🔶 HOMO primário em homologação
+        let f;
+        { const { data: fHomo } = await DB_HOMO
             .from('fichas_pmoc')
             .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
             .eq('id', id)
             .maybeSingle();
-
-          if (!fHomo) { mostrarErro('Laudo PMOC não encontrado na base de dados.'); return; }
-          f  = fHomo;
-          db = DB_HOMO; // reaponta ponteiro global da página
+          if (fHomo) { f = fHomo; db = DB_HOMO; }
         }
+        if (!f) {
+          const { data: fProd } = await DB_PROD
+            .from('fichas_pmoc')
+            .select('*, equipamentos(tag, produto, marca, bloco, setor, sala)')
+            .eq('id', id)
+            .maybeSingle();
+          if (fProd) { f = fProd; db = DB_PROD; }
+        }
+        if (!f) { mostrarErro('Laudo PMOC não encontrado na base de dados.'); return; }
 
         const matchData   = (f.observacoes || '').match(/\[DataInspecao:\s*([^\]]+)\]/);
         const matchFreq   = (f.observacoes || '').match(/\[Frequencia:\s*([^\]]+)\]/);
@@ -291,24 +324,24 @@
 
       } else if (tipo === 'os') {
         // Tenta PROD; se não achar, tenta HOMO
-        let os, erroOs;
-        ({ data: os, error: erroOs } = await DB_PROD
-          .from('ordens_servico')
-          .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
-          .eq('id', id)
-          .maybeSingle());
-
-        if (!os) {
-          const { data: osHomo } = await DB_HOMO
+        // 🔶 HOMO primário em homologação
+        let os;
+        { const { data: osHomo } = await DB_HOMO
             .from('ordens_servico')
             .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
             .eq('id', id)
             .maybeSingle();
-
-          if (!osHomo) { mostrarErro('Ordem de Serviço não encontrada na base de dados.'); return; }
-          os = osHomo;
-          db = DB_HOMO;
+          if (osHomo) { os = osHomo; db = DB_HOMO; }
         }
+        if (!os) {
+          const { data: osProd } = await DB_PROD
+            .from('ordens_servico')
+            .select('*, equipamentos(tag, produto, bloco, setor, nr_serie), colaboradores(nome, assinatura_digital)')
+            .eq('id', id)
+            .maybeSingle();
+          if (osProd) { os = osProd; db = DB_PROD; }
+        }
+        if (!os) { mostrarErro('Ordem de Serviço não encontrada na base de dados.'); return; }
 
         const col    = os.colaboradores || {};
         const eq     = os.equipamentos  || {};
@@ -373,29 +406,29 @@
         let eq = null;
         let banco = null;
 
-        const [resProd, resHomo] = await Promise.all([
-          DB_PROD.from('equipamentos').select('*').eq('id', id).maybeSingle(),
+        // 🔶 HOMO é primário em homologação — ordem: HOMO → PROD
+        const [resHomo, resProd] = await Promise.all([
           DB_HOMO.from('equipamentos').select('*').eq('id', id).maybeSingle(),
+          DB_PROD.from('equipamentos').select('*').eq('id', id).maybeSingle(),
         ]);
 
-        if (resProd.data) {
-          eq    = resProd.data;
-          banco = 'PROD';
-          db    = DB_PROD;
-        } else if (resHomo.data) {
+        if (resHomo.data) {
           eq    = resHomo.data;
           banco = 'HOMO';
           db    = DB_HOMO;
+        } else if (resProd.data) {
+          eq    = resProd.data;
+          banco = 'PROD';
+          db    = DB_PROD;
         }
 
-        // Debug: loga erros de RLS ou rede para auxiliar diagnóstico em campo
-        if (resProd.error)  console.warn('[verificar] PROD erro:', resProd.error.message);
-        if (resHomo.error)  console.warn('[verificar] HOMO erro:', resHomo.error.message);
+        // Debug: loga erros para auxiliar diagnóstico em campo
+        if (resHomo.error) console.warn('[verificar] HOMO erro:', resHomo.error.message);
+        if (resProd.error) console.warn('[verificar] PROD erro:', resProd.error.message);
         if (!eq) {
-          // Mostra mensagem detalhada com os erros reais de cada banco
-          const detProd = resProd.error  ? ' PROD: ' + resProd.error.message  : ' PROD: sem resultado';
-          const detHomo = resHomo.error  ? ' HOMO: ' + resHomo.error.message  : ' HOMO: sem resultado';
-          mostrarErro('Equipamento não encontrado. (' + detProd + ' |' + detHomo + ')');
+          const detHomo = resHomo.error ? ' HOMO: ' + resHomo.error.message : ' HOMO: sem resultado';
+          const detProd = resProd.error ? ' PROD: ' + resProd.error.message : ' PROD: sem resultado';
+          mostrarErro('Equipamento não encontrado. (' + detHomo + ' |' + detProd + ')');
           return;
         }
         console.info('[verificar] Ativo encontrado em', banco, '— id:', eq.id);
@@ -422,7 +455,7 @@
         document.getElementById('status-banner').className = 'status-banner valido';
         document.getElementById('status-texto').textContent = '✅ Ativo autenticado — ' + eq.tag;
 
-        // Injeta ficha técnica isolada — bloco estrutural sempre visível
+        // Injeta ficha técnica + placeholders de histórico
         document.getElementById('corpo').innerHTML = `
           <div class="os-content-block" id="ficha-ativo-verificado">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
@@ -446,8 +479,96 @@
               <div class="field"><label>Validade / Garantia</label><span>${validadeStr}</span></div>
               ${extraRows}
             </div>
+
+            <!-- Histórico PMOC -->
+            <div class="hist-section">
+              <div class="hist-section-title">📋 Laudos PMOC</div>
+              <div id="hist-pmoc"><div class="hist-loading">⏳ Carregando laudos...</div></div>
+            </div>
+
+            <!-- Histórico OS -->
+            <div class="hist-section">
+              <div class="hist-section-title">🛠️ Ordens de Serviço</div>
+              <div id="hist-os"><div class="hist-loading">⏳ Carregando ordens...</div></div>
+            </div>
           </div>
         `;
+
+        // Busca PMOC e OS em paralelo usando o banco já apontado (db = HOMO ou PROD)
+        const [resFichas, resOS] = await Promise.all([
+          db.from('fichas_pmoc')
+            .select('id, created_at, tecnico_nome, observacoes')
+            .eq('equipamento_id', eq.id)
+            .order('created_at', { ascending: false })
+            .limit(10),
+          db.from('ordens_servico')
+            .select('id, created_at, tipo_os, status_os, descricao_defeito, colaboradores(nome)')
+            .eq('equipamento_id', eq.id)
+            .order('created_at', { ascending: false })
+            .limit(10),
+        ]);
+
+        // Renderiza PMOC
+        const elPMOC = document.getElementById('hist-pmoc');
+        if (elPMOC) {
+          const fichas = resFichas.data || [];
+          if (!fichas.length) {
+            elPMOC.innerHTML = '<div class="hist-loading">Nenhum laudo PMOC registrado para este ativo.</div>';
+          } else {
+            elPMOC.innerHTML = fichas.map(f => {
+              const matchData  = (f.observacoes || '').match(/\[DataInspecao:\s*([^\]]+)\]/);
+              const matchFreq  = (f.observacoes || '').match(/\[Frequencia:\s*([^\]]+)\]/);
+              const matchChk   = (f.observacoes || '').match(/\[Checklist:\s*([^\]]+)\]/);
+              const dataInsp   = matchData ? matchData[1] : fmtDate(f.created_at);
+              const freq       = matchFreq ? matchFreq[1] : '—';
+              const checklist  = matchChk  ? (() => { try { return JSON.parse(matchChk[1]); } catch(e) { return {}; } })() : {};
+              const totalItens = Object.keys(checklist).length;
+              const itensOK    = Object.values(checklist).filter(v => v === 'OK' || v === 'C').length;
+              const codigo     = 'L-PMOC-' + f.id.toString().slice(0,6).toUpperCase();
+              const badgeFreq  = freq === 'Mensal' ? 'badge-info' : freq === 'Trimestral' ? 'badge-warn' : 'badge-ok';
+              return `<div class="hist-card">
+                <div class="hist-card-header">
+                  <span class="hist-card-codigo">${codigo}</span>
+                  <span class="badge-pmoc">PMOC</span>
+                  <span class="${badgeFreq}">${freq}</span>
+                  <span class="hist-card-data">${dataInsp}</span>
+                </div>
+                <div class="hist-card-body">
+                  ${totalItens ? `Checklist: ${itensOK}/${totalItens} itens conformes` : 'Sem checklist registrado'}
+                </div>
+                <div class="hist-card-tecnico">👷 ${f.tecnico_nome || '—'}</div>
+              </div>`;
+            }).join('');
+          }
+        }
+
+        // Renderiza OS
+        const elOS = document.getElementById('hist-os');
+        if (elOS) {
+          const ordens = resOS.data || [];
+          if (!ordens.length) {
+            elOS.innerHTML = '<div class="hist-loading">Nenhuma ordem de serviço registrada para este ativo.</div>';
+          } else {
+            const statusCls = { 'Concluída': 'badge-ok', 'Em Andamento': 'badge-info', 'Aberta': 'badge-warn' };
+            elOS.innerHTML = ordens.map(os => {
+              const codigo  = 'OS-AC-' + os.id.toString().slice(0,5).toUpperCase();
+              const resumo  = os.descricao_defeito
+                ? os.descricao_defeito.slice(0, 80) + (os.descricao_defeito.length > 80 ? '…' : '')
+                : '—';
+              const cls = statusCls[os.status_os] || 'badge-warn';
+              return `<div class="hist-card">
+                <div class="hist-card-header">
+                  <span class="hist-card-codigo">${codigo}</span>
+                  <span class="badge-os">O.S.</span>
+                  <span class="${cls}">${os.status_os || '—'}</span>
+                  <span class="hist-card-data">${fmtDate(os.created_at)}</span>
+                </div>
+                <div class="hist-card-body">${os.tipo_os || '—'} — ${resumo}</div>
+                <div class="hist-card-tecnico">👷 ${os.colaboradores?.nome || '—'}</div>
+              </div>`;
+            }).join('');
+          }
+        }
 
       } else {
         mostrarErro('Tipo de documento desconhecido.');
