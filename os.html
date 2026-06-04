@@ -13,6 +13,7 @@
     <aside class="sidebar no-print">
       <div class="sidebar-header">
         <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
             <nav>
@@ -88,7 +89,7 @@
                 </div>
               </div>
               <div class="form-group" style="grid-column:span 2;"><label>Falha Relatada *</label><textarea id="osg-falha" rows="3"></textarea></div>
-              <div class="form-group"><label>Equipamento Associado</label><select id="osg-equipamento" class="form-input-style"><option value="">-- Nenhum / Não aplicável --</option></select></div>
+              <div class="form-group"><label>Equipamento</label><input type="text" id="osg-equipamento"></div>
               <div class="form-group"><label>Status Atual</label><select id="osg-status" class="form-input-style"><option value="Aberta">Aberta</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option></select></div>
               <div class="form-group"><label>Técnico Atribuído</label><select id="osg-tecnico" class="form-input-style"></select></div>
             </div>
@@ -114,6 +115,7 @@
     </main>
   </div>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
   <script>
     window.addEventListener('DOMContentLoaded', async () => {

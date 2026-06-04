@@ -13,6 +13,7 @@
     <aside class="sidebar no-print">
       <div class="sidebar-header">
         <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
             <nav>
@@ -93,7 +94,7 @@
                   <p id="desc-link-contexto" style="font-size:11px; color:#665d1e; margin-bottom:8px;">Copie o token abaixo e encaminhe para o operador via WhatsApp:</p>
                   <div style="display:flex; gap:6px;">
                     <input type="text" id="adm-link-gerado" readonly class="form-input-style" style="background:#fff; font-family:monospace; font-size:11px;">
-                    <button onclick="navigator.clipboard.writeText(document.getElementById('adm-link-gerado').value).then(function(){ alert('Link copiado com sucesso!'); }).catch(function(){ alert('Erro ao copiar. Selecione e copie manualmente.'); })" class="btn-primary" style="padding:4px 12px; font-size:11px; white-space:nowrap; background:#854d0e;">📋 Copiar</button>
+                    <button onclick="navigator.clipboard.writeText($('adm-link-gerado').value); alert('Link copiado com sucesso!')" class="btn-primary" style="padding:4px 12px; font-size:11px; white-space:nowrap; background:#854d0e;">📋 Copiar</button>
                   </div>
                 </div>
               </div>
@@ -131,6 +132,7 @@
     </main>
   </div>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
   <script>
     const ROLE_DESC = {

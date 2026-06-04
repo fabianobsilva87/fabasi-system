@@ -13,6 +13,7 @@
     <aside class="sidebar no-print">
       <div class="sidebar-header">
         <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
             <nav>
@@ -247,7 +248,7 @@
               </div>
               <div class="form-group">
                 <label>Potência do Motor (W / CV)</label>
-                <input type="text" id="eq-potencia-ven" placeholder="Ex: 150W / 0,25CV">
+                <input type="text" id="eq-potencia" placeholder="Ex: 150W / 0,25CV">
               </div>
               <div class="form-group">
                 <label>Diâmetro da Hélice (mm)</label>
@@ -335,75 +336,12 @@
     </main>
   </div>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
   <script>
-    window.addEventListener('DOMContentLoaded', async () => {
+    // Inicializar estado do formulário no carregamento
+    window.addEventListener('DOMContentLoaded', () => {
       toggleCamposEquipamento();
-
-      // ── BUG FIX 2: Carrega dados do ativo se ?edit=id estiver na URL ──
-      const editId = new URLSearchParams(window.location.search).get('edit');
-      if (!editId) return; // novo cadastro — nada a fazer
-
-      // Sinaliza modo edição visualmente
-      document.querySelector('.topbar h2').textContent = '✏️ Edição de Ativo';
-      const btnSalvar = document.getElementById('btn-salvar');
-      if (btnSalvar) { btnSalvar.textContent = '💾 Salvar Alterações'; btnSalvar.style.background = '#d97706'; }
-
-      // Busca o registro completo no Supabase
-      const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', editId).maybeSingle();
-      if (error || !eq) { alert('Erro ao carregar ativo: ' + (error?.message || 'não encontrado')); return; }
-
-      // Preenche campos de identificação geral
-      const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-      set('eq-categoria',   eq.categoria);
-      set('eq-tag',         eq.tag);
-      set('eq-marca',       eq.marca);
-      set('eq-produto',     eq.produto);
-      set('eq-serie',       eq.nr_serie);
-      set('eq-patrimonio',  eq.patrimonio);
-
-      // Revela os blocos condicionais para a categoria carregada
-      toggleCamposEquipamento();
-
-      // Preenche campos de localização
-      set('eq-bloco',       eq.bloco);
-      set('eq-setor',       eq.setor);
-      set('eq-sala',        eq.sala);
-      set('eq-instituicao', eq.instituicao);
-
-      // Preenche campos técnicos extras (guardados em extras_tecnico JSON)
-      const extras = eq.extras_tecnico || {};
-      Object.entries(extras).forEach(([chave, valor]) => {
-        const elId = 'eq-' + chave;
-        const el   = document.getElementById(elId);
-        if (!el || valor == null) return;
-        // Campos de mês: o DB guarda YYYY-MM-DD, input[type=month] precisa de YYYY-MM
-        if (el.type === 'month' && typeof valor === 'string' && valor.length >= 7) {
-          el.value = valor.slice(0, 7);
-        } else {
-          el.value = valor;
-        }
-      });
-
-      // Potência direta (coluna separada)
-      if (eq.potencia) set('eq-potencia', eq.potencia);
-
-      // Validade da garantia: DB = YYYY-MM-DD → input[type=month] = YYYY-MM
-      if (eq.validade) {
-        const elVal = document.getElementById('eq-validade');
-        if (elVal) elVal.value = String(eq.validade).slice(0, 7);
-      }
-
-      // Restaura seleções de criticidade a partir da classe armazenada
-      const critMap = { Alta: { interrupcao:'sim', seguranca:'sim', operacao:'nao', reserva:'nao' },
-                        Média: { interrupcao:'nao', seguranca:'nao', operacao:'sim', reserva:'nao' },
-                        Baixa: { interrupcao:'nao', seguranca:'nao', operacao:'nao', reserva:'sim' } };
-      const crit = critMap[eq.criticidade] || critMap['Baixa'];
-      Object.entries(crit).forEach(([campo, val]) => {
-        const el = document.getElementById('crit-' + campo);
-        if (el) el.value = val;
-      });
-      calcularCriticidadeFluxograma();
     });
   </script>
 </body>
