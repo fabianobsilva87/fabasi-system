@@ -470,8 +470,144 @@ async function verAtivo(id) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); }, { once: true });
 }
 
-// ── imprimirEtiqueta — etiqueta 80x50mm com QR Code local ──
+// ── imprimirEtiqueta ──────────────────────────────────────────────────
+// Estratégia: renderiza o HTML da etiqueta → captura via html2canvas →
+// imprime APENAS a imagem resultante. Imagens nunca têm cor removida
+// pelo driver de impressão, eliminando o bug de fundo azul desaparecendo.
 function imprimirEtiqueta(id) {
+  const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
+  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
+
+  const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
+  const baseUrl     = window.location.origin
+    + window.location.pathname.replace(/\/[^/]*$/, '')
+    + '/verificar.html';
+
+  const eqId     = eq.id;
+  const eqTag    = (eq.tag    || '').replace(/"/g, '&quot;');
+  const eqMarca  = (eq.marca  || '');
+  const eqProd   = (eq.produto|| '—');
+  const eqSerie  = (eq.nr_serie   || '—');
+  const eqPatrim = (eq.patrimonio || '—');
+  const eqPot    = (eq.potencia   || '');
+  const eqCat    = (eq.categoria  || 'Ativo');
+
+  const win = window.open('', '_blank', 'width=520,height=420');
+  if (!win) { alert('Permita pop-ups para imprimir etiquetas.'); return; }
+
+  // CSS da etiqueta — sem print-color-adjust (será capturada como imagem)
+  var css = '';
+  css += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
+  css += '@page { size: 80mm 50mm; margin: 0; }';
+  css += 'body { font-family: Arial, sans-serif; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 16px; min-height: 100vh; }';
+  css += '#etiqueta-wrapper { width: 302px; }';  // 80mm ≈ 302px a 96dpi
+  css += '.etiqueta { width: 302px; border: 2px solid #1a56db; border-radius: 6px; overflow: hidden; background: #fff; font-family: Arial, sans-serif; }';
+  css += '.etq-header { background: #1a56db; color: #fff; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; }';
+  css += '.etq-header-left { flex: 1; }';
+  css += '.etq-titulo { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #fff; opacity: .85; }';
+  css += '.etq-tag { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: .04em; line-height: 1.1; }';
+  css += '.etq-categoria { display: inline-block; background: rgba(255,255,255,.22); color: #fff; font-size: 7px; font-weight: 700; padding: 1px 7px; border-radius: 8px; margin-top: 3px; }';
+  css += '.etq-body { display: flex; padding: 7px 9px; gap: 9px; align-items: flex-start; background: #fff; }';
+  css += '.etq-qr canvas, .etq-qr img { display: block; }';
+  css += '.etq-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }';
+  css += '.etq-info-titulo { font-size: 7.5px; font-weight: 700; color: #1a56db; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }';
+  css += '.etq-info-desc { font-size: 7.5px; color: #374151; line-height: 1.45; }';
+  css += '.etq-url { font-size: 5.5px; color: #9ca3af; word-break: break-all; line-height: 1.3; margin-top: 4px; }';
+  css += '.etq-footer { background: #f1f5f9; border-top: 1px solid #e2e8f0; padding: 4px 9px; display: flex; justify-content: space-between; font-size: 6.5px; color: #6b7280; }';
+  // Status durante captura
+  css += '#status-msg { margin-top: 12px; font-family: Arial, sans-serif; font-size: 12px; color: #64748b; text-align: center; }';
+  // Área de impressão — só a imagem gerada vai para a impressora
+  css += '#print-area { display: none; }';
+  css += '@media print { body > * { display: none !important; } #print-area { display: block !important; margin: 0; padding: 0; } #print-area img { width: 80mm; height: auto; display: block; } }';
+
+  var html = '<!DOCTYPE html><html lang="pt-BR"><head>';
+  html += '<meta charset="UTF-8">';
+  html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
+  html += '<title>Etiqueta - ' + eqTag + '</title>';
+  // html2canvas: captura o DOM renderizado como canvas
+  html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><' + '/script>';
+  html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><' + '/script>';
+  html += '<style>' + css + '</style>';
+  html += '</head><body>';
+
+  // Área de preview — renderiza normalmente no DOM
+  html += '<div id="etiqueta-wrapper">';
+  html += '<div class="etiqueta" data-base="' + baseUrl + '" data-eqid="' + eqId + '">';
+  html += '  <div class="etq-header">';
+  html += '    <div class="etq-header-left">';
+  html += '      <div class="etq-titulo">Concredur — Controle de Ativo</div>';
+  html += '      <div class="etq-tag">' + eqTag + '</div>';
+  html += '      <div class="etq-categoria">' + eqCat + '</div>';
+  html += '    </div>';
+  html += '  </div>';
+  html += '  <div class="etq-body">';
+  html += '    <div class="etq-qr"><div id="qr-etiqueta"></div></div>';
+  html += '    <div class="etq-info">';
+  html += '      <div class="etq-info-titulo">Informações do Ativo</div>';
+  html += '      <div class="etq-info-desc">Aponte a câmera do celular para verificar histórico de manutenções, especificações técnicas e dados completos deste equipamento.</div>';
+  html += '      <div class="etq-url" id="url-texto"></div>';
+  if (eqPot) html += '      <div style="font-size:7px;color:#374151;margin-top:3px;font-weight:600;">Cap.: ' + eqPot + '</div>';
+  html += '    </div>';
+  html += '  </div>';
+  html += '  <div class="etq-footer">';
+  html += '    <span>Série: ' + eqSerie + '</span>';
+  html += '    <span>' + (eqMarca ? eqMarca + ' — ' : '') + eqProd + '</span>';
+  html += '    <span>Pat.: ' + eqPatrim + '</span>';
+  html += '  </div>';
+  html += '</div>';
+  html += '</div>';
+  html += '<p id="status-msg">⏳ Preparando etiqueta...</p>';
+
+  // Área oculta que recebe a imagem e vai para a impressora
+  html += '<div id="print-area"></div>';
+
+  html += '<script>';
+  html += 'window.addEventListener("DOMContentLoaded", function() {';
+  html += '  var el   = document.querySelector(".etiqueta");';
+  html += '  var base = el.getAttribute("data-base");';
+  html += '  var uid  = el.getAttribute("data-eqid");';
+  html += '  var url  = base + "?id=" + uid + "&tipo=equipamento";';
+  html += '  document.getElementById("url-texto").textContent = url;';
+
+  // Gera o QR Code no DOM (para ser capturado pelo html2canvas)
+  html += '  new QRCode(document.getElementById("qr-etiqueta"), {';
+  html += '    text: url, width: 72, height: 72,';
+  html += '    colorDark: "#1a202c", colorLight: "#ffffff",';
+  html += '    correctLevel: QRCode.CorrectLevel.H';
+  html += '  });';
+
+  // Aguarda QR renderizar (é síncrono mas o canvas precisa de 1 tick)
+  // depois captura com html2canvas e imprime a imagem
+  html += '  setTimeout(function() {';
+  html += '    var msg = document.getElementById("status-msg");';
+  html += '    if (msg) msg.textContent = "🖼️ Capturando cores...";';
+  html += '    html2canvas(document.getElementById("etiqueta-wrapper"), {';
+  html += '      scale: 3,';           // 3x para qualidade de impressão
+  html += '      useCORS: true,';
+  html += '      backgroundColor: null';
+  html += '    }).then(function(canvas) {';
+  html += '      var dataUrl = canvas.toDataURL("image/png");';
+  html += '      var printArea = document.getElementById("print-area");';
+  html += '      printArea.innerHTML = "<img src=\'" + dataUrl + "\' alt=\'Etiqueta\'>";';
+  html += '      if (msg) msg.textContent = "✅ Pronto! Abrindo impressão...";';
+  html += '      setTimeout(function() {';
+  html += '        window.print();';
+  html += '        window.addEventListener("afterprint", function() { window.close(); });';
+  html += '      }, 300);';
+  html += '    }).catch(function(err) {';
+  // Fallback: se html2canvas falhar, imprime o HTML normalmente
+  html += '      console.warn("html2canvas falhou, imprimindo HTML:", err);';
+  html += '      if (msg) msg.textContent = "⚠️ Fallback — imprimindo HTML...";';
+  html += '      setTimeout(function() { window.print(); window.addEventListener("afterprint", function() { window.close(); }); }, 400);';
+  html += '    });';
+  html += '  }, 400);';
+  html += '});';
+  html += '<' + '/script>';
+  html += '</body></html>';
+
+  win.document.write(html);
+  win.document.close();
+}
   const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
   if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
 
