@@ -137,26 +137,31 @@ async function verificarSessaoGlobal() {
     return;
   }
 
-  // Carrega perfil da tabela profiles
-  const { data: perfil } = await db
-    .from('profiles')
-    .select('nome, role, status')
-    .eq('id', user.id)
-    .maybeSingle(); // ← maybeSingle nunca lança erro se não encontrar
+  // Exibe o nome do usuário — profiles sync é best-effort, nunca bloqueia o roteamento
+  try {
+    const { data: perfil } = await db
+      .from('profiles')
+      .select('nome, role, status')
+      .eq('id', user.id)
+      .maybeSingle();
 
-  if (!perfil) {
-    // Perfil ausente — cria automaticamente como admin e continua
-    await db.from('profiles').insert([{
-      id:     user.id,
-      email:  user.email,
-      nome:   user.user_metadata?.full_name || 'Administrador',
-      role:   'admin',
-      status: 'ativo',
-    }]).select().maybeSingle();
+    if (perfil) {
+      const exibir = perfil.nome || user.email;
+      if ($('user-display-email')) $('user-display-email').innerText = exibir;
+    } else {
+      if ($('user-display-email')) $('user-display-email').innerText = user.email;
+      // Tenta criar perfil silenciosamente — ignora FK violation em HOMO
+      db.from('profiles').insert([{
+        id:     user.id,
+        email:  user.email,
+        nome:   user.user_metadata?.full_name || 'Administrador',
+        role:   'admin',
+        status: 'ativo',
+      }]).catch(() => {});
+    }
+  } catch (_) {
+    // Falha no profiles não impede acesso — exibe email como fallback
     if ($('user-display-email')) $('user-display-email').innerText = user.email;
-  } else {
-    const exibir = perfil.nome ? `${perfil.nome}` : user.email;
-    if ($('user-display-email')) $('user-display-email').innerText = exibir;
   }
 }
 verificarSessaoGlobal();
@@ -1673,45 +1678,44 @@ if ($('btn-login')) {
     } else {
       if (!password) { alert("Por favor, informe sua senha."); return; }
       msgForm('mensagem', 'Verificando credenciais...', 'blue');
-      const { error: loginError } = await authClient.auth.signInWithPassword({ email, password });
+
+      const { data: sessao, error: loginError } = await authClient.auth.signInWithPassword({ email, password });
+
       if (loginError) {
-        // Traduz os erros mais comuns do Supabase Auth para português
         const erroTraduzido = {
-          'Invalid login credentials':  'E-mail ou senha incorretos.',
-          'Email not confirmed':        'E-mail ainda não confirmado. Verifique sua caixa de entrada.',
-          'Too many requests':          'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
-          'User not found':             'Usuário não encontrado neste ambiente.',
+          'Invalid login credentials': 'E-mail ou senha incorretos.',
+          'Email not confirmed':       'E-mail ainda não confirmado. Verifique sua caixa de entrada.',
+          'Too many requests':         'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+          'User not found':            'Usuário não encontrado.',
         }[loginError.message] || ('Erro: ' + loginError.message);
         msgForm('mensagem', '⚠️ ' + erroTraduzido, 'red');
-        console.error('[login] Supabase Auth erro:', loginError.message);
-      } else {
-        msgForm('mensagem', 'Acesso autorizado! Carregando dashboard...', 'green');
+        console.error('[login] Auth erro:', loginError.message);
+        return;
+      }
 
-        // Verifica se o perfil existe; cria automaticamente se for o primeiro acesso do admin
-        const { data: { user: userLogado } } = await authClient.auth.getUser();
+      // ── Login bem-sucedido ──
+      // Redireciona IMEDIATAMENTE — sem aguardar operações de profiles
+      msgForm('mensagem', '✓ Acesso autorizado! Carregando...', 'green');
+      window.location.href = 'dashboard.html';
+
+      // Sync de profiles em background — fire-and-forget, nunca bloqueia o login
+      // Envolto em try-catch duplo: erro de FK (UUID PROD vs HOMO) é ignorado silenciosamente
+      try {
+        const userLogado = sessao?.user;
         if (userLogado) {
-          const { data: perfilExistente } = await db
-            .from('profiles')
-            .select('id')
-            .eq('id', userLogado.id)
-            .maybeSingle();
-
-          if (!perfilExistente) {
-            // Cria o perfil admin automaticamente — nunca bloqueia o login
+          const { data: perfil } = await db
+            .from('profiles').select('id').eq('id', userLogado.id).maybeSingle();
+          if (!perfil) {
             await db.from('profiles').insert([{
               id:     userLogado.id,
               email:  userLogado.email,
               nome:   userLogado.user_metadata?.full_name || 'Administrador',
               role:   'admin',
               status: 'ativo',
-            }]);
-          } else {
-            await db.from('profiles').update({ status: 'ativo' }).eq('id', userLogado.id);
+            }]).catch(() => {}); // FK violation em HOMO é ignorada
           }
         }
-
-        setTimeout(() => { window.location.href = "dashboard.html"; }, 600);
-      }
+      } catch (_) { /* silencioso — nunca impede o login */ }
     }
   });
 }
