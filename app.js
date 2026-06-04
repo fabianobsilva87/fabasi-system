@@ -403,7 +403,7 @@ async function excluirEquipamento(id) { if (confirm('Remover ativo?')) { await d
 function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id; }
 
 // ── BUG FIX 3A: verAtivo — visualiza ficha completa do ativo em modal ──
-// CORREÇÃO 1: lookup duplo — cobre tanto UUID direto quanto string serializada pelo onclick
+// Lookup duplo: cobre UUID direto e string serializada pelo onclick do HTML
 async function verAtivo(id) {
   const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
   if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
@@ -414,7 +414,7 @@ async function verAtivo(id) {
     .map(([k, v]) => `<tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">${k.replace(/-/g,' ')}</td><td style="font-weight:600;">${v}</td></tr>`)
     .join('');
 
-  // PATCH 1: tipo=pmoc garante compatibilidade com o roteador de verificar.html
+  // tipo=pmoc: modal aponta para verificar.html que exibe fichas de manutenção do ativo
   const urlValidacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=pmoc`;
 
   // Cria ou reutiliza o modal
@@ -448,7 +448,6 @@ async function verAtivo(id) {
           <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Instituição</td><td>${eq.instituicao || '—'}</td></tr>
           <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Criticidade</td><td><span style="font-weight:700;color:${eq.criticidade==='Alta'?'#dc2626':eq.criticidade==='Baixa'?'#059669':'#d97706'};">Classe ${eq.criticidade || '—'}</span></td></tr>
           <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Validade</td><td>${eq.validade ? new Date(eq.validade+'T00:00:00').toLocaleDateString('pt-BR',{month:'2-digit',year:'numeric'}) : '—'}</td></tr>
-          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Capacidade / Potência</td><td style="font-weight:600;">${eq.potencia || '—'}</td></tr>
           ${extraRows}
         </table>
 
@@ -467,82 +466,89 @@ async function verAtivo(id) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); }, { once: true });
 }
 
-// ── imprimirEtiqueta — janela de impressão com QR Code local ──
-// CORREÇÃO 1: lookup duplo (string e original) garante que o eq.id
-// do cache globalEquipamentos é sempre o UUID persistido no banco.
-// O onclick do modal serializa o id como string — cobrimos os dois casos.
+// ── BUG FIX 3B: imprimirEtiqueta — janela de impressão com QR Code local ──
+// FIX CRÍTICO: imprimirEtiqueta
+// Causa raiz do bug "ID truncado / tipo ausente":
+//   O template literal passava '&tipo=equipamento' dentro de document.write().
+//   O parser HTML do browser interpreta '&' como início de entidade HTML (&amp;),
+//   truncando a query string — o QR Code ficava com ?id=UUID (sem &tipo=...).
+// Solução: a URL é montada DENTRO do <script> filho via data-attributes,
+//   sem nenhum '&' no fluxo HTML do document.write.
 function imprimirEtiqueta(id) {
   const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
-  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
+  if (!eq) { alert('Ativo nao encontrado no inventario. Recarregue a pagina.'); return; }
 
-  // CORREÇÃO 2: &tipo=equipamento — sintaxe correta com '=' obrigatório
-  // eq.id é o UUID indexado no banco — única fonte de verdade do identificador
-  const urlVerificacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=equipamento`;
-  const localizacao    = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
-  const qrUid          = 'qr-etq-' + eq.id.toString().slice(0, 8);
+  const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' - ') || '--';
+
+  // Base da URL sem query string — o filho monta ?id=...&tipo=... em JS puro
+  const baseUrl = window.location.origin
+    + window.location.pathname.replace(/\/[^/]*$/, '')
+    + '/verificar.html';
 
   const win = window.open('', '_blank', 'width=420,height=600');
   if (!win) { alert('Permita pop-ups para imprimir etiquetas.'); return; }
 
-  win.document.write(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Etiqueta — ${eq.tag}</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    @page { size: 80mm 80mm; margin: 4mm; }
-    body { font-family: Arial, sans-serif; background: #fff; display: flex; justify-content: center; align-items: flex-start; }
-    .etiqueta {
-      width: 72mm; border: 2px solid #1a56db; border-radius: 6px; padding: 6px 8px;
-      display: flex; flex-direction: column; align-items: center; gap: 4px;
-    }
-    .etq-header { background: #1a56db; color: #fff; width: 100%; text-align: center;
-      padding: 4px 6px; border-radius: 3px; font-size: 9px; font-weight: 700;
-      letter-spacing: .08em; text-transform: uppercase; }
-    .etq-tag { font-size: 22px; font-weight: 900; color: #1a202c; letter-spacing: .04em; }
-    .etq-produto { font-size: 9px; color: #4a5568; text-align: center; max-width: 68mm;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .etq-local { font-size: 8px; color: #718096; text-align: center; }
-    #${qrUid} { margin-top: 2px; }
-    #${qrUid} canvas, #${qrUid} img { display: block; }
-    .etq-url { font-size: 6px; color: #a0aec0; word-break: break-all; text-align: center;
-      margin-top: 2px; max-width: 68mm; }
-    .etq-footer { font-size: 7px; color: #718096; text-align: center; border-top: 1px solid #e2e8f0;
-      padding-top: 3px; width: 100%; }
-  </style>
-</head>
-<body>
-<div class="etiqueta">
-  <div class="etq-header">🏗️ Concredur — Controle de Ativo</div>
-  <div class="etq-tag">${eq.tag}</div>
-  <div class="etq-produto">${eq.marca ? eq.marca + ' · ' : ''}${eq.produto || '—'}</div>
-  <div class="etq-local">${localizacao}</div>
-  <div id="${qrUid}"></div>
-  <div class="etq-url">${urlVerificacao}</div>
-  <div class="etq-footer">Nº Série: ${eq.nr_serie || '—'} &nbsp;|&nbsp; Patrimônio: ${eq.patrimonio || '—'}</div>
-</div>
-<script>
-  window.addEventListener('DOMContentLoaded', function() {
-    try {
-      new QRCode(document.getElementById('${qrUid}'), {
-        text:         '${urlVerificacao}',
-        width:        110,
-        height:       110,
-        colorDark:    '#1a202c',
-        colorLight:   '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H,
-      });
-    } catch(e) { console.warn('QR falhou:', e.message); }
-    setTimeout(function() {
-      window.print();
-      window.addEventListener('afterprint', function() { window.close(); });
-    }, 500);
-  });
-<\/script>
-</body>
-</html>`);
+  // Constrói o HTML por concatenação de strings — sem template literals aninhados
+  // e sem nenhum '&' no fluxo de markup, eliminando a ambiguidade de entidade HTML.
+  const eqId      = eq.id;
+  const eqTag     = eq.tag || '';
+  const eqProduto = (eq.marca ? eq.marca + ' - ' : '') + (eq.produto || '--');
+  const eqSerie   = eq.nr_serie   || '--';
+  const eqPatrim  = eq.patrimonio || '--';
+
+  var html  = '<!DOCTYPE html><html lang="pt-BR"><head>';
+  html += '<meta charset="UTF-8">';
+  html += '<title>Etiqueta - ' + eqTag + '</title>';
+  html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><' + '/script>';
+  html += '<style>';
+  html += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
+  html += '@page { size: 80mm 80mm; margin: 4mm; }';
+  html += 'body { font-family: Arial, sans-serif; background: #fff; display: flex; justify-content: center; align-items: flex-start; }';
+  html += '.etiqueta { width: 72mm; border: 2px solid #1a56db; border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }';
+  html += '.etq-header { background: #1a56db; color: #fff; width: 100%; text-align: center; padding: 4px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }';
+  html += '.etq-tag { font-size: 22px; font-weight: 900; color: #1a202c; letter-spacing: .04em; }';
+  html += '.etq-produto { font-size: 9px; color: #4a5568; text-align: center; max-width: 68mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
+  html += '.etq-local { font-size: 8px; color: #718096; text-align: center; }';
+  html += '#qr-etiqueta { margin-top: 2px; }';
+  html += '#qr-etiqueta canvas, #qr-etiqueta img { display: block; }';
+  html += '.etq-url { font-size: 6px; color: #a0aec0; word-break: break-all; text-align: center; margin-top: 2px; max-width: 68mm; }';
+  html += '.etq-footer { font-size: 7px; color: #718096; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 3px; width: 100%; }';
+  html += '</style></head><body>';
+  // data-base e data-eqid passam os parâmetros sem '&' no markup
+  html += '<div class="etiqueta" data-base="' + baseUrl + '" data-eqid="' + eqId + '">';
+  html += '  <div class="etq-header">Concredur - Controle de Ativo</div>';
+  html += '  <div class="etq-tag">' + eqTag + '</div>';
+  html += '  <div class="etq-produto">' + eqProduto + '</div>';
+  html += '  <div class="etq-local">' + localizacao + '</div>';
+  html += '  <div id="qr-etiqueta"></div>';
+  html += '  <div class="etq-url" id="url-texto"></div>';
+  html += '  <div class="etq-footer">Serie: ' + eqSerie + ' | Patrimonio: ' + eqPatrim + '</div>';
+  html += '</div>';
+  // Script filho constrói a URL final com '&' em JavaScript — sem risco de &amp;
+  html += '<script>';
+  html += 'window.addEventListener("DOMContentLoaded", function() {';
+  html += '  var el   = document.querySelector(".etiqueta");';
+  html += '  var base = el.getAttribute("data-base");';
+  html += '  var uid  = el.getAttribute("data-eqid");';
+  html += '  var url  = base + "?id=" + uid + "&tipo=equipamento";';
+  html += '  var urlEl = document.getElementById("url-texto");';
+  html += '  if (urlEl) urlEl.textContent = url;';
+  html += '  try {';
+  html += '    new QRCode(document.getElementById("qr-etiqueta"), {';
+  html += '      text: url, width: 110, height: 110,';
+  html += '      colorDark: "#1a202c", colorLight: "#ffffff",';
+  html += '      correctLevel: QRCode.CorrectLevel.H';
+  html += '    });';
+  html += '  } catch(e) { console.warn("QR falhou:", e.message); }';
+  html += '  setTimeout(function() {';
+  html += '    window.print();';
+  html += '    window.addEventListener("afterprint", function() { window.close(); });';
+  html += '  }, 500);';
+  html += '});';
+  html += '<' + '/script>';
+  html += '</body></html>';
+
+  win.document.write(html);
   win.document.close();
 }
 
@@ -690,32 +696,9 @@ if ($('btn-salvar-colaborador')) {
     msgForm('msg-colaborador', idEd ? '✓ Colaborador atualizado!' : '✓ Colaborador registrado!', 'green');
     carregarColaboradores();
     atualizarSelectColaboradores();
-
-    // ── PATCH 2: Isolamento de estado — limpeza completa pós-cadastro ──
-    // Chama resetarFormColaborador() se a view de colaboradores estiver ativa (colaborador.html).
-    // O fallback manual garante limpeza mesmo quando a função não estiver no escopo (outras páginas).
-    if (typeof resetarFormColaborador === 'function') {
-      resetarFormColaborador();
-    } else {
-      // Limpeza inline de campos de texto
-      if ($('colab-nome'))        $('colab-nome').value        = '';
-      if ($('colab-cpf'))         $('colab-cpf').value         = '';
-      if ($('colab-funcao'))      $('colab-funcao').value      = '';
-      if ($('colab-contratacao')) $('colab-contratacao').value = '';
-      if ($('colab-id-edicao'))   $('colab-id-edicao').value   = '';
-      // Oculta o preview de assinatura existente e limpa a imagem fantasma
-      const preview = $('assinatura-preview-existente');
-      const imgAtual = $('img-assinatura-atual');
-      if (preview)  preview.style.display = 'none';
-      if (imgAtual) imgAtual.src = '';
-      // Revela o canvas de desenho e limpa qualquer traço residual
-      const canvasColab = document.getElementById('canvas-colab-assinatura');
-      if (canvasColab) {
-        canvasColab.style.display = 'block';
-        const ctxColab = canvasColab.getContext('2d');
-        if (ctxColab) ctxColab.clearRect(0, 0, canvasColab.width, canvasColab.height);
-      }
-    }
+    // Reseta form via função do HTML (se disponível) ou inline
+    if (typeof resetarFormColaborador === 'function') resetarFormColaborador();
+    else { $('colab-nome').value = ''; $('colab-cpf').value = ''; }
   });
 }
 if ($('btn-salvar-funcao')) {
@@ -1334,8 +1317,6 @@ function imprimir(areaId, html) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Concredur — Impressão</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <!-- PATCH 3: qrcodejs carregado no <head> — disponível antes do DOMContentLoaded -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     @page { margin: 14mm; size: A4 portrait; }
@@ -1353,7 +1334,7 @@ function imprimir(areaId, html) {
     .laudo-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
     .laudo-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 16px; }
     .laudo-field  { margin-bottom: 4px; }
-    .laudo-field label { font-size: 9px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 2px; }
+    .laudo-field label { font-size: 9px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; display: block; }
     .laudo-field span  { font-size: 12px; font-weight: 600; color: #1a202c; }
     .laudo-checklist-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
     .laudo-checklist-table th { background: #1a56db; color: #fff; padding: 5px 8px; text-align: left; font-size: 10px; }
@@ -1375,8 +1356,9 @@ function imprimir(areaId, html) {
 </head>
 <body>
   ${html}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
-    // ── PATCH 3: DOMContentLoaded — qrcodejs já carregado no <head>, execução imediata garantida ──
+    // ── PATCH 3: DOMContentLoaded garante execução imediata após parse do DOM ──
     // Evita dependência de fontes externas pesadas (Google Fonts) que atrasam 'load'
     // e podem causar canvas em branco na janela de impressão.
     window.addEventListener('DOMContentLoaded', function() {
