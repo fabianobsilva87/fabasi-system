@@ -364,39 +364,41 @@
         `;
 
       } else if (tipo === 'equipamento') {
-        // ── CORREÇÃO 3: Roteador harmonizado para tipo=equipamento ──
-        // Limpa o DOM de carregamento imediatamente antes da busca assíncrona
+        // Limpa spinner imediatamente
         const spinnerEq = document.getElementById('spinner');
         if (spinnerEq) spinnerEq.remove();
 
-        // Busca em PROD primeiro; muta db=DB_PROD explicitamente para garantir
-        // que a conexão aponte para a fonte correta em operações subsequentes
-        let eq;
-        ({ data: eq } = await DB_PROD
-          .from('equipamentos')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle());
+        // Busca em PROD e HOMO em paralelo — o que responder primeiro com dados vence
+        // Execução paralela evita latência dupla de rede
+        let eq = null;
+        let banco = null;
 
-        if (eq) {
-          // Ativo encontrado em PROD — ponteiro explícito
-          db = DB_PROD;
-        } else {
-          // Fallback para banco legado
-          const { data: eqHomo } = await DB_HOMO
-            .from('equipamentos')
-            .select('*')
-            .eq('id', id)
-            .maybeSingle();
-          if (!eqHomo) {
-            mostrarErro('Equipamento não encontrado na base de dados.');
-            return;
-          }
-          eq = eqHomo;
-          // CORREÇÃO 3: muta ponteiro global para DB_HOMO — históricos futuros
-          // na mesma sessão de auditoria consultarão o banco correto
-          db = DB_HOMO;
+        const [resProd, resHomo] = await Promise.all([
+          DB_PROD.from('equipamentos').select('*').eq('id', id).maybeSingle(),
+          DB_HOMO.from('equipamentos').select('*').eq('id', id).maybeSingle(),
+        ]);
+
+        if (resProd.data) {
+          eq    = resProd.data;
+          banco = 'PROD';
+          db    = DB_PROD;
+        } else if (resHomo.data) {
+          eq    = resHomo.data;
+          banco = 'HOMO';
+          db    = DB_HOMO;
         }
+
+        // Debug: loga erros de RLS ou rede para auxiliar diagnóstico em campo
+        if (resProd.error)  console.warn('[verificar] PROD erro:', resProd.error.message);
+        if (resHomo.error)  console.warn('[verificar] HOMO erro:', resHomo.error.message);
+        if (!eq) {
+          // Mostra mensagem detalhada com os erros reais de cada banco
+          const detProd = resProd.error  ? ' PROD: ' + resProd.error.message  : ' PROD: sem resultado';
+          const detHomo = resHomo.error  ? ' HOMO: ' + resHomo.error.message  : ' HOMO: sem resultado';
+          mostrarErro('Equipamento não encontrado. (' + detProd + ' |' + detHomo + ')');
+          return;
+        }
+        console.info('[verificar] Ativo encontrado em', banco, '— id:', eq.id);
 
         // Monta extras técnicos como campos de formulário padrão
         const extras    = eq.extras_tecnico || {};
