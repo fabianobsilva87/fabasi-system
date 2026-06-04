@@ -3,8 +3,9 @@
 //   A ANON KEY abaixo é segura para o front-end pois é somente leitura pública.
 //   O acesso real aos dados é controlado por Row Level Security (RLS) no Supabase.
 //   NUNCA exponha a SERVICE_ROLE_KEY no front-end.
-const SUPABASE_URL      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
+// ⚠️  AMBIENTE: HOMOLOGAÇÃO — não conectar ao banco de produção neste ambiente
+const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===================== ESTADO GLOBAL =====================
@@ -350,7 +351,7 @@ function filtrarEquipamentos(delta) {
       <td><strong>${eq.produto || '—'}</strong><br><small style="color:#a0aec0">${eq.marca || ''}</small></td>
       <td>${eq.bloco || '—'} / ${eq.setor || '—'}<br><small style="color:#a0aec0">${eq.sala || ''}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></td>
-      <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${eq.qrcode_token}','${eq.tag}')">👁️ QR</button>` : '—'}</td>
+      <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${eq.qrcode_token}','${eq.tag}','${eq.id}')">👁️ QR</button>` : '—'}</td>
       <td><button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button> <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button></td>
     </tr>`;
   }).join('');
@@ -952,6 +953,56 @@ function gerarQrCodeSVG(texto, tamanho = 120) {
 function gerarUrlValidacao(id, tipo) {
   const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
   return `${base}/verificar.html?id=${id}&tipo=${tipo}`;
+}
+
+function exibirJanelaQRCode(qrcodeToken, tag, eqId) {
+  // Gera a URL de verificação usando o qrcode_token do equipamento
+  const urlVerificacao = gerarUrlValidacao(qrcodeToken, 'equipamento');
+  const tamanho = 200;
+  const qrSrc   = `https://api.qrserver.com/v1/create-qr-code/?size=${tamanho}x${tamanho}&data=${encodeURIComponent(urlVerificacao)}&format=png&margin=6`;
+  const codigo   = `EQ-${tag.toUpperCase()}`;
+
+  const win = window.open('', '_blank', 'width=420,height=560');
+  if (!win) { alert('Permita pop-ups para exibir o QR Code.'); return; }
+
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Code — ${tag}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', Arial, sans-serif; background: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 32px 28px; text-align: center; max-width: 360px; width: 100%; }
+    .header-icon { font-size: 36px; margin-bottom: 10px; }
+    h2 { font-size: 20px; font-weight: 700; color: #1a202c; }
+    .tag-badge { display: inline-block; margin: 8px 0 20px; background: #dbeafe; color: #1e40af; font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 20px; }
+    .qr-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; display: inline-block; margin-bottom: 20px; }
+    .qr-box img { display: block; border-radius: 4px; }
+    .url-box { font-size: 10px; color: #94a3b8; word-break: break-all; margin-bottom: 20px; padding: 8px 12px; background: #f1f5f9; border-radius: 6px; }
+    .btn-print { background: #1a56db; color: #fff; border: none; border-radius: 8px; padding: 10px 28px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; }
+    .btn-print:hover { background: #1648c0; }
+    @media print {
+      body { background: #fff; }
+      .btn-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header-icon">🏷️</div>
+    <h2>QR Code de Identificação</h2>
+    <div class="tag-badge">${codigo}</div>
+    <div class="qr-box">
+      <img src="${qrSrc}" width="${tamanho}" height="${tamanho}" alt="QR Code ${tag}">
+    </div>
+    <div class="url-box">${urlVerificacao}</div>
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+  </div>
+</body>
+</html>`);
+  win.document.close();
 }
 
 function imprimir(areaId, html) {
