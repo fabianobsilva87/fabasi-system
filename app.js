@@ -1,15 +1,27 @@
 // ===================== SUPABASE CONFIG =====================
-// ⚠️  SEGURANÇA:
-//   A ANON KEY abaixo é segura para o front-end pois é somente leitura pública.
-//   O acesso real aos dados é controlado por Row Level Security (RLS) no Supabase.
-//   NUNCA exponha a SERVICE_ROLE_KEY no front-end.
-//
 // 🔶 AMBIENTE: HOMOLOGAÇÃO
-//   Banco: nweligwbglblbncaegir (HOMO)
-//   Para produção, substituir pelas credenciais PROD (mqijbvcnalbfjbhhjjzx).
-const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+//
+// Arquitetura dual-client:
+//   authClient → PROD (mqijbvcnalbfjbhhjjzx) — autenticação, sessão, usuários
+//   db         → HOMO (nweligwbglblbncaegir) — todos os dados operacionais
+//
+// Motivo: Supabase Auth é isolado por projeto. As credenciais dos
+// usuários existem no PROD. Separar Auth de Data permite testar
+// o banco HOMO sem precisar recriar contas em cada ambiente.
+//
+// Para produção: ambos apontam para PROD (remover esta seção dual).
+
+const SUPABASE_URL_PROD      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
+const SUPABASE_ANON_KEY_PROD = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
+
+const SUPABASE_URL_HOMO      = "https://nweligwbglblbncaegir.supabase.co";
+const SUPABASE_ANON_KEY_HOMO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
+
+// authClient: exclusivo para login/logout/sessão — aponta sempre para PROD
+const authClient = supabase.createClient(SUPABASE_URL_PROD, SUPABASE_ANON_KEY_PROD);
+
+// db: queries de dados operacionais — aponta para HOMO em homologação
+const db = supabase.createClient(SUPABASE_URL_HOMO, SUPABASE_ANON_KEY_HOMO);
 
 // ===================== ESTADO GLOBAL =====================
 let globalEquipamentos = [];
@@ -119,7 +131,7 @@ async function verificarSessaoGlobal() {
     return;
   }
 
-  const { data: { user }, error } = await db.auth.getUser();
+  const { data: { user }, error } = await authClient.auth.getUser();
   if (!user || error) {
     window.location.href = 'index.html';
     return;
@@ -151,7 +163,7 @@ verificarSessaoGlobal();
 
 if ($('btn-logout')) {
   $('btn-logout').addEventListener('click', async () => {
-    if (confirm('Encerrar sessão?')) { await db.auth.signOut(); window.location.href = 'index.html'; }
+    if (confirm('Encerrar sessão?')) { await authClient.auth.signOut(); window.location.href = 'index.html'; }
   });
 }
 
@@ -945,7 +957,7 @@ if ($('btn-salvar-ficha')) {
       'msg-ficha'
     );
     const { data: colab } = await db.from('colaboradores').select('nome, assinatura_digital').eq('id', tecnico_id).single();
-    const { data: { user } } = await db.auth.getUser();
+    const { data: { user } } = await authClient.auth.getUser();
 
     // Usa assinatura cadastrada do técnico; se não houver, usa o canvas do fiscal (fallback)
     const assinaturaTecnico = colab?.assinatura_digital || null;
@@ -1400,7 +1412,7 @@ if ($('btn-admin-salvar-usuario')) {
 
 async function carregarUsuariosSistema() {
   const tbody = $('tbody-usuarios-sistema'); if (!tbody) return;
-  const { data: { user: userAtual } } = await db.auth.getUser();
+  const { data: { user: userAtual } } = await authClient.auth.getUser();
   const { data: perfis, error } = await db.from('profiles').select('*').order('email', { ascending: true });
 
   let lista = perfis || [];
@@ -1603,7 +1615,7 @@ if ($('btn-login')) {
 
   (async () => {
     if (!paramsUrl.get('token')) {
-      try { await db.auth.signOut(); } catch(e) {}
+      try { await authClient.auth.signOut(); } catch(e) {}
     }
     if (paramsUrl.get('email') && paramsUrl.get('token') === 'ativar_direto') {
       fluxoAtivacaoDireta = true;
@@ -1628,23 +1640,23 @@ if ($('btn-login')) {
       if (!password || password.length < 6) { alert("A nova senha precisa conter no mínimo 6 dígitos."); return; }
       msgForm('mensagem', 'Autenticando canal de segurança silencioso...', 'blue');
       const senhaTemporariaPadrao = "Acesso@Provisorio123";
-      const { error: errorLoginProv } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senhaTemporariaPadrao });
+      const { error: errorLoginProv } = await authClient.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senhaTemporariaPadrao });
       if (errorLoginProv) {
-        const { error: errorLoginDireto } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password });
+        const { error: errorLoginDireto } = await authClient.auth.signInWithPassword({ email: emailAlvoAtivacao, password });
         if (!errorLoginDireto) {
           await db.from('profiles').update({ status: 'ativo' }).eq('email', emailAlvoAtivacao);
           window.location.href = "dashboard.html"; return;
         }
-        const { error: sError } = await db.auth.signUp({ email: emailAlvoAtivacao, password, options: { emailRedirectTo: null } });
+        const { error: sError } = await authClient.auth.signUp({ email: emailAlvoAtivacao, password, options: { emailRedirectTo: null } });
         if (sError) { msgForm('mensagem', 'Erro: ' + sError.message, 'red'); return; }
         await db.from('profiles').update({ status: 'ativo' }).eq('email', emailAlvoAtivacao);
         msgForm('mensagem', 'Conta ativada! Redirecionando...', 'green');
         setTimeout(() => { window.location.href = "dashboard.html"; }, 1000); return;
       }
-      const { error: errorUpdate } = await db.auth.updateUser({ password });
+      const { error: errorUpdate } = await authClient.auth.updateUser({ password });
       if (errorUpdate) { msgForm('mensagem', 'Erro ao salvar senha: ' + errorUpdate.message, 'red'); return; }
       // Garante que o perfil existe com upsert
-      const { data: { user: uAtivo } } = await db.auth.getUser();
+      const { data: { user: uAtivo } } = await authClient.auth.getUser();
       if (uAtivo) {
         await db.from('profiles').upsert({
           id: uAtivo.id, email: emailAlvoAtivacao, status: 'ativo'
@@ -1656,12 +1668,12 @@ if ($('btn-login')) {
 
     if (modoRecuperacao) {
       msgForm('mensagem', 'Processando requisição...', 'blue');
-      await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/index.html" });
+      await authClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/index.html" });
       msgForm('mensagem', 'Se o SMTP estiver ativo, as instruções chegarão no e-mail.', 'green');
     } else {
       if (!password) { alert("Por favor, informe sua senha."); return; }
       msgForm('mensagem', 'Verificando credenciais...', 'blue');
-      const { error: loginError } = await db.auth.signInWithPassword({ email, password });
+      const { error: loginError } = await authClient.auth.signInWithPassword({ email, password });
       if (loginError) {
         // Traduz os erros mais comuns do Supabase Auth para português
         const erroTraduzido = {
@@ -1676,7 +1688,7 @@ if ($('btn-login')) {
         msgForm('mensagem', 'Acesso autorizado! Carregando dashboard...', 'green');
 
         // Verifica se o perfil existe; cria automaticamente se for o primeiro acesso do admin
-        const { data: { user: userLogado } } = await db.auth.getUser();
+        const { data: { user: userLogado } } = await authClient.auth.getUser();
         if (userLogado) {
           const { data: perfilExistente } = await db
             .from('profiles')
