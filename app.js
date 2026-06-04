@@ -312,29 +312,55 @@ function toggleCamposEquipamento() {
 
 if ($('btn-salvar')) {
   $('btn-salvar').addEventListener('click', async () => {
-    const tag = $('eq-tag')?.value.trim(); const cat = $('eq-categoria')?.value;
-    if (!tag || !cat)  { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
+    const tag = $('eq-tag')?.value.trim();
+    const cat = $('eq-categoria')?.value;
+    if (!tag || !cat) { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
     msgForm('msg-equipamento', 'Salvando...', 'blue');
+
+    // BUG FIX 1: input type="month" retorna "YYYY-MM"; Postgres DATE exige "YYYY-MM-DD"
+    // Converte appending "-01" (primeiro dia do mês) antes de enviar ao Supabase
+    const rawValidade = $('eq-validade')?.value?.trim() || null;
+    const validadeISO = rawValidade
+      ? (rawValidade.length === 7 ? rawValidade + '-01' : rawValidade)
+      : null;
+
     const payload = {
       tag, categoria: cat,
-      marca: $('eq-marca')?.value.trim()||null, produto: $('eq-produto')?.value.trim()||null,
-      nr_serie: $('eq-serie')?.value.trim()||null, patrimonio: $('eq-patrimonio')?.value.trim()||null,
-      bloco: $('eq-bloco')?.value.trim()||null, setor: $('eq-setor')?.value.trim()||null,
-      sala: $('eq-sala')?.value.trim()||null, instituicao: $('eq-instituicao')?.value.trim()||null,
+      marca:       $('eq-marca')?.value.trim()       || null,
+      produto:     $('eq-produto')?.value.trim()     || null,
+      nr_serie:    $('eq-serie')?.value.trim()       || null,
+      patrimonio:  $('eq-patrimonio')?.value.trim()  || null,
+      bloco:       $('eq-bloco')?.value.trim()       || null,
+      setor:       $('eq-setor')?.value.trim()       || null,
+      sala:        $('eq-sala')?.value.trim()        || null,
+      instituicao: $('eq-instituicao')?.value.trim() || null,
       criticidade: calcularCriticidadeFluxograma(),
+      validade:    validadeISO,
     };
+
+    // Captura os campos técnicos extras da categoria selecionada
     const extras = {};
     (EQ_CAMPOS_EXTRAS[cat] || []).forEach(id => {
-      const el = $(id); if (!el || !el.value.trim()) return;
-      extras[id.replace('eq-','')] = el.value.trim();
+      const el = $(id);
+      if (!el || !el.value.trim()) return;
+      // Campos de validade month também precisam ser convertidos
+      const chave = id.replace('eq-', '');
+      const val   = el.value.trim();
+      extras[chave] = (el.type === 'month' && val.length === 7) ? val + '-01' : val;
     });
     if (Object.keys(extras).length) payload.extras_tecnico = extras;
     if ($('eq-potencia')?.value) payload.potencia = $('eq-potencia').value.trim();
-    if ($('eq-validade')?.value) payload.validade = $('eq-validade').value.trim();
 
-    const { error } = await db.from('equipamentos').insert([payload]);
+    // BUG FIX 2: suporte a edição — detecta ?edit=id na URL e faz UPDATE
+    const editId = new URLSearchParams(window.location.search).get('edit');
+    let error;
+    if (editId) {
+      ({ error } = await db.from('equipamentos').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await db.from('equipamentos').insert([payload]));
+    }
     if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
-    msgForm('msg-equipamento', '✓ Equipamento salvo!', 'green');
+    msgForm('msg-equipamento', editId ? '✓ Ativo atualizado!' : '✓ Equipamento salvo!', 'green');
     setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
   });
 }
@@ -367,7 +393,7 @@ function filtrarEquipamentos(delta) {
       <td><strong>${eq.produto || '—'}</strong><br><small style="color:#a0aec0">${eq.marca || ''}</small></td>
       <td>${eq.bloco || '—'} / ${eq.setor || '—'}<br><small style="color:#a0aec0">${eq.sala || ''}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${eq.criticidade || 'Média'}</span></td>
-      <td>${eq.qrcode_token ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="verAtivo('${eq.id}')">👁️ QR</button>` : '—'}</td>
+      <td><button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="verAtivo('${eq.id}')">👁️ Ver / QR</button></td>
       <td><button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button> <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button></td>
     </tr>`;
   }).join('');
@@ -375,6 +401,145 @@ function filtrarEquipamentos(delta) {
 function mudarPaginaEquipamento(d) { filtrarEquipamentos(d); }
 async function excluirEquipamento(id) { if (confirm('Remover ativo?')) { await db.from('equipamentos').delete().eq('id', id); carregarEquipamentos(); } }
 function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id; }
+
+// ── BUG FIX 3A: verAtivo — visualiza ficha completa do ativo em modal ──
+async function verAtivo(id) {
+  const eq = globalEquipamentos.find(e => e.id === id);
+  if (!eq) { alert('Ativo não encontrado no cache. Recarregue a página.'); return; }
+
+  // Monta o conteúdo da ficha
+  const extras = eq.extras_tecnico || {};
+  const extraRows = Object.entries(extras)
+    .map(([k, v]) => `<tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">${k.replace(/-/g,' ')}</td><td style="font-weight:600;">${v}</td></tr>`)
+    .join('');
+
+  // PATCH 1: tipo=pmoc garante compatibilidade com o roteador de verificar.html
+  const urlValidacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=pmoc`;
+
+  // Cria ou reutiliza o modal
+  let modal = document.getElementById('modal-ver-ativo');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-ver-ativo';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+      <div style="background:#1a56db;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:18px;font-weight:700;">📋 Ficha do Ativo</div>
+          <div style="font-size:11px;opacity:.8;margin-top:2px;">${eq.tag} — ${eq.produto || '—'}</div>
+        </div>
+        <button onclick="document.getElementById('modal-ver-ativo').remove()"
+          style="background:rgba(255,255,255,.2);border:none;color:#fff;font-size:18px;width:32px;height:32px;border-radius:6px;cursor:pointer;line-height:1;">✕</button>
+      </div>
+      <div style="padding:20px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">TAG</td><td style="font-weight:700;color:#1a56db;">${eq.tag}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Categoria</td><td style="font-weight:600;">${eq.categoria || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Marca</td><td>${eq.marca || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Produto</td><td>${eq.produto || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Nº Série</td><td>${eq.nr_serie || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Patrimônio</td><td>${eq.patrimonio || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Localização</td><td>${[eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Instituição</td><td>${eq.instituicao || '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Criticidade</td><td><span style="font-weight:700;color:${eq.criticidade==='Alta'?'#dc2626':eq.criticidade==='Baixa'?'#059669':'#d97706'};">Classe ${eq.criticidade || '—'}</span></td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Validade</td><td>${eq.validade ? new Date(eq.validade+'T00:00:00').toLocaleDateString('pt-BR',{month:'2-digit',year:'numeric'}) : '—'}</td></tr>
+          <tr><td style="color:#718096;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:5px 0;">Capacidade / Potência</td><td style="font-weight:600;">${eq.potencia || '—'}</td></tr>
+          ${extraRows}
+        </table>
+
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-primary" onclick="imprimirEtiqueta('${eq.id}')"
+            style="flex:1;min-width:140px;">🏷️ Imprimir Etiqueta QR</button>
+          <button class="btn-secondary" onclick="editarEquipamento('${eq.id}')"
+            style="flex:1;min-width:120px;">✏️ Editar Ativo</button>
+          <button class="btn-secondary" onclick="document.getElementById('modal-ver-ativo').remove()"
+            style="flex:1;min-width:100px;">✕ Fechar</button>
+        </div>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  // Fecha ao clicar fora
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); }, { once: true });
+}
+
+// ── BUG FIX 3B: imprimirEtiqueta — janela de impressão com QR Code local ──
+function imprimirEtiqueta(id) {
+  const eq = globalEquipamentos.find(e => e.id === id);
+  if (!eq) { alert('Ativo não encontrado.'); return; }
+
+  // PATCH 1: tipo=pmoc garante compatibilidade com o roteador de verificar.html
+  const urlVerificacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=pmoc`;
+  const localizacao    = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
+  const qrUid          = 'qr-etq-' + eq.id.toString().slice(0, 8);
+
+  const win = window.open('', '_blank', 'width=420,height=600');
+  if (!win) { alert('Permita pop-ups para imprimir etiquetas.'); return; }
+
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Etiqueta — ${eq.tag}</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: 80mm 80mm; margin: 4mm; }
+    body { font-family: Arial, sans-serif; background: #fff; display: flex; justify-content: center; align-items: flex-start; }
+    .etiqueta {
+      width: 72mm; border: 2px solid #1a56db; border-radius: 6px; padding: 6px 8px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .etq-header { background: #1a56db; color: #fff; width: 100%; text-align: center;
+      padding: 4px 6px; border-radius: 3px; font-size: 9px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase; }
+    .etq-tag { font-size: 22px; font-weight: 900; color: #1a202c; letter-spacing: .04em; }
+    .etq-produto { font-size: 9px; color: #4a5568; text-align: center; max-width: 68mm;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .etq-local { font-size: 8px; color: #718096; text-align: center; }
+    #${qrUid} { margin-top: 2px; }
+    #${qrUid} canvas, #${qrUid} img { display: block; }
+    .etq-url { font-size: 6px; color: #a0aec0; word-break: break-all; text-align: center;
+      margin-top: 2px; max-width: 68mm; }
+    .etq-footer { font-size: 7px; color: #718096; text-align: center; border-top: 1px solid #e2e8f0;
+      padding-top: 3px; width: 100%; }
+  </style>
+</head>
+<body>
+<div class="etiqueta">
+  <div class="etq-header">🏗️ Concredur — Controle de Ativo</div>
+  <div class="etq-tag">${eq.tag}</div>
+  <div class="etq-produto">${eq.marca ? eq.marca + ' · ' : ''}${eq.produto || '—'}</div>
+  <div class="etq-local">${localizacao}</div>
+  <div id="${qrUid}"></div>
+  <div class="etq-url">${urlVerificacao}</div>
+  <div class="etq-footer">Nº Série: ${eq.nr_serie || '—'} &nbsp;|&nbsp; Patrimônio: ${eq.patrimonio || '—'}</div>
+</div>
+<script>
+  window.addEventListener('DOMContentLoaded', function() {
+    try {
+      new QRCode(document.getElementById('${qrUid}'), {
+        text:         '${urlVerificacao}',
+        width:        110,
+        height:       110,
+        colorDark:    '#1a202c',
+        colorLight:   '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H,
+      });
+    } catch(e) { console.warn('QR falhou:', e.message); }
+    setTimeout(function() {
+      window.print();
+      window.addEventListener('afterprint', function() { window.close(); });
+    }, 500);
+  });
+<\/script>
+</body>
+</html>`);
+  win.document.close();
+}
 
 async function atualizarSelectEquipamentos() {
   // ── CORREÇÃO 2B: inclui osg-equipamento no ciclo de população ──
@@ -520,9 +685,32 @@ if ($('btn-salvar-colaborador')) {
     msgForm('msg-colaborador', idEd ? '✓ Colaborador atualizado!' : '✓ Colaborador registrado!', 'green');
     carregarColaboradores();
     atualizarSelectColaboradores();
-    // Reseta form via função do HTML (se disponível) ou inline
-    if (typeof resetarFormColaborador === 'function') resetarFormColaborador();
-    else { $('colab-nome').value = ''; $('colab-cpf').value = ''; }
+
+    // ── PATCH 2: Isolamento de estado — limpeza completa pós-cadastro ──
+    // Chama resetarFormColaborador() se a view de colaboradores estiver ativa (colaborador.html).
+    // O fallback manual garante limpeza mesmo quando a função não estiver no escopo (outras páginas).
+    if (typeof resetarFormColaborador === 'function') {
+      resetarFormColaborador();
+    } else {
+      // Limpeza inline de campos de texto
+      if ($('colab-nome'))        $('colab-nome').value        = '';
+      if ($('colab-cpf'))         $('colab-cpf').value         = '';
+      if ($('colab-funcao'))      $('colab-funcao').value      = '';
+      if ($('colab-contratacao')) $('colab-contratacao').value = '';
+      if ($('colab-id-edicao'))   $('colab-id-edicao').value   = '';
+      // Oculta o preview de assinatura existente e limpa a imagem fantasma
+      const preview = $('assinatura-preview-existente');
+      const imgAtual = $('img-assinatura-atual');
+      if (preview)  preview.style.display = 'none';
+      if (imgAtual) imgAtual.src = '';
+      // Revela o canvas de desenho e limpa qualquer traço residual
+      const canvasColab = document.getElementById('canvas-colab-assinatura');
+      if (canvasColab) {
+        canvasColab.style.display = 'block';
+        const ctxColab = canvasColab.getContext('2d');
+        if (ctxColab) ctxColab.clearRect(0, 0, canvasColab.width, canvasColab.height);
+      }
+    }
   });
 }
 if ($('btn-salvar-funcao')) {
@@ -1141,6 +1329,8 @@ function imprimir(areaId, html) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Concredur — Impressão</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- PATCH 3: qrcodejs carregado no <head> — disponível antes do DOMContentLoaded -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     @page { margin: 14mm; size: A4 portrait; }
@@ -1158,7 +1348,7 @@ function imprimir(areaId, html) {
     .laudo-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
     .laudo-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 16px; }
     .laudo-field  { margin-bottom: 4px; }
-    .laudo-field label { font-size: 9px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; display: block; }
+    .laudo-field label { font-size: 9px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 2px; }
     .laudo-field span  { font-size: 12px; font-weight: 600; color: #1a202c; }
     .laudo-checklist-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
     .laudo-checklist-table th { background: #1a56db; color: #fff; padding: 5px 8px; text-align: left; font-size: 10px; }
@@ -1180,9 +1370,8 @@ function imprimir(areaId, html) {
 </head>
 <body>
   ${html}
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script>
-    // ── PATCH 3: DOMContentLoaded garante execução imediata após parse do DOM ──
+    // ── PATCH 3: DOMContentLoaded — qrcodejs já carregado no <head>, execução imediata garantida ──
     // Evita dependência de fontes externas pesadas (Google Fonts) que atrasam 'load'
     // e podem causar canvas em branco na janela de impressão.
     window.addEventListener('DOMContentLoaded', function() {

@@ -247,7 +247,7 @@
               </div>
               <div class="form-group">
                 <label>Potência do Motor (W / CV)</label>
-                <input type="text" id="eq-potencia" placeholder="Ex: 150W / 0,25CV">
+                <input type="text" id="eq-potencia-ven" placeholder="Ex: 150W / 0,25CV">
               </div>
               <div class="form-group">
                 <label>Diâmetro da Hélice (mm)</label>
@@ -331,475 +331,80 @@
           <p id="msg-equipamento" class="msg-form"></p>
 
         </div><!-- .card -->
-
-        <!-- ===== ETIQUETA QR-CODE (exibida após salvar) ===== -->
-        <div id="secao-etiqueta" style="display:none;" class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
-            <h3 class="card-title" style="margin:0;">🏷️ Etiqueta do Equipamento</h3>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn-primary" onclick="imprimirEtiqueta()">🖨️ Imprimir Etiqueta</button>
-              <button class="btn-secondary" onclick="location.href='gerir-equipamentos.html'">⚙️ Ver Inventário</button>
-              <button class="btn-secondary" onclick="novoEquipamento()">➕ Novo Equipamento</button>
-            </div>
-          </div>
-
-          <!-- Preview da etiqueta na tela -->
-          <div style="display:flex;justify-content:center;padding:16px 0;">
-            <div id="etiqueta-preview" class="etiqueta-wrapper">
-              <!-- Preenchida via JS após salvar -->
-            </div>
-          </div>
-
-          <p style="font-size:12px;color:#718096;text-align:center;margin-top:8px;">
-            📱 Aponte a câmera do celular para o QR-Code para acessar as informações do equipamento.
-          </p>
-        </div>
-
       </div><!-- .section-content -->
     </main>
   </div>
-
-  <style>
-    /* ===== ETIQUETA ESTILO UNIVAG ===== */
-    .etiqueta-wrapper {
-      width: 420px;
-      border: 3px solid #1a2e5a;
-      border-radius: 10px;
-      overflow: hidden;
-      font-family: 'Inter', Arial, sans-serif;
-      background: #fff;
-      box-shadow: 0 4px 24px rgba(0,0,0,.18);
-    }
-
-    /* --- CABEÇALHO --- */
-    .etq-header {
-      background: #1a2e5a;
-      display: flex;
-      align-items: stretch;
-      min-height: 78px;
-    }
-    .etq-header-logo {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px 16px;
-      flex-shrink: 0;
-    }
-    .etq-header-sep {
-      width: 2px;
-      background: rgba(255,255,255,.38);
-      margin: 10px 0;
-      flex-shrink: 0;
-    }
-    .etq-header-title {
-      display: flex;
-      align-items: center;
-      padding: 10px 18px;
-      color: #fff;
-      font-size: 17px;
-      font-weight: 900;
-      line-height: 1.2;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-      flex: 1;
-    }
-
-    /* --- TAG --- */
-    .etq-tag-bar {
-      background: #f0f4ff;
-      border-bottom: 2px solid #c7d5f0;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .etq-tag-badge {
-      background: #1a2e5a;
-      color: #fff;
-      font-size: 18px;
-      font-weight: 900;
-      padding: 5px 18px;
-      border-radius: 7px;
-      letter-spacing: 1.5px;
-      font-family: 'Rajdhani', Arial, sans-serif;
-    }
-    .etq-cat-pill {
-      font-size: 11px;
-      font-weight: 700;
-      color: #1a2e5a;
-      background: #fff;
-      padding: 4px 12px;
-      border-radius: 20px;
-      border: 1.5px solid #1a2e5a;
-    }
-
-    /* --- CORPO: TIPO DE SERVIÇO --- */
-    .etq-body {
-      padding: 14px 16px 10px;
-    }
-
-    .etq-section-label {
-      text-align: center;
-      margin-bottom: 10px;
-    }
-    .etq-section-label span {
-      display: inline-block;
-      background: #1a2e5a;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      padding: 4px 22px;
-      border-radius: 20px;
-    }
-
-    /* caixa de tipo de serviço com borda */
-    .etq-servico-box {
-      border: 2px solid #1a2e5a;
-      border-radius: 8px;
-      padding: 10px 8px 8px;
-      margin-bottom: 12px;
-    }
-    .etq-servico-grid {
-      display: flex;
-      justify-content: space-around;
-      gap: 6px;
-    }
-    .etq-servico-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-    .etq-checkbox {
-      width: 28px;
-      height: 28px;
-      border: 2px solid #1a2e5a;
-      border-radius: 5px;
-      background: #fff;
-      flex-shrink: 0;
-    }
-    .etq-servico-label {
-      font-size: 9px;
-      font-weight: 800;
-      color: #1a2e5a;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-      text-align: center;
-    }
-
-    /* --- DATA --- */
-    .etq-data-row {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      margin-bottom: 10px;
-    }
-    .etq-linha-h {
-      flex: 1;
-      height: 2px;
-      background: #1a2e5a;
-    }
-    .etq-data-label {
-      background: #1a2e5a;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      padding: 4px 22px;
-      border-radius: 20px;
-      white-space: nowrap;
-    }
-    .etq-data-campos {
-      text-align: center;
-      font-size: 16px;
-      color: #1a2e5a;
-      font-weight: 700;
-      letter-spacing: 2px;
-      padding: 4px 0 10px;
-      border-bottom: 2px solid #1a2e5a;
-      margin-bottom: 10px;
-    }
-    .etq-data-underline {
-      display: inline-block;
-      border-bottom: 2px solid #1a2e5a;
-      width: 52px;
-      margin: 0 4px;
-      vertical-align: bottom;
-      height: 18px;
-    }
-
-    /* --- RESPONSÁVEL --- */
-    .etq-resp-row {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      margin-bottom: 8px;
-    }
-    .etq-resp-label {
-      background: #1a2e5a;
-      color: #fff;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      padding: 4px 22px;
-      border-radius: 20px;
-      white-space: nowrap;
-    }
-    .etq-resp-linha {
-      border-bottom: 2px solid #1a2e5a;
-      margin: 0 16px;
-      margin-top: 8px;
-    }
-
-    /* --- QR CODE rodapé --- */
-    .etq-qr-area {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px 14px;
-      border-top: 1.5px solid #e2e8f0;
-      margin-top: 4px;
-    }
-    .etq-qr-img {
-      border: 2px solid #1a2e5a;
-      border-radius: 6px;
-      padding: 3px;
-      background: #fff;
-      flex-shrink: 0;
-    }
-    .etq-qr-text {
-      flex: 1;
-    }
-    .etq-qr-title {
-      font-size: 10px;
-      font-weight: 800;
-      color: #1a2e5a;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      margin-bottom: 3px;
-    }
-    .etq-qr-desc {
-      font-size: 9.5px;
-      color: #4a5568;
-      line-height: 1.45;
-    }
-    .etq-qr-url {
-      font-size: 8px;
-      color: #a0aec0;
-      word-break: break-all;
-      margin-top: 4px;
-    }
-
-    /* Print */
-    @media print {
-      .no-print, .sidebar, .topbar { display: none !important; }
-      .main-content { margin: 0 !important; padding: 0 !important; }
-      .section-content { padding: 0 !important; }
-      #secao-etiqueta { display: block !important; border: none !important; box-shadow: none !important; }
-      #secao-etiqueta > div:first-child { display: none !important; }
-      .card:not(#secao-etiqueta) { display: none !important; }
-      .etiqueta-wrapper { box-shadow: none !important; margin: 0 auto; }
-    }
-  </style>
 
   <script src="app.js"></script>
   <script>
     window.addEventListener('DOMContentLoaded', async () => {
       toggleCamposEquipamento();
-      const params = new URLSearchParams(window.location.search);
-      const editId = params.get('edit');
-      if (!editId) return;
 
-      // Modo edição: carregar dados do equipamento
-      document.querySelector('.topbar h2').textContent = '✏️ Editar Ativo / Equipamento';
-      document.getElementById('btn-salvar').textContent = '💾 Salvar Alterações';
+      // ── BUG FIX 2: Carrega dados do ativo se ?edit=id estiver na URL ──
+      const editId = new URLSearchParams(window.location.search).get('edit');
+      if (!editId) return; // novo cadastro — nada a fazer
 
-      // Aguarda o Supabase estar pronto
-      await new Promise(r => setTimeout(r, 600));
-      const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', editId).single();
-      if (error || !eq) { alert('Equipamento não encontrado.'); return; }
-
-      // Preenche campos principais
-      const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-      set('eq-categoria', eq.categoria);
-      toggleCamposEquipamento(); // mostrar campos do tipo certo
-
-      set('eq-tag', eq.tag);
-      set('eq-marca', eq.marca);
-      set('eq-produto', eq.produto);
-      set('eq-serie', eq.nr_serie);
-      set('eq-patrimonio', eq.patrimonio);
-      set('eq-bloco', eq.bloco);
-      set('eq-setor', eq.setor);
-      set('eq-sala', eq.sala);
-      set('eq-instituicao', eq.instituicao);
-      if (eq.potencia) set('eq-potencia', eq.potencia);
-      if (eq.validade) set('eq-validade', eq.validade);
-
-      // Extras técnicos
-      if (eq.extras_tecnico) {
-        Object.entries(eq.extras_tecnico).forEach(([k, v]) => {
-          const el = document.getElementById('eq-' + k);
-          if (el) el.value = v;
-        });
-      }
-
-      // Criticidade
-      if (eq.criticidade) {
-        const c = eq.criticidade;
-        if (c === 'Alta') {
-          set('crit-interrupcao', 'sim');
-          set('crit-reserva', 'nao');
-        } else if (c === 'Baixa') {
-          set('crit-interrupcao', 'nao');
-          set('crit-seguranca', 'nao');
-          set('crit-operacao', 'nao');
-        }
-        calcularCriticidadeFluxograma();
-      }
-
-      // Trocar behavior do botão salvar para UPDATE
+      // Sinaliza modo edição visualmente
+      document.querySelector('.topbar h2').textContent = '✏️ Edição de Ativo';
       const btnSalvar = document.getElementById('btn-salvar');
-      const novoBtn = btnSalvar.cloneNode(true);
-      btnSalvar.parentNode.replaceChild(novoBtn, btnSalvar);
-      novoBtn.addEventListener('click', async () => {
-        const tag = document.getElementById('eq-tag')?.value.trim();
-        const cat = document.getElementById('eq-categoria')?.value;
-        if (!tag || !cat) { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
-        msgForm('msg-equipamento', 'Salvando...', 'blue');
-        const payload = {
-          tag, categoria: cat,
-          marca: document.getElementById('eq-marca')?.value.trim()||null,
-          produto: document.getElementById('eq-produto')?.value.trim()||null,
-          nr_serie: document.getElementById('eq-serie')?.value.trim()||null,
-          patrimonio: document.getElementById('eq-patrimonio')?.value.trim()||null,
-          bloco: document.getElementById('eq-bloco')?.value.trim()||null,
-          setor: document.getElementById('eq-setor')?.value.trim()||null,
-          sala: document.getElementById('eq-sala')?.value.trim()||null,
-          instituicao: document.getElementById('eq-instituicao')?.value.trim()||null,
-          criticidade: calcularCriticidadeFluxograma(),
-        };
-        const extras = {};
-        (EQ_CAMPOS_EXTRAS[cat] || []).forEach(id => {
-          const el = document.getElementById(id); if (!el || !el.value.trim()) return;
-          extras[id.replace('eq-','')] = el.value.trim();
-        });
-        if (Object.keys(extras).length) payload.extras_tecnico = extras;
-        if (document.getElementById('eq-potencia')?.value) payload.potencia = document.getElementById('eq-potencia').value.trim();
-        if (document.getElementById('eq-validade')?.value) payload.validade = document.getElementById('eq-validade').value.trim();
+      if (btnSalvar) { btnSalvar.textContent = '💾 Salvar Alterações'; btnSalvar.style.background = '#d97706'; }
 
-        const { error } = await db.from('equipamentos').update(payload).eq('id', editId);
-        if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
-        msgForm('msg-equipamento', '✓ Ativo atualizado com sucesso!', 'green');
-        setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
-      });
-    });
+      // Busca o registro completo no Supabase
+      const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', editId).maybeSingle();
+      if (error || !eq) { alert('Erro ao carregar ativo: ' + (error?.message || 'não encontrado')); return; }
 
-    const EQ_CAT_ICONE = { AC: '❄️', BEB: '💧', CLIM: '🌀', VEN: '💨', OUT: '🔧' };
-    const EQ_CAT_NOME  = { AC: 'Ar Condicionado', BEB: 'Bebedouro', CLIM: 'Climatizador', VEN: 'Ventilador/Exaustor', OUT: 'Outros' };
+      // Preenche campos de identificação geral
+      const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+      set('eq-categoria',   eq.categoria);
+      set('eq-tag',         eq.tag);
+      set('eq-marca',       eq.marca);
+      set('eq-produto',     eq.produto);
+      set('eq-serie',       eq.nr_serie);
+      set('eq-patrimonio',  eq.patrimonio);
 
-    function exibirEtiqueta(eq) {
-      const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
-      const urlVerificar = `${baseUrl}/verificar.html?id=${eq.id}&tipo=equipamento`;
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(urlVerificar)}&format=png&margin=4`;
-      const cat = eq.categoria || 'OUT';
-
-      /* Logo UNIVAG SVG fiel à imagem original:
-         fundo azul escuro (preenchendo o oval), borda branca dupla, texto UNIVAG branco bold */
-      const logoSVG = '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAYAAADoByY0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyNpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ4OCwgMjAyMC8wNy8xMC0yMjowNjo1MyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIyLjAgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjM4MEYxMjVBNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjM4MEYxMjVCNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MzgwRjEyNTg1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6MzgwRjEyNTk1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6klSGIAAAP7ElEQVR42uxdCXQV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" width="148" height="61" alt="UNIVAG" style="display:block;">';
-
-      const html = `
-        <!-- CABEÇALHO -->
-        <div class="etq-header">
-          <div class="etq-header-logo">${logoSVG}</div>
-          <div class="etq-header-sep"></div>
-          <div class="etq-header-title">Manutenção<br>Ar Condicionado</div>
-        </div>
-
-        <!-- TAG + CATEGORIA -->
-        <div class="etq-tag-bar">
-          <span class="etq-tag-badge">${eq.tag}</span>
-          <span class="etq-cat-pill">${EQ_CAT_ICONE[cat] || '🔧'} ${EQ_CAT_NOME[cat] || 'Equipamento'}</span>
-        </div>
-
-        <!-- QR CODE -->
-
-        <!-- QR CODE -->
-        <div class="etq-qr-area">
-          <img class="etq-qr-img" src="${qrUrl}" width="100" height="100" alt="QR Code">
-          <div class="etq-qr-text">
-            <div class="etq-qr-title">📱 Informações do Ativo</div>
-            <div class="etq-qr-desc">Aponte a câmera do celular para verificar histórico de manutenções, especificações técnicas e dados completos deste equipamento.</div>
-            <div class="etq-qr-url">${urlVerificar}</div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById('etiqueta-preview').innerHTML = html;
-      document.getElementById('secao-etiqueta').style.display = 'block';
-      document.getElementById('secao-etiqueta').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    function imprimirEtiqueta() {
-      const wrapper = document.getElementById('etiqueta-preview');
-      if (!wrapper || !wrapper.innerHTML.trim()) {
-        alert('Nenhuma etiqueta gerada para imprimir.'); return;
-      }
-      const win = window.open('', '_blank', 'width=520,height=500');
-      if (!win) { alert('Permita pop-ups para imprimir.'); return; }
-      win.document.write(`<!DOCTYPE html><html><head>
-        <meta charset="UTF-8">
-        <style>
-          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-          body { background: #fff; display: flex; justify-content: center; padding: 20px; font-family: Arial, sans-serif; }
-          .etiqueta-wrapper { width: 420px; border: 3px solid #1a2e5a; border-radius: 10px; overflow: hidden; }
-          .etq-header { background: #1a2e5a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; display: flex; align-items: stretch; min-height: 78px; }
-          .etq-header-logo { display: flex; align-items: center; justify-content: center; padding: 10px 16px; flex-shrink: 0; background: #1a2e5a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .etq-header-sep { width: 2px; background: rgba(255,255,255,.38) !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin: 10px 0; flex-shrink: 0; }
-          .etq-header-title { display: flex; align-items: center; padding: 10px 18px; color: #fff !important; font-size: 17px; font-weight: 900; line-height: 1.2; text-transform: uppercase; letter-spacing: .04em; flex: 1; background: #1a2e5a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .etq-tag-bar { background: #f0f4ff; border-bottom: 2px solid #c7d5f0; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; }
-          .etq-tag-badge { background: #1a2e5a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #fff !important; font-size: 18px; font-weight: 900; padding: 5px 18px; border-radius: 7px; letter-spacing: 1.5px; }
-          .etq-cat-pill { font-size: 11px; font-weight: 700; color: #1a2e5a; background: #fff; padding: 4px 12px; border-radius: 20px; border: 1.5px solid #1a2e5a; }
-          .etq-qr-area { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
-          .etq-qr-img { border: 2px solid #1a2e5a; border-radius: 6px; padding: 3px; background: #fff; flex-shrink: 0; }
-          .etq-qr-text { flex: 1; }
-          .etq-qr-title { font-size: 10px; font-weight: 800; color: #1a2e5a; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
-          .etq-qr-desc { font-size: 9.5px; color: #4a5568; line-height: 1.45; }
-          .etq-qr-url { font-size: 8px; color: #a0aec0; word-break: break-all; margin-top: 4px; }
-          @media print {
-            body { padding: 0; }
-            @page { margin: 6mm; size: 148mm 100mm landscape; }
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          }
-        </style>
-      </head><body>
-        <div class="etiqueta-wrapper">\${wrapper.innerHTML}</div>
-        <script>
-          var imgs = document.images, total = imgs.length, done = 0;
-          function tryPrint() { window.focus(); window.print(); setTimeout(function(){ window.close(); }, 500); }
-          if (total === 0) { setTimeout(tryPrint, 500); }
-          else {
-            for (var i = 0; i < total; i++) {
-              if (imgs[i].complete) { if (++done === total) setTimeout(tryPrint, 600); }
-              else { imgs[i].onload = imgs[i].onerror = function(){ if (++done === total) setTimeout(tryPrint, 600); }; }
-            }
-          }
-        <\/script>
-      </body></html>\`);
-      win.document.close();
-    }
-
-    function novoEquipamento() {
-      document.getElementById('secao-etiqueta').style.display = 'none';
-      document.getElementById('eq-categoria').value = '';
+      // Revela os blocos condicionais para a categoria carregada
       toggleCamposEquipamento();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      document.getElementById('msg-equipamento').innerText = '';
-    }
+
+      // Preenche campos de localização
+      set('eq-bloco',       eq.bloco);
+      set('eq-setor',       eq.setor);
+      set('eq-sala',        eq.sala);
+      set('eq-instituicao', eq.instituicao);
+
+      // Preenche campos técnicos extras (guardados em extras_tecnico JSON)
+      const extras = eq.extras_tecnico || {};
+      Object.entries(extras).forEach(([chave, valor]) => {
+        const elId = 'eq-' + chave;
+        const el   = document.getElementById(elId);
+        if (!el || valor == null) return;
+        // Campos de mês: o DB guarda YYYY-MM-DD, input[type=month] precisa de YYYY-MM
+        if (el.type === 'month' && typeof valor === 'string' && valor.length >= 7) {
+          el.value = valor.slice(0, 7);
+        } else {
+          el.value = valor;
+        }
+      });
+
+      // Potência direta (coluna separada)
+      if (eq.potencia) set('eq-potencia', eq.potencia);
+
+      // Validade da garantia: DB = YYYY-MM-DD → input[type=month] = YYYY-MM
+      if (eq.validade) {
+        const elVal = document.getElementById('eq-validade');
+        if (elVal) elVal.value = String(eq.validade).slice(0, 7);
+      }
+
+      // Restaura seleções de criticidade a partir da classe armazenada
+      const critMap = { Alta: { interrupcao:'sim', seguranca:'sim', operacao:'nao', reserva:'nao' },
+                        Média: { interrupcao:'nao', seguranca:'nao', operacao:'sim', reserva:'nao' },
+                        Baixa: { interrupcao:'nao', seguranca:'nao', operacao:'nao', reserva:'sim' } };
+      const crit = critMap[eq.criticidade] || critMap['Baixa'];
+      Object.entries(crit).forEach(([campo, val]) => {
+        const el = document.getElementById('crit-' + campo);
+        if (el) el.value = val;
+      });
+      calcularCriticidadeFluxograma();
+    });
   </script>
 </body>
 </html>
