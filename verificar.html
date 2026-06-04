@@ -95,6 +95,29 @@
       .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   }
 
+  // Compatibilidade: lê meta_pmoc (novo) com fallback para observacoes regex (legado)
+  function lerMetaPMOC(ficha) {
+    if (ficha.meta_pmoc && Object.keys(ficha.meta_pmoc).length > 0) return ficha.meta_pmoc;
+    const obs = ficha.observacoes || '';
+    const m = (p) => { const r = obs.match(p); return r ? r[1] : null; };
+    return {
+      data_inspecao:    m(/\[DataInspecao:\s*([^\]]+)\]/),
+      frequencia:       m(/\[Frequencia:\s*([^\]]+)\]/)     || 'Mensal',
+      tipo_equipamento: m(/\[TipoEquipamento:\s*([^\]]+)\]/)|| 'OUT',
+      checklist:        (() => { try { return JSON.parse(m(/\[Checklist:\s*(\{[^\]]+\})\]/)||'{}'); } catch(e) { return {}; } })(),
+      fiscal_nome:      (m(/\[FiscalNome:\s*([^\]]+)\]/)    || '—').trim(),
+      _obsLimpa:        obs.replace(/\[[^\]]+\]/g,'').trim(),
+    };
+  }
+
+  // Compatibilidade: URL Storage com fallback para Base64 legado
+  function lerAssinatura(obj, campoUrl, campoBase64) {
+    if (!obj) return null;
+    if (obj[campoUrl]) return obj[campoUrl];
+    if (obj[campoBase64]?.startsWith('data:image')) return obj[campoBase64];
+    return null;
+  }
+
   function mostrarErro(msg) {
     const sp = document.getElementById('spinner');
     if (sp) sp.remove();
@@ -135,8 +158,8 @@
           .single();
         if (error || !f) { mostrarErro('Laudo PMOC não encontrado na base de dados.'); return; }
 
-        // Fase 2: lê meta_pmoc JSONB — sem regex
-        const meta       = f.meta_pmoc || {};
+        // Lê meta_pmoc (novo JSONB) com fallback automático para observacoes legado
+        const meta       = lerMetaPMOC(f);
         const dataInsp   = meta.data_inspecao    || fmtDate(f.created_at);
         const freq       = meta.frequencia       || '—';
         const tipo_eq    = meta.tipo_equipamento || '—';
@@ -185,15 +208,15 @@
           <hr class="divider">
           <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinaturas</div>
           <div class="assinatura-row">
-            <div class="assinatura-box">${assinaturaHTML(f.assinatura_tecnico_url)}<div class="linha">${escapeHTML(f.tecnico_nome)}<br>Técnico Executor</div></div>
-            <div class="assinatura-box">${assinaturaHTML(f.assinatura_fiscal_url)}<div class="linha">${escapeHTML(fiscalNome)}<br>Fiscal / Validador</div></div>
+            <div class="assinatura-box">${assinaturaHTML(lerAssinatura(f,'assinatura_tecnico_url','assinatura_digital'))}<div class="linha">${escapeHTML(f.tecnico_nome)}<br>Técnico Executor</div></div>
+            <div class="assinatura-box">${assinaturaHTML(lerAssinatura(f,'assinatura_fiscal_url','assinatura_fiscal'))}<div class="linha">${escapeHTML(fiscalNome)}<br>Fiscal / Validador</div></div>
           </div>`;
 
       // ════════════════════════ OS ════════════════════════
       } else if (tipo === 'os') {
         const { data: os, error } = await db
           .from('ordens_servico')
-          .select('*, equipamentos(tag,produto,bloco,setor,nr_serie), colaboradores(nome,assinatura_url)')
+          .select('*, equipamentos(tag,produto,bloco,setor,nr_serie), colaboradores(nome,assinatura_url,assinatura_digital)')
           .eq('id', id)
           .single();
         if (error || !os) { mostrarErro('Ordem de Serviço não encontrada na base de dados.'); return; }
@@ -228,7 +251,7 @@
           <hr class="divider">
           <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinatura do Técnico</div>
           <div class="assinatura-row">
-            <div class="assinatura-box">${assinaturaHTML(col.assinatura_url)}<div class="linha">${escapeHTML(col.nome||'—')}<br>Técnico Executor</div></div>
+            <div class="assinatura-box">${assinaturaHTML(lerAssinatura(col,'assinatura_url','assinatura_digital'))}<div class="linha">${escapeHTML(col.nome||'—')}<br>Técnico Executor</div></div>
           </div>`;
 
       // ════════════════════════ EQUIPAMENTO ════════════════════════

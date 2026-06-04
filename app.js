@@ -34,6 +34,35 @@ function escapeHTML(str) {
     .replace(/'/g, '&#039;');
 }
 
+// ── Compatibilidade: lê meta_pmoc (novo JSONB) com fallback para observacoes regex (legado) ──
+function lerMetaPMOC(ficha) {
+  if (ficha.meta_pmoc && Object.keys(ficha.meta_pmoc).length > 0) {
+    return ficha.meta_pmoc;
+  }
+  const obs = ficha.observacoes || '';
+  const matchData   = obs.match(/\[DataInspecao:\s*([^\]]+)\]/);
+  const matchFreq   = obs.match(/\[Frequencia:\s*([^\]]+)\]/);
+  const matchTipo   = obs.match(/\[TipoEquipamento:\s*([^\]]+)\]/);
+  const matchChk    = obs.match(/\[Checklist:\s*(\{[^\]]+\})\]/);
+  const matchFiscal = obs.match(/\[FiscalNome:\s*([^\]]+)\]/);
+  return {
+    data_inspecao:    matchData   ? matchData[1]   : null,
+    frequencia:       matchFreq   ? matchFreq[1]   : 'Mensal',
+    tipo_equipamento: matchTipo   ? matchTipo[1]   : 'OUT',
+    checklist:        matchChk    ? (() => { try { return JSON.parse(matchChk[1]); } catch(e) { return {}; } })() : {},
+    fiscal_nome:      matchFiscal ? matchFiscal[1].trim() : '—',
+    _obsLimpa:        obs.replace(/\[[^\]]+\]/g, '').trim(),
+  };
+}
+
+// ── Compatibilidade: lê assinatura_url (Storage) com fallback para assinatura_digital (Base64 legado) ──
+function lerAssinaturaURL(obj, campoUrl, campoBase64) {
+  if (!obj) return null;
+  if (obj[campoUrl])                                    return obj[campoUrl];
+  if (obj[campoBase64]?.startsWith('data:image'))       return obj[campoBase64];
+  return null;
+}
+
 function statusBadge(status) {
   const cls = status === 'Concluída' ? 'success' : status === 'Em Andamento' ? 'andamento' : 'warning';
   return `<span class="tag-badge ${cls}">${escapeHTML(status)}</span>`;
@@ -423,7 +452,7 @@ function onEquipamentoSelecionado() {
 
 // ===================== COLABORADORES & FUNÇÕES =====================
 async function atualizarSelectColaboradores() {
-  const { data } = await db.from('colaboradores').select('id, nome, assinatura_url');
+  const { data } = await db.from('colaboradores').select('id, nome, assinatura_url, assinatura_digital');
   ['pmoc-tecnico','os-tecnico','osg-tecnico'].map($).filter(Boolean).forEach(sel => {
     sel.innerHTML = '<option value="">-- Selecione o Colaborador --</option>';
     (data || []).forEach(c => {
@@ -453,7 +482,7 @@ async function carregarColaboradores() {
   const { data } = await db.from('colaboradores').select('*, funcoes(nome)').order('nome', { ascending: true });
   _colabCache = data || [];
   tbody.innerHTML = _colabCache.length ? _colabCache.map(c => {
-    const temAssinatura = !!c.assinatura_url;
+    const temAssinatura = !!(c.assinatura_url || c.assinatura_digital?.startsWith('data:image'));
     const badgeAssinatura = temAssinatura
       ? `<span class="tag-badge success" style="font-size:10px;">✓ Cadastrada</span>`
       : `<span class="tag-badge" style="font-size:10px;color:#a0aec0;">— Sem assinatura</span>`;
@@ -589,7 +618,7 @@ if ($('btn-salvar-ficha')) {
     }
 
     const foto_url = await uploadFoto($('pmoc-foto')?.files[0], 'pmoc', 'msg-ficha');
-    const { data: colab }     = await db.from('colaboradores').select('nome, assinatura_url').eq('id', tecnico_id).single();
+    const { data: colab }     = await db.from('colaboradores').select('nome, assinatura_url, assinatura_digital').eq('id', tecnico_id).single();
     const { data: { user } }  = await db.auth.getUser();
 
     const payload = {
@@ -598,8 +627,8 @@ if ($('btn-salvar-ficha')) {
       observacoes:          $('pmoc-obs')?.value.trim() || null, // campo livre — sem regex
       meta_pmoc,                                                 // ← JSONB estruturado
       user_id:              user?.id,
-      assinatura_tecnico_url: colab?.assinatura_url || null,    // ← URL Storage
-      assinatura_fiscal_url:  assinatura_fiscal_url || null,    // ← URL Storage
+      assinatura_tecnico_url: lerAssinaturaURL(colab,'assinatura_url','assinatura_digital') || null,
+      assinatura_fiscal_url:  assinatura_fiscal_url || null,
     };
     if (foto_url) payload.foto_url = foto_url;
 
@@ -635,8 +664,8 @@ function filtrarHistoricoFichas() {
   const freq = $('filtro-hist-freq')?.value  || '';
   renderHistoricoFichas(_fichasCache.filter(f =>
     (f.equipamentos?.tag||'').toLowerCase().includes(tag) &&
-    (!tipo || f.meta_pmoc?.tipo_equipamento === tipo) &&
-    (!freq || f.meta_pmoc?.frequencia === freq)
+    (!tipo || lerMetaPMOC(f).tipo_equipamento === tipo) &&
+    (!freq || lerMetaPMOC(f).frequencia === freq)
   ));
 }
 
@@ -644,8 +673,9 @@ function renderHistoricoFichas(data) {
   const tbody = $('tbody-fichas'); if (!tbody) return;
   if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Sem registros.</td></tr>'; return; }
   tbody.innerHTML = data.map(f => {
-    const freq = f.meta_pmoc?.frequencia || 'Mensal';
-    const tipo = f.meta_pmoc?.tipo_equipamento || 'OUT';
+    const meta = lerMetaPMOC(f);
+    const freq = meta.frequencia      || 'Mensal';
+    const tipo = meta.tipo_equipamento || 'OUT';
     return `<tr>
       <td><strong>L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}</strong></td>
       <td>${fmtDate(f.created_at)}</td>
@@ -670,14 +700,14 @@ function _assinaturaImg(url, style) {
 function emitirRelatorioPMOC(b64) {
   const f  = JSON.parse(decodeURIComponent(escape(atob(b64))));
   const eq = f.equipamentos || {};
-  // ── Fase 2: lê de meta_pmoc (JSONB) em vez de regex ──
-  const meta       = f.meta_pmoc || {};
+  // ── Lê meta_pmoc (novo JSONB) com fallback automático para observacoes legado ──
+  const meta       = lerMetaPMOC(f);
   const dataInsp   = meta.data_inspecao   || fmtDate(f.created_at);
   const freq       = meta.frequencia      || '—';
   const tipo       = meta.tipo_equipamento|| '—';
   const fiscalNome = meta.fiscal_nome     || 'Fiscal Responsável';
   const checklist  = meta.checklist       || {};
-  const obsLimpa   = f.observacoes        || '';
+  const obsLimpa   = meta._obsLimpa       || '';
 
   const labelChk = {
     'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora',
@@ -690,8 +720,8 @@ function emitirRelatorioPMOC(b64) {
     `<tr><td>${labelChk[k]||k}</td><td style="text-align:center;">${statusChk[v]||v}</td></tr>`
   ).join('');
 
-  const assinaturaTecnicoHTML = _assinaturaImg(f.assinatura_tecnico_url,'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
-  const assinaturaFiscalHTML  = _assinaturaImg(f.assinatura_fiscal_url, 'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
+  const assinaturaTecnicoHTML = _assinaturaImg(lerAssinaturaURL(f,'assinatura_tecnico_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
+  const assinaturaFiscalHTML  = _assinaturaImg(lerAssinaturaURL(f,'assinatura_fiscal_url','assinatura_fiscal'), 'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
   const urlValidacao = gerarUrlValidacao(f.id, 'pmoc');
   const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
   const codigoLaudo  = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
@@ -777,7 +807,7 @@ function emitirRelatorioOS(os) {
   const urlValidacao = gerarUrlValidacao(os.id, 'os');
   const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
   const codigoOS     = `OS-AC-${os.id.toString().slice(0,5).toUpperCase()}`;
-  const assinaturaTecnicoHTML = _assinaturaImg(col.assinatura_url,'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
+  const assinaturaTecnicoHTML = _assinaturaImg(lerAssinaturaURL(col,'assinatura_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
 
   const html = `
   <div class="laudo-wrapper">
@@ -861,7 +891,7 @@ if ($('btn-salvar-os')) {
 async function carregarOrdensServico() {
   const tbody = $('tbody-os'); if (!tbody) return;
   const { data } = await db.from('ordens_servico')
-    .select('*, equipamentos(tag,produto,bloco,setor,nr_serie), colaboradores(nome,assinatura_url)')
+    .select('*, equipamentos(tag,produto,bloco,setor,nr_serie), colaboradores(nome,assinatura_url,assinatura_digital)')
     .order('created_at', { ascending: false });
   tbody.innerHTML = (data||[]).map(os => {
     const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(os))));
@@ -1138,77 +1168,128 @@ if ($('btn-login')) {
 const CHART_DEFAULTS = { responsive:true, maintainAspectRatio:true, devicePixelRatio:2 };
 
 async function renderizarGraficosDashboard() {
-  // ── Fase 4: lê das views SQL em vez de 6 queries COUNT separadas ──
-  const { data: resumo } = await db.from('vw_dashboard_resumo').select('*').single();
+  // ── Tenta views SQL (Fase 4); fallback para queries diretas se views não existirem ──
+  let resumo = null;
+  const { data: resumoView, error: erroView } = await db.from('vw_dashboard_resumo').select('*').single();
+
+  if (!erroView && resumoView) {
+    resumo = resumoView;
+  } else {
+    // Fallback: queries diretas (banco sem migration aplicada)
+    const [{ count: cAtivos }, { count: cFichas }, { count: cAbAC }, { count: cFecAC }, { count: cAbFac }, { count: cFecFac }] = await Promise.all([
+      db.from('equipamentos').select('*', { count:'exact', head:true }),
+      db.from('fichas_pmoc').select('*', { count:'exact', head:true }),
+      db.from('ordens_servico').select('*', { count:'exact', head:true }).in('status_os', ['Aberta','Em Andamento']),
+      db.from('ordens_servico').select('*', { count:'exact', head:true }).eq('status_os', 'Concluída'),
+      db.from('ordens_servico_geral').select('*', { count:'exact', head:true }).in('status_os', ['Aberta','Em Andamento']),
+      db.from('ordens_servico_geral').select('*', { count:'exact', head:true }).eq('status_os', 'Concluída'),
+    ]);
+    resumo = { total_ativos: cAtivos??0, total_pmocs: cFichas??0, os_pendentes: (cAbAC??0)+(cAbFac??0), os_concluidas: (cFecAC??0)+(cFecFac??0) };
+  }
+
   const r = resumo || {};
+  if ($('dash-txt-ativos'))      $('dash-txt-ativos').textContent      = r.total_ativos  ?? '0';
+  if ($('dash-txt-fichas'))      $('dash-txt-fichas').textContent      = r.total_pmocs   ?? '0';
+  if ($('dash-txt-os-abertas'))  $('dash-txt-os-abertas').textContent  = r.os_pendentes  ?? '0';
+  if ($('dash-txt-os-fechadas')) $('dash-txt-os-fechadas').textContent = r.os_concluidas ?? '0';
 
-  if ($('dash-txt-ativos'))      $('dash-txt-ativos').textContent      = r.total_ativos     ?? '0';
-  if ($('dash-txt-fichas'))      $('dash-txt-fichas').textContent      = r.total_pmocs      ?? '0';
-  if ($('dash-txt-os-abertas'))  $('dash-txt-os-abertas').textContent  = r.os_pendentes     ?? '0';
-  if ($('dash-txt-os-fechadas')) $('dash-txt-os-fechadas').textContent = r.os_concluidas    ?? '0';
 
-  // Gráfico 1 — Volumetria OS (view)
-  const { data: volOS } = await db.from('vw_dashboard_volumetria_os').select('*');
+  // Gráfico 1 — Volumetria OS (view com fallback)
+  let volOS = null;
+  const { data: volOSView, error: erroVol } = await db.from('vw_dashboard_volumetria_os').select('*');
+  if (!erroVol && volOSView) {
+    volOS = volOSView;
+  } else {
+    const [{ data: osAC }, { data: osFac }] = await Promise.all([
+      db.from('ordens_servico').select('status_os'),
+      db.from('ordens_servico_geral').select('status_os'),
+    ]);
+    const map = {};
+    [...(osAC||[]), ...(osFac||[])].forEach(o => { map[o.status_os] = (map[o.status_os]||0)+1; });
+    volOS = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
+  }
   if ($('chartStatusOS') && volOS) {
     const cnt = { Aberta:0, 'Em Andamento':0, Concluida:0 };
     volOS.forEach(row => {
-      if (row.status_os === 'Aberta')        cnt.Aberta        += Number(row.total);
-      else if (row.status_os === 'Em Andamento') cnt['Em Andamento'] += Number(row.total);
-      else if (row.status_os === 'Concluída')  cnt.Concluida     += Number(row.total);
+      if (row.status_os === 'Aberta')            cnt.Aberta            += Number(row.total);
+      else if (row.status_os === 'Em Andamento') cnt['Em Andamento']   += Number(row.total);
+      else if (row.status_os === 'Concluída')    cnt.Concluida         += Number(row.total);
     });
     if (chartOS) chartOS.destroy();
     chartOS = new Chart($('chartStatusOS'), {
       type: 'doughnut',
-      data: {
-        labels: ['Aberta / Pendente','Em Andamento','Concluída'],
-        datasets: [{ data:[cnt.Aberta,cnt['Em Andamento'],cnt.Concluida], backgroundColor:['#f59e0b','#3b82f6','#10b981'], borderColor:'#fff', borderWidth:3, hoverOffset:8 }],
-      },
+      data: { labels:['Aberta / Pendente','Em Andamento','Concluída'], datasets:[{ data:[cnt.Aberta,cnt['Em Andamento'],cnt.Concluida], backgroundColor:['#f59e0b','#3b82f6','#10b981'], borderColor:'#fff', borderWidth:3, hoverOffset:8 }] },
       options: { ...CHART_DEFAULTS, cutout:'62%', plugins:{ legend:{ position:'bottom', labels:{ padding:16, font:{ size:13 }, usePointStyle:true } }, tooltip:{ callbacks:{ label: c => ` ${c.label}: ${c.parsed} O.S.` } } } },
     });
   }
 
-  // Gráfico 2 — Criticidade (view)
-  const { data: critData } = await db.from('vw_dashboard_criticidade').select('*');
+  // Gráfico 2 — Criticidade (view com fallback)
+  let critData = null;
+  const { data: critView, error: erroCrit } = await db.from('vw_dashboard_criticidade').select('*');
+  if (!erroCrit && critView) {
+    critData = critView;
+  } else {
+    const { data: eqCrit } = await db.from('equipamentos').select('criticidade');
+    const map = {};
+    (eqCrit||[]).forEach(e => { map[e.criticidade||'Média'] = (map[e.criticidade||'Média']||0)+1; });
+    critData = Object.entries(map).map(([criticidade,total]) => ({ criticidade, total }));
+  }
   if ($('chartCriticidade') && critData) {
     const cnt = { Alta:0, Media:0, Baixa:0 };
     critData.forEach(row => {
-      if (row.criticidade === 'Alta')  cnt.Alta  += Number(row.total);
+      if (row.criticidade === 'Alta')       cnt.Alta  += Number(row.total);
       else if (row.criticidade === 'Média') cnt.Media += Number(row.total);
       else if (row.criticidade === 'Baixa') cnt.Baixa += Number(row.total);
     });
     if (chartCrit) chartCrit.destroy();
     chartCrit = new Chart($('chartCriticidade'), {
       type: 'bar',
-      data: {
-        labels: ['Alta (A)','Média (B)','Baixa (C)'],
-        datasets: [{ data:[cnt.Alta,cnt.Media,cnt.Baixa], backgroundColor:['rgba(239,68,68,.85)','rgba(245,158,11,.85)','rgba(16,185,129,.85)'], borderColor:['#ef4444','#f59e0b','#10b981'], borderWidth:2, borderRadius:6, borderSkipped:false }],
-      },
+      data: { labels:['Alta (A)','Média (B)','Baixa (C)'], datasets:[{ data:[cnt.Alta,cnt.Media,cnt.Baixa], backgroundColor:['rgba(239,68,68,.85)','rgba(245,158,11,.85)','rgba(16,185,129,.85)'], borderColor:['#ef4444','#f59e0b','#10b981'], borderWidth:2, borderRadius:6, borderSkipped:false }] },
       options: { ...CHART_DEFAULTS, plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => ` ${c.parsed.y} ativo(s)` } } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1, font:{ size:12 } }, grid:{ color:'rgba(0,0,0,.05)' } }, x:{ ticks:{ font:{ size:12 } }, grid:{ display:false } } } },
     });
   }
 
-  // Gráfico 3 — Facilities (view)
-  const { data: facData } = await db.from('vw_dashboard_facilities').select('*');
+  // Gráfico 3 — Facilities (view com fallback)
+  let facData = null;
+  const { data: facView, error: erroFac } = await db.from('vw_dashboard_facilities').select('*');
+  if (!erroFac && facView) {
+    facData = facView;
+  } else {
+    const { data: osFac } = await db.from('ordens_servico_geral').select('status_os');
+    const map = {};
+    (osFac||[]).forEach(o => { map[o.status_os] = (map[o.status_os]||0)+1; });
+    facData = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
+  }
   if ($('chartStatusOSG') && facData) {
     const cnt = { Aberta:0, 'Em Andamento':0, Concluida:0 };
     facData.forEach(row => {
-      if (row.status_os === 'Aberta')           cnt.Aberta          += Number(row.total);
+      if (row.status_os === 'Aberta')            cnt.Aberta          += Number(row.total);
       else if (row.status_os === 'Em Andamento') cnt['Em Andamento'] += Number(row.total);
       else if (row.status_os === 'Concluída')    cnt.Concluida       += Number(row.total);
     });
     if (chartOSG) chartOSG.destroy();
     chartOSG = new Chart($('chartStatusOSG'), {
       type: 'bar',
-      data: {
-        labels: ['Aberta','Em Andamento','Concluída'],
-        datasets: [{ data:[cnt.Aberta,cnt['Em Andamento'],cnt.Concluida], backgroundColor:['rgba(245,158,11,.85)','rgba(139,92,246,.85)','rgba(16,185,129,.85)'], borderColor:['#f59e0b','#8b5cf6','#10b981'], borderWidth:2, borderRadius:6, borderSkipped:false }],
-      },
+      data: { labels:['Aberta','Em Andamento','Concluída'], datasets:[{ data:[cnt.Aberta,cnt['Em Andamento'],cnt.Concluida], backgroundColor:['rgba(245,158,11,.85)','rgba(139,92,246,.85)','rgba(16,185,129,.85)'], borderColor:['#f59e0b','#8b5cf6','#10b981'], borderWidth:2, borderRadius:6, borderSkipped:false }] },
       options: { ...CHART_DEFAULTS, indexAxis:'y', plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => ` ${c.parsed.x} O.S.` } } }, scales:{ x:{ beginAtZero:true, ticks:{ stepSize:1, font:{ size:12 } }, grid:{ color:'rgba(0,0,0,.05)' } }, y:{ ticks:{ font:{ size:13 } }, grid:{ display:false } } } },
     });
   }
 
-  // Logs recentes (view)
-  const { data: logs } = await db.from('vw_dashboard_logs_recentes').select('*').limit(8);
+  // Logs recentes (view com fallback)
+  let logs = null;
+  const { data: logsView, error: erroLogs } = await db.from('vw_dashboard_logs_recentes').select('*').limit(8);
+  if (!erroLogs && logsView) {
+    logs = logsView;
+  } else {
+    const [{ data: logsAC }, { data: logsFac }] = await Promise.all([
+      db.from('ordens_servico').select('created_at,status_os,tipo_os,equipamentos(tag)').order('created_at',{ascending:false}).limit(5),
+      db.from('ordens_servico_geral').select('created_at,status_os,servico_requisitado,setor').order('created_at',{ascending:false}).limit(5),
+    ]);
+    logs = [
+      ...(logsAC||[]).map(l=>({ data:l.created_at, status:l.status_os, desc:l.tipo_os, ref:l.equipamentos?.tag||'—', origem:'❄️' })),
+      ...(logsFac||[]).map(l=>({ data:l.created_at, status:l.status_os, desc:l.servico_requisitado||'—', ref:l.setor||'—', origem:'🏢' })),
+    ].sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,8);
+  }
   const el = $('dash-atividades');
   if (el && logs) {
     el.innerHTML = logs.length ? logs.map(l =>
@@ -1314,12 +1395,12 @@ async function carregarAlertasVencimento() {
 async function editarFichaPMOC(id) {
   const ficha = _fichasCache.find(f => f.id == id);
   if (!ficha) { alert('Ficha não encontrada no cache. Recarregue a página.'); return; }
-  const meta    = ficha.meta_pmoc || {};
+  const meta    = lerMetaPMOC(ficha);
   const freqMap = { Mensal:'M', Trimestral:'T', Semestral:'S', Anual:'A' };
   if ($('pmoc-equipamento'))  $('pmoc-equipamento').value  = ficha.equipamento_id || '';
   if ($('pmoc-data'))         $('pmoc-data').value         = meta.data_inspecao   || '';
   if ($('pmoc-frequencia'))   $('pmoc-frequencia').value   = freqMap[meta.frequencia] || 'M';
-  if ($('pmoc-obs'))          $('pmoc-obs').value          = ficha.observacoes    || '';
+  if ($('pmoc-obs'))          $('pmoc-obs').value          = meta._obsLimpa || ficha.observacoes || '';
   if ($('pmoc-id-edicao'))    $('pmoc-id-edicao').value    = id;
   const titulo = $('titulo-formulario-pmoc') || document.querySelector('#sub-pmoc-form h3');
   if (titulo) titulo.textContent = '✏️ Editando Ficha PMOC — ' + (ficha.equipamentos?.tag || id.toString().slice(0,6).toUpperCase());
