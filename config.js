@@ -1,14 +1,6 @@
 // =====================================================================
 //  CONCREDUR — CONFIGURAÇÃO DE AMBIENTE
 //  ⚠️  Este arquivo define o ambiente ativo do sistema.
-//
-//  HOMOLOGAÇÃO : SUPABASE_URL aponta para nweligwbglblbncaegir
-//  PRODUÇÃO    : SUPABASE_URL aponta para mqijbvcnalbfjbhhjjzx
-//
-//  Para trocar de ambiente, altere APENAS este arquivo.
-//  NUNCA exponha a SERVICE_ROLE_KEY aqui ou em qualquer front-end.
-//  A ANON_KEY é segura para front-end: o acesso real é controlado
-//  por Row Level Security (RLS) no painel do Supabase.
 // =====================================================================
 
 const ENV = 'homologacao'; // 'homologacao' | 'producao'
@@ -24,7 +16,6 @@ const SUPABASE_CONFIG = {
   },
 };
 
-// Exporta as constantes que app.js e verificar.html consomem
 const SUPABASE_URL      = SUPABASE_CONFIG[ENV].url;
 const SUPABASE_ANON_KEY = SUPABASE_CONFIG[ENV].anonKey;
 const IS_HOMOLOGACAO    = (ENV === 'homologacao');
