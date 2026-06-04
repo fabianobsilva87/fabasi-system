@@ -1663,7 +1663,15 @@ if ($('btn-login')) {
       msgForm('mensagem', 'Verificando credenciais...', 'blue');
       const { error: loginError } = await db.auth.signInWithPassword({ email, password });
       if (loginError) {
-        msgForm('mensagem', 'Acesso negado: ' + loginError.message, 'red');
+        // Traduz os erros mais comuns do Supabase Auth para português
+        const erroTraduzido = {
+          'Invalid login credentials':  'E-mail ou senha incorretos.',
+          'Email not confirmed':        'E-mail ainda não confirmado. Verifique sua caixa de entrada.',
+          'Too many requests':          'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+          'User not found':             'Usuário não encontrado neste ambiente.',
+        }[loginError.message] || ('Erro: ' + loginError.message);
+        msgForm('mensagem', '⚠️ ' + erroTraduzido, 'red');
+        console.error('[login] Supabase Auth erro:', loginError.message);
       } else {
         msgForm('mensagem', 'Acesso autorizado! Carregando dashboard...', 'green');
 
