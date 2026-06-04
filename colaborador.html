@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="config.js"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div class="app-container">
@@ -42,7 +42,6 @@
 
     <div class="section-content">
 
-      <!-- ===== ABA: COLABORADORES ===== -->
       <div id="aba-lista" class="app-sub-panel">
         <div class="card">
           <h3 class="card-title">👷 Registrar Novo Técnico / Colaborador</h3>
@@ -57,7 +56,6 @@
             <div class="form-group"><label>Data de Contratação</label><input type="date" id="colab-contratacao"></div>
           </div>
 
-          <!-- ASSINATURA DIGITAL -->
           <div style="margin-top:20px; padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
             <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">🖋️ Assinatura Digital do Técnico</label>
             <p style="font-size:11px;color:#718096;margin-bottom:10px;">O técnico pode assinar diretamente no celular. A assinatura será usada automaticamente nos laudos PMOC e O.S.</p>
@@ -107,7 +105,6 @@
         </div>
       </div>
 
-      <!-- ===== ABA: CARGOS E FUNÇÕES ===== -->
       <div id="aba-cargo" class="app-sub-panel" style="display:none;">
         <div class="card">
           <h3 class="card-title">🪪 Novo Cargo / Função</h3>
@@ -139,13 +136,12 @@
         </div>
       </div>
 
-    </div><!-- /section-content -->
+    </div>
   </main>
 </div>
 
-  <script src="app.js"></script>
+<script src="app.js"></script>
 <script>
-// ===================== CANVAS DE ASSINATURA DO COLABORADOR =====================
 let canvasColab, ctxColab, desenhandoColab = false;
 
 function inicializarCanvasColaborador() {
@@ -184,13 +180,6 @@ function limparAssinaturaColaborador() {
   limparCanvasColabAssinatura();
 }
 
-function canvasColabTemConteudo() {
-  if (!canvasColab || !ctxColab) return false;
-  const idat = ctxColab.getImageData(0, 0, canvasColab.width, canvasColab.height);
-  return idat.data.some((v, i) => i % 4 === 3 && v > 0);
-}
-
-// ===================== EDITAR COLABORADOR =====================
 function editarColaborador(id) {
   const c = _colabCache.find(x => x.id === id);
   if (!c) return;
@@ -202,9 +191,10 @@ function editarColaborador(id) {
   document.getElementById('colab-funcao').value = c.funcao_id || '';
   document.getElementById('colab-contratacao').value = c.data_contratacao || '';
 
-  // Exibe assinatura existente se houver
-  if (c.assinatura_digital && c.assinatura_digital.startsWith('data:image')) {
-    document.getElementById('img-assinatura-atual').src = c.assinatura_digital;
+  // ── Sincronização Híbrida: Lê assinatura_url (Storage) ou fallback antiga assinatura_digital ──
+  const urlAssinatura = c.assinatura_url || c.assinatura_digital;
+  if (urlAssinatura && (urlAssinatura.startsWith('data:image') || urlAssinatura.startsWith('http'))) {
+    document.getElementById('img-assinatura-atual').src = urlAssinatura;
     document.getElementById('assinatura-preview-existente').style.display = 'block';
     document.getElementById('canvas-colab-assinatura').style.display = 'none';
     limparCanvasColabAssinatura();
@@ -237,7 +227,6 @@ function resetarFormColaborador() {
   document.getElementById('btn-cancelar-colab').style.display = 'none';
 }
 
-// ===================== CONTROLE DE ABAS =====================
 function alternarAbasColab(aba) {
   ['lista','cargo'].forEach(a => {
     const el = document.getElementById('aba-' + a);
@@ -245,7 +234,6 @@ function alternarAbasColab(aba) {
   });
 }
 
-// ===================== INIT =====================
 window.addEventListener('DOMContentLoaded', async () => {
   inicializarCanvasColaborador();
   await atualizarSelectFuncoes();
