@@ -3,8 +3,12 @@
 //   A ANON KEY abaixo é segura para o front-end pois é somente leitura pública.
 //   O acesso real aos dados é controlado por Row Level Security (RLS) no Supabase.
 //   NUNCA exponha a SERVICE_ROLE_KEY no front-end.
-const SUPABASE_URL      = "https://mqijbvcnalbfjbhhjjzx.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q";
+//
+// 🔶 AMBIENTE: HOMOLOGAÇÃO
+//   Banco: nweligwbglblbncaegir (HOMO)
+//   Para produção, substituir pelas credenciais PROD (mqijbvcnalbfjbhhjjzx).
+const SUPABASE_URL      = "https://nweligwbglblbncaegir.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZWxpZ3diZ2xibGJuY2FlZ2lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzAzNTgsImV4cCI6MjA5NTYwNjM1OH0.6eKcn40QmcfvHKAxuDH3kB6vHBJUu5LUVzfr27dvbKk";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===================== ESTADO GLOBAL =====================
@@ -466,76 +470,107 @@ async function verAtivo(id) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); }, { once: true });
 }
 
-// ── BUG FIX 3B: imprimirEtiqueta — janela de impressão com QR Code local ──
-// FIX CRÍTICO: imprimirEtiqueta
-// Causa raiz do bug "ID truncado / tipo ausente":
-//   O template literal passava '&tipo=equipamento' dentro de document.write().
-//   O parser HTML do browser interpreta '&' como início de entidade HTML (&amp;),
-//   truncando a query string — o QR Code ficava com ?id=UUID (sem &tipo=...).
-// Solução: a URL é montada DENTRO do <script> filho via data-attributes,
-//   sem nenhum '&' no fluxo HTML do document.write.
+// ── imprimirEtiqueta — etiqueta 80x50mm com QR Code local ──
 function imprimirEtiqueta(id) {
   const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
-  if (!eq) { alert('Ativo nao encontrado no inventario. Recarregue a pagina.'); return; }
+  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
 
-  const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' - ') || '--';
-
-  // Base da URL sem query string — o filho monta ?id=...&tipo=... em JS puro
-  const baseUrl = window.location.origin
+  const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
+  const baseUrl     = window.location.origin
     + window.location.pathname.replace(/\/[^/]*$/, '')
     + '/verificar.html';
 
-  const win = window.open('', '_blank', 'width=420,height=600');
+  const eqId     = eq.id;
+  const eqTag    = (eq.tag    || '').replace(/"/g, '&quot;');
+  const eqMarca  = (eq.marca  || '');
+  const eqProd   = (eq.produto|| '—');
+  const eqSerie  = (eq.nr_serie   || '—');
+  const eqPatrim = (eq.patrimonio || '—');
+  const eqPot    = (eq.potencia   || '');
+
+  const win = window.open('', '_blank', 'width=500,height=650');
   if (!win) { alert('Permita pop-ups para imprimir etiquetas.'); return; }
 
-  // Constrói o HTML por concatenação de strings — sem template literals aninhados
-  // e sem nenhum '&' no fluxo de markup, eliminando a ambiguidade de entidade HTML.
-  const eqId      = eq.id;
-  const eqTag     = eq.tag || '';
-  const eqProduto = (eq.marca ? eq.marca + ' - ' : '') + (eq.produto || '--');
-  const eqSerie   = eq.nr_serie   || '--';
-  const eqPatrim  = eq.patrimonio || '--';
+  // Monta CSS com print-color-adjust para garantir fundo azul na impressão
+  var css = '';
+  css += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
+  css += '@page { size: 80mm 50mm; margin: 0; }';
+  // FIX 1: -webkit-print-color-adjust e print-color-adjust forçam impressão de backgrounds
+  css += '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }';
+  css += 'body { font-family: Arial, sans-serif; background: #fff; width: 80mm; margin: 0 auto; }';
+  css += '.etiqueta { width: 78mm; border: 2px solid #1a56db; border-radius: 5px; overflow: hidden; margin: 1mm auto; }';
+  css += '.etq-header { background: #1a56db !important; color: #fff !important; padding: 5px 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }';
+  css += '.etq-header-left { flex: 1; }';
+  css += '.etq-titulo { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #fff !important; opacity: .85; }';
+  css += '.etq-tag { font-size: 16px; font-weight: 900; color: #fff !important; letter-spacing: .04em; line-height: 1.1; }';
+  css += '.etq-categoria { display: inline-block; background: rgba(255,255,255,.25) !important; color: #fff !important; font-size: 7px; font-weight: 700; padding: 1px 6px; border-radius: 8px; margin-top: 2px; }';
+  css += '.etq-body { display: flex; padding: 5px 8px; gap: 8px; align-items: flex-start; }';
+  css += '.etq-qr { flex-shrink: 0; }';
+  css += '#qr-etiqueta canvas, #qr-etiqueta img { display: block; width: 72px !important; height: 72px !important; }';
+  css += '.etq-info { flex: 1; display: flex; flex-direction: column; gap: 3px; justify-content: center; }';
+  css += '.etq-info-titulo { font-size: 7px; font-weight: 700; color: #1a56db !important; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1px; }';
+  css += '.etq-info-desc { font-size: 8px; color: #374151; line-height: 1.4; }';
+  css += '.etq-url { font-size: 5.5px; color: #9ca3af; word-break: break-all; line-height: 1.3; margin-top: 3px; }';
+  css += '.etq-footer { background: #f1f5f9 !important; border-top: 1px solid #e2e8f0; padding: 3px 8px; display: flex; justify-content: space-between; font-size: 6.5px; color: #6b7280; }';
+  // Tela: mostra preview maior antes de imprimir
+  css += '@media screen { body { padding: 12px; background: #f1f5f9; } .etiqueta { box-shadow: 0 2px 12px rgba(0,0,0,.12); } }';
 
-  var html  = '<!DOCTYPE html><html lang="pt-BR"><head>';
+  // Monta HTML por concatenação — sem '&' solto no markup
+  var html = '<!DOCTYPE html><html lang="pt-BR"><head>';
   html += '<meta charset="UTF-8">';
+  html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
   html += '<title>Etiqueta - ' + eqTag + '</title>';
   html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><' + '/script>';
-  html += '<style>';
-  html += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
-  html += '@page { size: 80mm 80mm; margin: 4mm; }';
-  html += 'body { font-family: Arial, sans-serif; background: #fff; display: flex; justify-content: center; align-items: flex-start; }';
-  html += '.etiqueta { width: 72mm; border: 2px solid #1a56db; border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }';
-  html += '.etq-header { background: #1a56db; color: #fff; width: 100%; text-align: center; padding: 4px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }';
-  html += '.etq-tag { font-size: 22px; font-weight: 900; color: #1a202c; letter-spacing: .04em; }';
-  html += '.etq-produto { font-size: 9px; color: #4a5568; text-align: center; max-width: 68mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
-  html += '.etq-local { font-size: 8px; color: #718096; text-align: center; }';
-  html += '#qr-etiqueta { margin-top: 2px; }';
-  html += '#qr-etiqueta canvas, #qr-etiqueta img { display: block; }';
-  html += '.etq-url { font-size: 6px; color: #a0aec0; word-break: break-all; text-align: center; margin-top: 2px; max-width: 68mm; }';
-  html += '.etq-footer { font-size: 7px; color: #718096; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 3px; width: 100%; }';
-  html += '</style></head><body>';
-  // data-base e data-eqid passam os parâmetros sem '&' no markup
+  html += '<style>' + css + '</style>';
+  html += '</head><body>';
+
+  // data-base e data-eqid — URL montada em JS para evitar &amp; no parser HTML
   html += '<div class="etiqueta" data-base="' + baseUrl + '" data-eqid="' + eqId + '">';
-  html += '  <div class="etq-header">Concredur - Controle de Ativo</div>';
-  html += '  <div class="etq-tag">' + eqTag + '</div>';
-  html += '  <div class="etq-produto">' + eqProduto + '</div>';
-  html += '  <div class="etq-local">' + localizacao + '</div>';
-  html += '  <div id="qr-etiqueta"></div>';
-  html += '  <div class="etq-url" id="url-texto"></div>';
-  html += '  <div class="etq-footer">Serie: ' + eqSerie + ' | Patrimonio: ' + eqPatrim + '</div>';
+
+  // Header azul: TAG + categoria
+  html += '  <div class="etq-header">';
+  html += '    <div class="etq-header-left">';
+  html += '      <div class="etq-titulo">Concredur — Controle de Ativo</div>';
+  html += '      <div class="etq-tag">' + eqTag + '</div>';
+  html += '      <div class="etq-categoria">' + (eq.categoria || 'Ativo') + '</div>';
+  html += '    </div>';
+  html += '  </div>';
+
+  // Body: QR Code + informações
+  html += '  <div class="etq-body">';
+  html += '    <div class="etq-qr"><div id="qr-etiqueta"></div></div>';
+  html += '    <div class="etq-info">';
+  html += '      <div class="etq-info-titulo">Informações do Ativo</div>';
+  html += '      <div class="etq-info-desc">Aponte a câmera do celular para verificar histórico de manutenções, especificações técnicas e dados completos deste equipamento.</div>';
+  html += '      <div class="etq-url" id="url-texto"></div>';
+  if (eqPot) {
+    html += '      <div style="font-size:7px;color:#374151;margin-top:2px;font-weight:600;">Cap.: ' + eqPot + '</div>';
+  }
+  html += '    </div>';
+  html += '  </div>';
+
+  // Footer: série e patrimônio
+  html += '  <div class="etq-footer">';
+  html += '    <span>Série: ' + eqSerie + '</span>';
+  html += '    <span>' + (eqMarca ? eqMarca + ' — ' : '') + eqProd + '</span>';
+  html += '    <span>Pat.: ' + eqPatrim + '</span>';
+  html += '  </div>';
+
   html += '</div>';
-  // Script filho constrói a URL final com '&' em JavaScript — sem risco de &amp;
+
+  // Script filho: monta URL completa e gera QR Code
   html += '<script>';
   html += 'window.addEventListener("DOMContentLoaded", function() {';
   html += '  var el   = document.querySelector(".etiqueta");';
   html += '  var base = el.getAttribute("data-base");';
   html += '  var uid  = el.getAttribute("data-eqid");';
+  // FIX 2: tipo=equipamento — verificar.html agora suporta e exibe ficha + histórico
   html += '  var url  = base + "?id=" + uid + "&tipo=equipamento";';
   html += '  var urlEl = document.getElementById("url-texto");';
   html += '  if (urlEl) urlEl.textContent = url;';
   html += '  try {';
   html += '    new QRCode(document.getElementById("qr-etiqueta"), {';
-  html += '      text: url, width: 110, height: 110,';
+  html += '      text: url, width: 72, height: 72,';
   html += '      colorDark: "#1a202c", colorLight: "#ffffff",';
   html += '      correctLevel: QRCode.CorrectLevel.H';
   html += '    });';
@@ -543,7 +578,7 @@ function imprimirEtiqueta(id) {
   html += '  setTimeout(function() {';
   html += '    window.print();';
   html += '    window.addEventListener("afterprint", function() { window.close(); });';
-  html += '  }, 500);';
+  html += '  }, 600);';
   html += '});';
   html += '<' + '/script>';
   html += '</body></html>';
