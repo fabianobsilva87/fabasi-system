@@ -492,17 +492,16 @@ function imprimirEtiqueta(id) {
   const eqPot    = (eq.potencia   || '');
   const eqCat    = (eq.categoria  || 'Ativo');
 
-  const win = window.open('', '_blank', 'width=520,height=420');
+  const win = window.open('', '_blank', 'width=560,height=500');
   if (!win) { alert('Permita pop-ups para imprimir etiquetas.'); return; }
 
-  // CSS da etiqueta — sem print-color-adjust (será capturada como imagem)
+  // CSS tela: preview da etiqueta + painel de instruções
   var css = '';
   css += '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }';
-  css += '@page { size: 80mm 50mm; margin: 0; }';
-  css += 'body { font-family: Arial, sans-serif; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 16px; min-height: 100vh; }';
-  css += '#etiqueta-wrapper { width: 302px; }';  // 80mm ≈ 302px a 96dpi
-  css += '.etiqueta { width: 302px; border: 2px solid #1a56db; border-radius: 6px; overflow: hidden; background: #fff; font-family: Arial, sans-serif; }';
-  css += '.etq-header { background: #1a56db; color: #fff; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; }';
+  css += 'body { font-family: Arial, sans-serif; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; padding: 20px 16px; gap: 14px; }';
+  css += '#etiqueta-wrapper { width: 302px; }';
+  css += '.etiqueta { width: 302px; border: 2px solid #1a56db; border-radius: 6px; overflow: hidden; background: #fff; }';
+  css += '.etq-header { background: #1a56db; color: #fff; padding: 7px 10px; display: flex; align-items: center; }';
   css += '.etq-header-left { flex: 1; }';
   css += '.etq-titulo { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #fff; opacity: .85; }';
   css += '.etq-tag { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: .04em; line-height: 1.1; }';
@@ -514,11 +513,27 @@ function imprimirEtiqueta(id) {
   css += '.etq-info-desc { font-size: 7.5px; color: #374151; line-height: 1.45; }';
   css += '.etq-url { font-size: 5.5px; color: #9ca3af; word-break: break-all; line-height: 1.3; margin-top: 4px; }';
   css += '.etq-footer { background: #f1f5f9; border-top: 1px solid #e2e8f0; padding: 4px 9px; display: flex; justify-content: space-between; font-size: 6.5px; color: #6b7280; }';
-  // Status durante captura
-  css += '#status-msg { margin-top: 12px; font-family: Arial, sans-serif; font-size: 12px; color: #64748b; text-align: center; }';
-  // Área de impressão — só a imagem gerada vai para a impressora
-  css += '#print-area { display: none; }';
-  css += '@media print { body > * { display: none !important; } #print-area { display: block !important; margin: 0; padding: 0; } #print-area img { width: 80mm; height: auto; display: block; } }';
+  // Painel de controle (tela)
+  css += '#painel { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; width:302px; font-size:12px; color:#374151; }';
+  css += '#painel h3 { font-size:13px; font-weight:700; color:#1a202c; margin-bottom:8px; }';
+  css += '#painel p  { font-size:11px; color:#6b7280; margin-bottom:10px; line-height:1.5; }';
+  css += '.btn-modo { display:block; width:100%; padding:9px 12px; border:none; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; margin-bottom:7px; text-align:left; }';
+  css += '.btn-etiqueta { background:#1a56db; color:#fff; }';
+  css += '.btn-a4      { background:#f1f5f9; color:#1a202c; border:1px solid #e2e8f0; }';
+  css += '#status-msg  { font-size:11px; color:#6b7280; text-align:center; min-height:18px; }';
+  // Área de impressão — invisível na tela, visível só ao imprimir
+  css += '#print-area { display:none; }';
+  // @media print: oculta tudo, exibe apenas a imagem capturada
+  css += '@media print {';
+  css += '  @page { margin: 0; }';
+  css += '  body > * { display:none !important; }';
+  css += '  #print-area { display:block !important; width:100%; height:100%; }';
+  // Modo etiqueta: imagem preenche exatamente o papel (label printer 80×50mm)
+  css += '  #print-area.modo-etiqueta img { width:100%; height:100%; object-fit:contain; display:block; }';
+  // Modo A4: imagem centralizada no topo com marcas de corte pontilhadas
+  css += '  #print-area.modo-a4 { display:flex !important; justify-content:center; padding-top:20mm; }';
+  css += '  #print-area.modo-a4 img { width:80mm; height:auto; outline:1px dashed #aaa; }';
+  css += '}';
 
   var html = '<!DOCTYPE html><html lang="pt-BR"><head>';
   html += '<meta charset="UTF-8">';
@@ -530,16 +545,14 @@ function imprimirEtiqueta(id) {
   html += '<style>' + css + '</style>';
   html += '</head><body>';
 
-  // Área de preview — renderiza normalmente no DOM
+  // Preview da etiqueta (DOM real — capturado pelo html2canvas)
   html += '<div id="etiqueta-wrapper">';
   html += '<div class="etiqueta" data-base="' + baseUrl + '" data-eqid="' + eqId + '">';
-  html += '  <div class="etq-header">';
-  html += '    <div class="etq-header-left">';
-  html += '      <div class="etq-titulo">Concredur — Controle de Ativo</div>';
-  html += '      <div class="etq-tag">' + eqTag + '</div>';
-  html += '      <div class="etq-categoria">' + eqCat + '</div>';
-  html += '    </div>';
-  html += '  </div>';
+  html += '  <div class="etq-header"><div class="etq-header-left">';
+  html += '    <div class="etq-titulo">Concredur — Controle de Ativo</div>';
+  html += '    <div class="etq-tag">' + eqTag + '</div>';
+  html += '    <div class="etq-categoria">' + eqCat + '</div>';
+  html += '  </div></div>';
   html += '  <div class="etq-body">';
   html += '    <div class="etq-qr"><div id="qr-etiqueta"></div></div>';
   html += '    <div class="etq-info">';
@@ -554,54 +567,72 @@ function imprimirEtiqueta(id) {
   html += '    <span>' + (eqMarca ? eqMarca + ' — ' : '') + eqProd + '</span>';
   html += '    <span>Pat.: ' + eqPatrim + '</span>';
   html += '  </div>';
-  html += '</div>';
-  html += '</div>';
-  html += '<p id="status-msg">⏳ Preparando etiqueta...</p>';
+  html += '</div></div>';
 
-  // Área oculta que recebe a imagem e vai para a impressora
+  // Painel de seleção de modo de impressão
+  html += '<div id="painel">';
+  html += '  <h3>🖨️ Como deseja imprimir?</h3>';
+  html += '  <p>Escolha o modo antes de imprimir. A etiqueta acima é o preview do resultado.</p>';
+  html += '  <button class="btn-modo btn-etiqueta" onclick="iniciarImpressao(\'etiqueta\')">';
+  html += '    🏷️ Impressora de Etiqueta &nbsp;<small style="font-weight:400;opacity:.8;">(80×50mm — preenche o papel)</small>';
+  html += '  </button>';
+  html += '  <button class="btn-modo btn-a4" onclick="iniciarImpressao(\'a4\')">';
+  html += '    📄 Papel A4 &nbsp;<small style="font-weight:400;color:#6b7280;">(centralizada para recortar)</small>';
+  html += '  </button>';
+  html += '  <div id="status-msg">⏳ Gerando imagem da etiqueta...</div>';
+  html += '</div>';
+
+  // Área de impressão (invisível na tela)
   html += '<div id="print-area"></div>';
 
   html += '<script>';
+  html += 'var _imgDataUrl = null;'; // cache da imagem capturada
   html += 'window.addEventListener("DOMContentLoaded", function() {';
   html += '  var el   = document.querySelector(".etiqueta");';
   html += '  var base = el.getAttribute("data-base");';
   html += '  var uid  = el.getAttribute("data-eqid");';
   html += '  var url  = base + "?id=" + uid + "&tipo=equipamento";';
   html += '  document.getElementById("url-texto").textContent = url;';
-
-  // Gera o QR Code no DOM (para ser capturado pelo html2canvas)
+  // Gera QR Code no DOM para ser capturado junto pela html2canvas
   html += '  new QRCode(document.getElementById("qr-etiqueta"), {';
   html += '    text: url, width: 72, height: 72,';
   html += '    colorDark: "#1a202c", colorLight: "#ffffff",';
   html += '    correctLevel: QRCode.CorrectLevel.H';
   html += '  });';
-
-  // Aguarda QR renderizar (é síncrono mas o canvas precisa de 1 tick)
-  // depois captura com html2canvas e imprime a imagem
+  // Captura automática após QR renderizar — armazena em cache
   html += '  setTimeout(function() {';
-  html += '    var msg = document.getElementById("status-msg");';
-  html += '    if (msg) msg.textContent = "🖼️ Capturando cores...";';
   html += '    html2canvas(document.getElementById("etiqueta-wrapper"), {';
-  html += '      scale: 3,';           // 3x para qualidade de impressão
-  html += '      useCORS: true,';
-  html += '      backgroundColor: null';
+  html += '      scale: 3, useCORS: true, backgroundColor: "#ffffff"';
   html += '    }).then(function(canvas) {';
-  html += '      var dataUrl = canvas.toDataURL("image/png");';
-  html += '      var printArea = document.getElementById("print-area");';
-  html += '      printArea.innerHTML = "<img src=\'" + dataUrl + "\' alt=\'Etiqueta\'>";';
-  html += '      if (msg) msg.textContent = "✅ Pronto! Abrindo impressão...";';
-  html += '      setTimeout(function() {';
-  html += '        window.print();';
-  html += '        window.addEventListener("afterprint", function() { window.close(); });';
-  html += '      }, 300);';
+  html += '      _imgDataUrl = canvas.toDataURL("image/png");';
+  html += '      var msg = document.getElementById("status-msg");';
+  html += '      if (msg) msg.textContent = "✅ Pronto! Escolha o modo de impressão acima.";';
   html += '    }).catch(function(err) {';
-  // Fallback: se html2canvas falhar, imprime o HTML normalmente
-  html += '      console.warn("html2canvas falhou, imprimindo HTML:", err);';
-  html += '      if (msg) msg.textContent = "⚠️ Fallback — imprimindo HTML...";';
-  html += '      setTimeout(function() { window.print(); window.addEventListener("afterprint", function() { window.close(); }); }, 400);';
+  html += '      console.warn("html2canvas falhou:", err);';
+  html += '      var msg = document.getElementById("status-msg");';
+  html += '      if (msg) msg.textContent = "⚠️ Captura falhou — imprimindo HTML no fallback.";';
+  html += '      _imgDataUrl = "fallback";';
   html += '    });';
-  html += '  }, 400);';
+  html += '  }, 450);';
   html += '});';
+
+  // Função chamada pelos botões de modo
+  html += 'function iniciarImpressao(modo) {';
+  html += '  if (!_imgDataUrl) { alert("Aguarde a etiqueta terminar de gerar."); return; }';
+  html += '  var printArea = document.getElementById("print-area");';
+  html += '  printArea.className = "modo-" + modo;';   // define a classe de layout
+  html += '  if (_imgDataUrl === "fallback") {';
+  // Fallback: imprime o HTML diretamente se html2canvas falhou
+  html += '    window.print();';
+  html += '    window.addEventListener("afterprint", function() { window.close(); });';
+  html += '    return;';
+  html += '  }';
+  html += '  printArea.innerHTML = "<img src=\'" + _imgDataUrl + "\' alt=\'Etiqueta\'>";';
+  html += '  setTimeout(function() {';
+  html += '    window.print();';
+  html += '    window.addEventListener("afterprint", function() { window.close(); });';
+  html += '  }, 200);';
+  html += '}';
   html += '<' + '/script>';
   html += '</body></html>';
 
