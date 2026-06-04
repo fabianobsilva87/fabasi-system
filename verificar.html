@@ -206,14 +206,39 @@
         const eq          = f.equipamentos || {};
         const codigo      = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
 
+        // CORREÇÃO 2: dicionário expandido + fallback para chaves não mapeadas
         const labelChk = {
-          'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora','limpeza-condensadora':'Limpeza Condensadora',
-          'verificacao-dreno':'Verificação de Dreno','verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
-          'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos','limpeza-geral':'Limpeza Geral',
+          // Chaves padrão do sistema
+          'limpeza-filtro':      'Limpeza de Filtro',
+          'limpeza-evaporadora': 'Limpeza Evaporadora',
+          'limpeza-condensadora':'Limpeza Condensadora',
+          'verificacao-dreno':   'Verificação de Dreno',
+          'verificacao-eletrica':'Verificação Elétrica',
+          'verificacao-fluido':  'Verificação de Fluido',
+          'teste-operacao':      'Teste de Operação',
+          'verificacao-ruidos':  'Verificação de Ruídos',
+          'limpeza-geral':       'Limpeza Geral',
+          // Chaves de checklist personalizado (formato código_sequência)
+          'fil_01':'Filtro — Item 01', 'fil_02':'Filtro — Item 02', 'fil_03':'Filtro — Item 03',
+          'bio_01':'Biológico — Item 01', 'bio_02':'Biológico — Item 02', 'bio_03':'Biológico — Item 03',
+          'mec_01':'Mecânico — Item 01', 'mec_02':'Mecânico — Item 02', 'mec_03':'Mecânico — Item 03',
+          'ele_01':'Elétrico — Item 01', 'ele_02':'Elétrico — Item 02', 'ele_03':'Elétrico — Item 03',
+          'hid_01':'Hidráulico — Item 01','hid_02':'Hidráulico — Item 02',
         };
-        const statusChk = { 'OK':'<span class="ok">✓ OK</span>', 'NOK':'<span class="nok">✗ NOK</span>', 'NA':'<span class="na">N/A</span>' };
+        // Fallback: formata a chave bruta substituindo _ por espaço e capitalizando
+        const labelFallback = (k) => labelChk[k] || k.replace(/_/g, ' ').replace(/\w/g, c => c.toUpperCase());
+
+        const statusChk = {
+          'OK': '<span class="ok">✓ OK</span>',
+          'NOK':'<span class="nok">✗ NOK</span>',
+          'NA': '<span class="na">N/A</span>',
+          // Compatibilidade com fichas que usam C/I/N
+          'C':  '<span class="ok">✓ Conforme</span>',
+          'I':  '<span class="nok">✗ Inconform.</span>',
+          'N':  '<span class="na">N/A</span>',
+        };
         const chkRows = Object.entries(checklist).map(([k,v]) =>
-          `<tr><td>${labelChk[k] || k}</td><td style="text-align:center;">${statusChk[v] || v}</td></tr>`
+          `<tr><td>${labelFallback(k)}</td><td style="text-align:center;">${statusChk[v] || v}</td></tr>`
         ).join('');
 
         const assinaturaTecnicoHTML = f.assinatura_digital?.startsWith('data:image')
@@ -334,6 +359,90 @@
             <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinatura do Técnico</div>
             <div class="assinatura-row">
               <div class="assinatura-box">${assinaturaTecnicoHTML}<div class="linha">${col.nome || '—'}<br>Técnico Executor</div></div>
+            </div>
+          </div>
+        `;
+
+      } else if (tipo === 'equipamento') {
+        // ── CORREÇÃO 3: Roteador harmonizado para tipo=equipamento ──
+        // Limpa o DOM de carregamento imediatamente antes da busca assíncrona
+        const spinnerEq = document.getElementById('spinner');
+        if (spinnerEq) spinnerEq.remove();
+
+        // Busca em PROD primeiro; muta db=DB_PROD explicitamente para garantir
+        // que a conexão aponte para a fonte correta em operações subsequentes
+        let eq;
+        ({ data: eq } = await DB_PROD
+          .from('equipamentos')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle());
+
+        if (eq) {
+          // Ativo encontrado em PROD — ponteiro explícito
+          db = DB_PROD;
+        } else {
+          // Fallback para banco legado
+          const { data: eqHomo } = await DB_HOMO
+            .from('equipamentos')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+          if (!eqHomo) {
+            mostrarErro('Equipamento não encontrado na base de dados.');
+            return;
+          }
+          eq = eqHomo;
+          // CORREÇÃO 3: muta ponteiro global para DB_HOMO — históricos futuros
+          // na mesma sessão de auditoria consultarão o banco correto
+          db = DB_HOMO;
+        }
+
+        // Monta extras técnicos como campos de formulário padrão
+        const extras    = eq.extras_tecnico || {};
+        const extraRows = Object.entries(extras)
+          .filter(([, v]) => v != null && String(v).trim() !== '')
+          .map(([k, v]) => `
+            <div class="field">
+              <label>${k.replace(/[-_]/g,' ')}</label>
+              <span>${v}</span>
+            </div>`)
+          .join('');
+
+        const localizacao = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ') || '—';
+        const validadeStr = eq.validade
+          ? new Date(eq.validade + 'T00:00:00').toLocaleDateString('pt-BR', { month:'2-digit', year:'numeric' })
+          : '—';
+        const critCor = eq.criticidade === 'Alta' ? '#dc2626'
+                      : eq.criticidade === 'Baixa' ? '#059669' : '#d97706';
+
+        // Atualiza banner de status
+        document.getElementById('status-banner').className = 'status-banner valido';
+        document.getElementById('status-texto').textContent = '✅ Ativo autenticado — ' + eq.tag;
+
+        // Injeta ficha técnica isolada — bloco estrutural sempre visível
+        document.getElementById('corpo').innerHTML = `
+          <div class="os-content-block" id="ficha-ativo-verificado">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+              <span class="tag-tipo tag-pmoc">🏷️ Ativo</span>
+              <strong style="font-size:15px;">${eq.tag}</strong>
+              <span style="font-size:11px;color:#94a3b8;margin-left:auto;">${eq.categoria || '—'}</span>
+            </div>
+
+            <div class="field-group">
+              <div class="field"><label>TAG</label><span>${eq.tag}</span></div>
+              <div class="field"><label>Produto / Modelo</label><span>${eq.produto || '—'}</span></div>
+              <div class="field"><label>Marca</label><span>${eq.marca || '—'}</span></div>
+              <div class="field"><label>Nº Série</label><span>${eq.nr_serie || '—'}</span></div>
+              <div class="field"><label>Patrimônio</label><span>${eq.patrimonio || '—'}</span></div>
+              <div class="field"><label>Potência / Capacidade</label><span>${eq.potencia || '—'}</span></div>
+              <div class="field full"><label>Localização</label><span>${localizacao}</span></div>
+              <div class="field"><label>Instituição</label><span>${eq.instituicao || '—'}</span></div>
+              <div class="field"><label>Criticidade</label>
+                <span style="font-weight:700;color:${critCor};">Classe ${eq.criticidade || '—'}</span>
+              </div>
+              <div class="field"><label>Validade / Garantia</label><span>${validadeStr}</span></div>
+              ${extraRows}
             </div>
           </div>
         `;

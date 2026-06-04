@@ -403,9 +403,10 @@ async function excluirEquipamento(id) { if (confirm('Remover ativo?')) { await d
 function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id; }
 
 // ── BUG FIX 3A: verAtivo — visualiza ficha completa do ativo em modal ──
+// CORREÇÃO 1: lookup duplo — cobre tanto UUID direto quanto string serializada pelo onclick
 async function verAtivo(id) {
-  const eq = globalEquipamentos.find(e => e.id === id);
-  if (!eq) { alert('Ativo não encontrado no cache. Recarregue a página.'); return; }
+  const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
+  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
 
   // Monta o conteúdo da ficha
   const extras = eq.extras_tecnico || {};
@@ -466,13 +467,17 @@ async function verAtivo(id) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); }, { once: true });
 }
 
-// ── BUG FIX 3B: imprimirEtiqueta — janela de impressão com QR Code local ──
+// ── imprimirEtiqueta — janela de impressão com QR Code local ──
+// CORREÇÃO 1: lookup duplo (string e original) garante que o eq.id
+// do cache globalEquipamentos é sempre o UUID persistido no banco.
+// O onclick do modal serializa o id como string — cobrimos os dois casos.
 function imprimirEtiqueta(id) {
-  const eq = globalEquipamentos.find(e => e.id === id);
-  if (!eq) { alert('Ativo não encontrado.'); return; }
+  const eq = globalEquipamentos.find(e => e.id === id || e.id === String(id));
+  if (!eq) { alert('Ativo não encontrado no inventário. Recarregue a página.'); return; }
 
-  // PATCH 1: tipo=pmoc garante compatibilidade com o roteador de verificar.html
-  const urlVerificacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=pmoc`;
+  // CORREÇÃO 2: &tipo=equipamento — sintaxe correta com '=' obrigatório
+  // eq.id é o UUID indexado no banco — única fonte de verdade do identificador
+  const urlVerificacao = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/verificar.html?id=${eq.id}&tipo=equipamento`;
   const localizacao    = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
   const qrUid          = 'qr-etq-' + eq.id.toString().slice(0, 8);
 
