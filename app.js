@@ -1,12 +1,7 @@
 // =====================================================================
-//  CONCREDUR — app.js  (versão refatorada — Fases 1-4)
-//  Fase 1: credenciais removidas → consumidas de config.js
-//  Fase 2: assinaturas → Storage; observacoes → meta_pmoc JSONB
-//  Fase 3: CanvasAssinatura isolado; escapeHTML contra XSS
-//  Fase 4: dashboard lê views SQL materializadas
+//  CONCREDUR — app.js  (versão completa e corrigida)
 // =====================================================================
 
-// ── Fase 1: credenciais vêm de config.js (carregado antes no HTML) ──
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===================== ESTADO GLOBAL =====================
@@ -23,7 +18,6 @@ const fmtDate = (iso) => iso
   : '—';
 const hoje = () => new Date().toISOString().split('T')[0];
 
-// ── Fase 3: escapeHTML — sanitização para todos os innerHTML com dados do banco ──
 function escapeHTML(str) {
   if (str === null || str === undefined) return '—';
   return String(str)
@@ -34,7 +28,6 @@ function escapeHTML(str) {
     .replace(/'/g, '&#039;');
 }
 
-// ── Compatibilidade: lê meta_pmoc (novo JSONB) com fallback para observacoes regex (legado) ──
 function lerMetaPMOC(ficha) {
   if (ficha.meta_pmoc && Object.keys(ficha.meta_pmoc).length > 0) {
     return ficha.meta_pmoc;
@@ -55,7 +48,6 @@ function lerMetaPMOC(ficha) {
   };
 }
 
-// ── Compatibilidade: lê assinatura_url (Storage) com fallback para assinatura_digital (Base64 legado) ──
 function lerAssinaturaURL(obj, campoUrl, campoBase64) {
   if (!obj) return null;
   if (obj[campoUrl])                                    return obj[campoUrl];
@@ -131,7 +123,6 @@ async function uploadFoto(file, pasta, msgId) {
   return publicUrl;
 }
 
-// ── Fase 2: upload de assinatura PNG para Storage (substitui Base64 no DB) ──
 async function uploadAssinatura(blob, pasta, nomeBase) {
   const nomeArq = `assinaturas/${pasta}/${nomeBase}_${Date.now()}.png`;
   const { error } = await db.storage
@@ -142,7 +133,7 @@ async function uploadAssinatura(blob, pasta, nomeBase) {
   return publicUrl;
 }
 
-// ── Fase 3: CanvasAssinatura — componente isolado e reutilizável ──
+// ===================== COMPONENTE CANVAS ASSINATURA =====================
 class CanvasAssinatura {
   constructor(canvasId) {
     this.el         = document.getElementById(canvasId);
@@ -222,17 +213,14 @@ class CanvasAssinatura {
     if (this.ctx && this.el) this.ctx.clearRect(0, 0, this.el.width, this.el.height);
   }
 
-  // Retorna Blob PNG (não Base64) — pronto para uploadAssinatura()
   async toBlob() {
     return new Promise((res) => this.el.toBlob(res, 'image/png'));
   }
 }
 
-// Instâncias globais (criadas após DOMContentLoaded nas páginas que usam canvas)
-let canvasFiscal  = null; // canvas-assinatura (PMOC — assinatura do fiscal)
-let canvasColab   = null; // canvas-colab-assinatura (colaborador)
+let canvasFiscal  = null;
+let canvasColab   = null;
 
-// ── Compatibilidade retroativa com chamadas diretas ao canvas PMOC ──
 function inicializarCanvasAssinatura() {
   canvasFiscal = new CanvasAssinatura('canvas-assinatura');
 }
@@ -281,19 +269,19 @@ if ($('btn-logout')) {
 }
 
 function toggleModoRecuperacao(ativar) {
-  modoRecuperacao = ativar;
-  if ($('login-title')) $('login-title').textContent = ativar ? 'Recuperação de Acesso' : 'Acesso ao Sistema';
-  if ($('login-desc'))  $('login-desc').textContent  = ativar
+  modoRecuperacao = activar;
+  if ($('login-title')) $('login-title').textContent = activar ? 'Recuperação de Acesso' : 'Acesso ao Sistema';
+  if ($('login-desc'))  $('login-desc').textContent  = activar
     ? 'Digite seu e-mail para receber o link de redefinição.'
     : 'Informe suas credenciais para continuar';
-  if ($('login-password-group')) $('login-password-group').style.display = ativar ? 'none' : 'flex';
-  if ($('link-recuperar')) $('link-recuperar').style.display = ativar ? 'none' : 'inline';
-  if ($('link-voltar'))    $('link-voltar').style.display    = ativar ? 'inline' : 'none';
+  if ($('login-password-group')) $('login-password-group').style.display = activar ? 'none' : 'flex';
+  if ($('link-recuperar')) $('link-recuperar').style.display = activar ? 'none' : 'inline';
+  if ($('link-voltar'))    $('link-voltar').style.display    = activar ? 'inline' : 'none';
   if ($('btn-login')) $('btn-login').querySelector('span').nextSibling.textContent =
     ativar ? ' Enviar Link' : ' Entrar no Sistema';
 }
 
-// ===================== FLUXOGRAMA DE CRITICIDADE =====================
+// ===================== CRITICIDADE & FREQUÊNCIA =====================
 function calcularCriticidadeFluxograma() {
   if (!$('crit-interrupcao')) return 'Média';
   const i = $('crit-interrupcao').value, s = $('crit-seguranca').value;
@@ -397,16 +385,24 @@ function filtrarEquipamentos(delta) {
   const slice  = items.slice(paginaAtualEquipamento * itensPorPagina, (paginaAtualEquipamento + 1) * itensPorPagina);
   const tbody  = $('tbody-equipamentos-gerir'); if (!tbody) return;
   if (!slice.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum ativo encontrado.</td></tr>'; return; }
+  
   tbody.innerHTML = slice.map(eq => {
     const critCls = eq.criticidade === 'Alta' ? 'danger' : eq.criticidade === 'Baixa' ? 'success' : '';
+    
+    // ── Correção Técnica: Caso o token do banco esteja nulo, assume o ID ou a TAG como contingência ──
+    const tokenSeguro = eq.qrcode_token || eq.tag || eq.id;
+    
     return `<tr>
       <td><span class="tag-badge">${escapeHTML(eq.tag)}</span></td>
       <td><strong>${escapeHTML(eq.produto)}</strong><br><small style="color:#a0aec0">${escapeHTML(eq.marca)}</small></td>
       <td>${escapeHTML(eq.bloco)} / ${escapeHTML(eq.setor)}<br><small style="color:#a0aec0">${escapeHTML(eq.sala)}</small></td>
       <td><span class="tag-badge ${critCls}">Classe ${escapeHTML(eq.criticidade || 'Média')}</span></td>
-      <td>${eq.qrcode_token
-        ? `<button class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="exibirJanelaQRCode('${escapeHTML(eq.qrcode_token)}','${escapeHTML(eq.tag)}','${eq.id}')">👁️ QR</button>`
-        : '—'}</td>
+      <td>
+        <button class="btn-primary" style="padding:3px 8px;font-size:11px;" 
+          onclick="exibirJanelaQRCode('${escapeHTML(tokenSeguro)}','${escapeHTML(eq.tag)}','${eq.id}')">
+          👁️ QR
+        </button>
+      </td>
       <td>
         <button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button>
         <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button>
@@ -414,6 +410,7 @@ function filtrarEquipamentos(delta) {
     </tr>`;
   }).join('');
 }
+
 function mudarPaginaEquipamento(d) { filtrarEquipamentos(d); }
 async function excluirEquipamento(id) {
   if (confirm('Remover ativo?')) { await db.from('equipamentos').delete().eq('id', id); carregarEquipamentos(); }
@@ -535,13 +532,11 @@ if ($('btn-salvar-colaborador')) {
     }
     msgForm('msg-colaborador', 'Salvando...', 'blue');
 
-    // ── Fase 2: assinatura → Storage (URL), não Base64 no DB ──
     let assinatura_url = null;
     if (canvasColab && canvasColab.temConteudo()) {
       const blob = await canvasColab.toBlob();
       assinatura_url = await uploadAssinatura(blob, 'colaboradores', cpf.replace(/\D/g,''));
     }
-    // Edição: preservar URL anterior se canvas não foi redesenhado
     if (!assinatura_url && $('canvas-colab-assinatura')?.style.display === 'none') {
       const idEd  = $('colab-id-edicao')?.value;
       const cached = _colabCache.find(x => x.id === idEd);
@@ -597,7 +592,6 @@ if ($('btn-salvar-ficha')) {
     const cat      = $('pmoc-equipamento').options[$('pmoc-equipamento').selectedIndex]?.dataset?.categoria || 'OUT';
     const freqLabel = { M:'Mensal', T:'Trimestral', S:'Semestral', A:'Anual' };
 
-    // ── Fase 2: checklist e metadados em JSONB (campo meta_pmoc) ──
     const checklistResult = {};
     document.querySelectorAll('.pmoc-checklist-container input[type="radio"]:checked')
       .forEach(r => { checklistResult[r.name] = r.value; });
@@ -610,7 +604,6 @@ if ($('btn-salvar-ficha')) {
       fiscal_nome:     fiscal_nome,
     };
 
-    // ── Fase 2: assinatura fiscal → Storage (URL), não Base64 ──
     let assinatura_fiscal_url = null;
     if (canvasFiscal && canvasFiscal.temConteudo()) {
       const blob = await canvasFiscal.toBlob();
@@ -624,8 +617,8 @@ if ($('btn-salvar-ficha')) {
     const payload = {
       equipamento_id,
       tecnico_nome:         colab?.nome || 'Técnico',
-      observacoes:          $('pmoc-obs')?.value.trim() || null, // campo livre — sem regex
-      meta_pmoc,                                                 // ← JSONB estruturado
+      observacoes:          $('pmoc-obs')?.value.trim() || null,
+      meta_pmoc,
       user_id:              user?.id,
       assinatura_tecnico_url: lerAssinaturaURL(colab,'assinatura_url','assinatura_digital') || null,
       assinatura_fiscal_url:  assinatura_fiscal_url || null,
@@ -638,7 +631,7 @@ if ($('btn-salvar-ficha')) {
       : await db.from('fichas_pmoc').insert([payload]);
 
     if (error) { msgForm('msg-ficha','Erro: ' + error.message,'red'); return; }
-    msgForm('msg-ficha', idEdicao ? '✓ Ficha atualizada!' : '✓ PMOC salvo!', 'green');
+    msgForm('msg-ficha', idEdicao ? '✓ Ficha updated!' : '✓ PMOC salvo!', 'green');
     limparCanvasAssinatura();
     if ($('pmoc-obs')) $('pmoc-obs').value = '';
     if ($('pmoc-fiscal-nome')) $('pmoc-fiscal-nome').value = '';
@@ -700,7 +693,6 @@ function _assinaturaImg(url, style) {
 function emitirRelatorioPMOC(b64) {
   const f  = JSON.parse(decodeURIComponent(escape(atob(b64))));
   const eq = f.equipamentos || {};
-  // ── Lê meta_pmoc (novo JSONB) com fallback automático para observacoes legado ──
   const meta       = lerMetaPMOC(f);
   const dataInsp   = meta.data_inspecao   || fmtDate(f.created_at);
   const freq       = meta.frequencia      || '—';
@@ -807,7 +799,7 @@ function emitirRelatorioOS(os) {
   const urlValidacao = gerarUrlValidacao(os.id, 'os');
   const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
   const codigoOS     = `OS-AC-${os.id.toString().slice(0,5).toUpperCase()}`;
-  const assinaturaTecnicoHTML = _assinaturaImg(lerAssinaturaURL(col,'assinatura_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
+  const BlackAssinaturaHTML = _assinaturaImg(lerAssinaturaURL(col,'assinatura_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
 
   const html = `
   <div class="laudo-wrapper">
@@ -850,7 +842,7 @@ function emitirRelatorioOS(os) {
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
         <div style="flex:1;">
           <div class="laudo-assinatura-box" style="min-width:200px;text-align:center;">
-            ${assinaturaTecnicoHTML}
+            ${BlackAssinaturaHTML}
             <div class="laudo-assinatura-linha">${escapeHTML(col.nome||'Técnico Responsável')}<br>Técnico Executor</div>
           </div>
         </div>
@@ -1044,7 +1036,7 @@ function validarCPF(cpf) {
   return r === parseInt(s[10]);
 }
 
-// ===================== CONTROLLERS =====================
+// ===================== CONTROLLERS SUB-PANELS =====================
 function alternarSubAbasPMOC(m) {
   if ($('sub-pmoc-form'))      $('sub-pmoc-form').style.display      = m === 'form' ? 'block' : 'none';
   if ($('sub-pmoc-historico')) $('sub-pmoc-historico').style.display = m === 'hist' ? 'block' : 'none';
@@ -1064,7 +1056,7 @@ function alternarSubAbasRH(m) {
 function resetarFormOS()  { ['os-defeito','os-laudo','os-id-edicao'].forEach(id => { if ($(id)) $(id).value = ''; }); }
 function resetarFormOSG() { ['osg-setor','osg-requisitado','osg-falha'].forEach(id => { if ($(id)) $(id).value = ''; }); }
 
-// ===================== QR CODE =====================
+// ===================== RENDERIZADORES QR CODE & JANELA IMPRESSÃO =====================
 function gerarQrCodeSVG(texto, tamanho = 120) {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${tamanho}x${tamanho}&data=${encodeURIComponent(texto)}&format=svg&margin=4`;
   return `<img src="${url}" width="${tamanho}" height="${tamanho}" alt="QR Code de Validação" style="display:block;border:1px solid #e2e8f0;border-radius:4px;background:#fff;">`;
@@ -1075,21 +1067,35 @@ function gerarUrlValidacao(id, tipo) {
   return `${base}/verificar.html?id=${id}&tipo=${tipo}`;
 }
 
+// ── Nova Lógica de Renderização Offline do QR Code para evitar Bloqueio de Pop-ups ──
 function exibirJanelaQRCode(qrcodeToken, tag, eqId) {
   const urlVerificacao = gerarUrlValidacao(qrcodeToken, 'equipamento');
-  const tamanho = 200;
-  const qrSrc   = `https://api.qrserver.com/v1/create-qr-code/?size=${tamanho}x${tamanho}&data=${encodeURIComponent(urlVerificacao)}&format=png&margin=6`;
   const codigo  = `EQ-${tag.toUpperCase()}`;
+  const tamanho = 200;
+  
   const win = window.open('', '_blank', 'width=420,height=560');
-  if (!win) { alert('Permita pop-ups para exibir o QR Code.'); return; }
-  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>QR Code — ${tag}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',Arial,sans-serif;background:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}.card{background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,.12);padding:32px 28px;text-align:center;max-width:360px;width:100%}.header-icon{font-size:36px;margin-bottom:10px}h2{font-size:20px;font-weight:700;color:#1a202c}.tag-badge{display:inline-block;margin:8px 0 20px;background:#dbeafe;color:#1e40af;font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px}.qr-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;display:inline-block;margin-bottom:20px}.qr-box img{display:block;border-radius:4px}.url-box{font-size:10px;color:#94a3b8;word-break:break-all;margin-bottom:20px;padding:8px 12px;background:#f1f5f9;border-radius:6px}.btn-print{background:#1a56db;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;width:100%}.btn-print:hover{background:#1648c0}@media print{body{background:#fff}.btn-print{display:none}}</style></head>
-  <body><div class="card"><div class="header-icon">🏷️</div><h2>QR Code de Identificação</h2><div class="tag-badge">${codigo}</div><div class="qr-box"><img src="${qrSrc}" width="${tamanho}" height="${tamanho}" alt="QR Code ${tag}"></div><div class="url-box">${urlVerificacao}</div><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div></body></html>`);
-  win.document.close();
+  if (!win) { alert('Permita pop-ups no navegador para emitir etiquetas de ativos.'); return; }
+  
+  const divOculta = document.createElement('div');
+  new QRCode(divOculta, {
+    text: urlVerificacao,
+    width: tamanho,
+    height: tamanho,
+    correctLevel: QRCode.CorrectLevel.H
+  });
+  
+  setTimeout(() => {
+    const imgGerada = divOculta.querySelector('img');
+    const qrSrcBase64 = imgGerada ? imgGerada.src : '';
+    
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>QR Code — ${tag}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{font-family:'Inter',Arial,sans-serif;background:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}.card{background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,.12);padding:32px 28px;text-align:center;max-width:360px;width:100%}.header-icon{font-size:36px;margin-bottom:10px}h2{font-size:20px;font-weight:700;color:#1a202c}.tag-badge{display:inline-block;margin:8px 0 20px;background:#dbeafe;color:#1e40af;font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px}.qr-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;display:inline-block;margin-bottom:20px}.qr-box img{display:block;border-radius:4px;margin:0 auto;}.url-box{font-size:10px;color:#94a3b8;word-break:break-all;margin-bottom:20px;padding:8px 12px;background:#f1f5f9;border-radius:6px}.btn-print{background:#1a56db;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;width:100%}.btn-print:hover{background:#1648c0}@media print{body{background:#fff}.btn-print{display:none}}</style></head>
+    <body><div class="card"><div class="header-icon">🏷️</div><h2>QR Code de Identificação</h2><div class="tag-badge">${codigo}</div><div class="qr-box"><img src="${qrSrcBase64}" width="${tamanho}" height="${tamanho}" alt="QR Code ${tag}"></div><div class="url-box">${urlVerificacao}</div><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div></body></html>`);
+    win.document.close();
+  }, 80);
 }
 
-// ===================== IMPRESSÃO =====================
 function imprimir(areaId, html) {
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) { alert('Permita pop-ups para imprimir os laudos.'); return; }
@@ -1100,7 +1106,7 @@ function imprimir(areaId, html) {
   win.document.close();
 }
 
-// ===================== LOGIN =====================
+// ===================== SESSÃO DE AUTENTICAÇÃO / LOGIN =====================
 if ($('btn-login')) {
   const paramsUrl = new URLSearchParams(window.location.search);
   let fluxoAtivacaoDireta = false;
@@ -1164,18 +1170,16 @@ if ($('btn-login')) {
   });
 }
 
-// ===================== DASHBOARD =====================
+// ===================== CONTROLADORES DASHBOARD =====================
 const CHART_DEFAULTS = { responsive:true, maintainAspectRatio:true, devicePixelRatio:2 };
 
 async function renderizarGraficosDashboard() {
-  // ── Tenta views SQL (Fase 4); fallback para queries diretas se views não existirem ──
   let resumo = null;
   const { data: resumoView, error: erroView } = await db.from('vw_dashboard_resumo').select('*').single();
 
   if (!erroView && resumoView) {
     resumo = resumoView;
   } else {
-    // Fallback: queries diretas (banco sem migration aplicada)
     const [{ count: cAtivos }, { count: cFichas }, { count: cAbAC }, { count: cFecAC }, { count: cAbFac }, { count: cFecFac }] = await Promise.all([
       db.from('equipamentos').select('*', { count:'exact', head:true }),
       db.from('fichas_pmoc').select('*', { count:'exact', head:true }),
@@ -1193,8 +1197,6 @@ async function renderizarGraficosDashboard() {
   if ($('dash-txt-os-abertas'))  $('dash-txt-os-abertas').textContent  = r.os_pendentes  ?? '0';
   if ($('dash-txt-os-fechadas')) $('dash-txt-os-fechadas').textContent = r.os_concluidas ?? '0';
 
-
-  // Gráfico 1 — Volumetria OS (view com fallback)
   let volOS = null;
   const { data: volOSView, error: erroVol } = await db.from('vw_dashboard_volumetria_os').select('*');
   if (!erroVol && volOSView) {
@@ -1223,7 +1225,6 @@ async function renderizarGraficosDashboard() {
     });
   }
 
-  // Gráfico 2 — Criticidade (view com fallback)
   let critData = null;
   const { data: critView, error: erroCrit } = await db.from('vw_dashboard_criticidade').select('*');
   if (!erroCrit && critView) {
@@ -1249,7 +1250,6 @@ async function renderizarGraficosDashboard() {
     });
   }
 
-  // Gráfico 3 — Facilities (view com fallback)
   let facData = null;
   const { data: facView, error: erroFac } = await db.from('vw_dashboard_facilities').select('*');
   if (!erroFac && facView) {
@@ -1275,7 +1275,6 @@ async function renderizarGraficosDashboard() {
     });
   }
 
-  // Logs recentes (view com fallback)
   let logs = null;
   const { data: logsView, error: erroLogs } = await db.from('vw_dashboard_logs_recentes').select('*').limit(8);
   if (!erroLogs && logsView) {
@@ -1330,7 +1329,7 @@ async function carregarAgendaManutencoes() {
   }).join('');
 }
 
-// ===================== ALERTAS DE VENCIMENTO =====================
+// ===================== CRONÔMETROS & ALERTAS =====================
 async function carregarAlertasVencimento() {
   const painel = $('painel-alertas-vencimento');
   const lista  = $('lista-alertas-vencimento');
@@ -1391,7 +1390,7 @@ async function carregarAlertasVencimento() {
   painel.style.display = 'block';
 }
 
-// ===================== EDIÇÃO PMOC =====================
+// ===================== FORM EDIÇÃO CONTROLLERS =====================
 async function editarFichaPMOC(id) {
   const ficha = _fichasCache.find(f => f.id == id);
   if (!ficha) { alert('Ficha não encontrada no cache. Recarregue a página.'); return; }
@@ -1441,7 +1440,6 @@ async function excluirFichaPMOC(id) {
   carregarHistoricoFichas();
 }
 
-// ===================== EDIÇÃO OS =====================
 async function editarOS(id, equipId, colabId, tipo, status, defeito, laudo) {
   if ($('os-id-edicao'))   $('os-id-edicao').value   = id;
   if ($('os-equipamento')) $('os-equipamento').value  = equipId;
@@ -1478,7 +1476,6 @@ if ($('btn-cancelar-edicao-os')) {
   });
 }
 
-// ===================== EDIÇÃO OSG =====================
 async function editarOSG(id, setor, servico, status) {
   if ($('osg-id-edicao'))   $('osg-id-edicao').value   = id;
   if ($('osg-setor'))       $('osg-setor').value       = setor;
