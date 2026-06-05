@@ -16,6 +16,9 @@ const _SUPA_KEY = (typeof SUPABASE_ANON_KEY !== 'undefined' && SUPABASE_ANON_KEY
   : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q';
 const db = supabase.createClient(_SUPA_URL, _SUPA_KEY);
 
+// Logo institucional (base64) — usada nas etiquetas de impressão
+const LOGO_ETIQUETA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAYAAADoByY0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyNpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ4OCwgMjAyMC8wNy8xMC0yMjowNjo1MyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIyLjAgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjM4MEYxMjVBNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjM4MEYxMjVCNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MzgwRjEyNTg1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6MzgwRjEyNTk1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6klSGIAAAP7ElEQVR42uxdCXQV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';
+
 // ===================== ESTADO GLOBAL =====================
 let globalEquipamentos     = [];
 let paginaAtualEquipamento = 0;
@@ -1208,57 +1211,48 @@ async function imprimirTodasEtiquetas() {
 
 function _abrirJanelaEtiqueta(lista) {
   const catLabel = {
-    AC:'Ar Condicionado', BEB:'Bebedouro',
-    CLIM:'Climatizador', VEN:'Ventilador/Exaustor', OUT:'Outros',
+    AC:'❄️ Ar Condicionado', BEB:'💧 Bebedouro',
+    CLIM:'🌀 Climatizador', VEN:'💨 Ventilador/Exaustor', OUT:'🔧 Outros',
   };
-  const critCor = {
-    Alta:  { bg:'#fee2e2', txt:'#991b1b', borda:'#fca5a5' },
-    Média: { bg:'#fef3c7', txt:'#92400e', borda:'#fcd34d' },
-    Baixa: { bg:'#d1fae5', txt:'#065f46', borda:'#6ee7b7' },
+  const catTitulo = {
+    AC:'AR CONDICIONADO', BEB:'BEBEDOURO',
+    CLIM:'CLIMATIZADOR', VEN:'VENTILAÇÃO / EXAUSTÃO', OUT:'EQUIPAMENTO',
   };
-  const QR_SIZE = 130;
+  const QR_SIZE = 150;
 
   const etiquetasHTML = lista.map(({ eq, url }) => {
     const tag      = eq.tag      || '—';
-    const produto  = eq.produto  || catLabel[eq.categoria] || '—';
-    const marca    = eq.marca    || '';
-    const local    = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' · ') || '—';
-    const crit     = eq.criticidade || 'Média';
-    const cc       = critCor[crit] || critCor['Média'];
-    const qrSrc    = `https://api.qrserver.com/v1/create-qr-code/?size=${QR_SIZE}x${QR_SIZE}&data=${encodeURIComponent(url)}&format=png&margin=4`;
-    const serie    = eq.nr_serie   ? `<div class="eq-detalhe">Série: <strong>${eq.nr_serie}</strong></div>` : '';
-    const patr     = eq.patrimonio ? `<div class="eq-detalhe">Patr.: <strong>${eq.patrimonio}</strong></div>` : '';
-    const potencia = eq.potencia   ? `<div class="eq-detalhe">Pot.: <strong>${eq.potencia}</strong></div>` : '';
+    const catNome  = catLabel[eq.categoria]  || '🔧 Equipamento';
+    const titulo   = catTitulo[eq.categoria] || 'EQUIPAMENTO';
+    const qrSrc    = `https://api.qrserver.com/v1/create-qr-code/?size=${QR_SIZE}x${QR_SIZE}&data=${encodeURIComponent(url)}&format=png&margin=2`;
 
     return `
     <div class="etiqueta">
-      <div class="etiqueta-header" style="background:#1a56db;">
-        <div class="etiqueta-header-left">
-          <div class="etiqueta-logo">🏗️ CONCREDUR</div>
-          <div class="etiqueta-sistema">Sistema de Gestão de Manutenção</div>
+      <div class="etq-top">
+        <div class="etq-logo">
+          <div class="etq-logo-badge"><img src="${LOGO_ETIQUETA}" alt="Logo"></div>
         </div>
-        <div class="etiqueta-crit" style="background:${cc.bg};color:${cc.txt};border:1px solid ${cc.borda};">
-          Classe ${crit}
+        <div class="etq-titulo">
+          MANUTENÇÃO<br>${titulo}
         </div>
       </div>
 
-      <div class="etiqueta-body">
-        <div class="etiqueta-info">
-          <div class="etiqueta-tag">TAG: ${tag}</div>
-          <div class="etiqueta-produto">${produto}${marca ? ` — ${marca}` : ''}</div>
-          <div class="etiqueta-local">📍 ${local}</div>
-          <div class="etiqueta-detalhes">
-            ${serie}${patr}${potencia}
-          </div>
-        </div>
-        <div class="etiqueta-qr">
+      <div class="etq-meta">
+        <div class="etq-codigo">${tag}</div>
+        <div class="etq-categoria">${catNome}</div>
+      </div>
+
+      <div class="etq-divider"></div>
+
+      <div class="etq-body">
+        <div class="etq-qr">
           <img src="${qrSrc}" width="${QR_SIZE}" height="${QR_SIZE}" alt="QR ${tag}">
         </div>
-      </div>
-
-      <div class="etiqueta-footer">
-        <div class="etiqueta-url">${url}</div>
-        <div class="etiqueta-instrucao">Aponte a câmera para verificar autenticidade</div>
+        <div class="etq-info">
+          <div class="etq-info-titulo">INFORMAÇÕES DO ATIVO</div>
+          <div class="etq-info-texto">Aponte a câmera do celular para verificar histórico de manutenções, especificações técnicas e dados completos deste equipamento.</div>
+          <div class="etq-url">${url}</div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -1270,205 +1264,114 @@ function _abrirJanelaEtiqueta(lista) {
 <head>
   <meta charset="UTF-8">
   <title>Etiqueta${lista.length > 1 ? 's' : ''} — Concredur</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', Arial, sans-serif; background: #e2e8f0; padding: 24px; color: #1a202c; }
 
-    body {
-      font-family: 'Inter', Arial, sans-serif;
-      background: #f1f5f9;
-      padding: 24px;
-      color: #1a202c;
-    }
-
-    /* ── Toolbar de controle (só na tela) ── */
     .toolbar {
-      max-width: 900px;
-      margin: 0 auto 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      background: #fff;
-      padding: 14px 20px;
-      border-radius: 10px;
+      max-width: 960px; margin: 0 auto 20px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: #fff; padding: 14px 20px; border-radius: 10px;
       box-shadow: 0 2px 12px rgba(0,0,0,.08);
     }
     .toolbar h2 { font-size: 15px; font-weight: 700; flex: 1; }
-    .toolbar small { font-size: 11px; color: #718096; }
-    .btn-imp {
-      background: #1a56db; color: #fff; border: none;
-      border-radius: 7px; padding: 9px 22px;
-      font-size: 13px; font-weight: 600; cursor: pointer;
-    }
-    .btn-imp:hover { background: #1648c0; }
-    .btn-sec {
-      background: #fff; color: #4a5568;
-      border: 1px solid #e2e8f0;
-      border-radius: 7px; padding: 8px 18px;
-      font-size: 13px; cursor: pointer;
-    }
-    .btn-sec:hover { background: #f7fafc; }
+    .toolbar small { font-size: 11px; color: #718096; display: block; margin-top: 2px; }
+    .btn-imp { background: #1e3a5f; color: #fff; border: none; border-radius: 7px;
+               padding: 9px 22px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-imp:hover { background: #16304d; }
+    .btn-sec { background: #fff; color: #4a5568; border: 1px solid #e2e8f0;
+               border-radius: 7px; padding: 8px 18px; font-size: 13px; cursor: pointer; }
 
-    /* ── Grade de etiquetas ── */
-    .grade {
-      max-width: 900px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: ${isSingle ? '1fr' : 'repeat(2, 1fr)'};
-      gap: 16px;
-    }
+    .grade { max-width: 960px; margin: 0 auto;
+             display: grid; grid-template-columns: ${isSingle ? '1fr' : 'repeat(2, 1fr)'}; gap: 18px; }
 
-    /* ── Etiqueta ── */
+    /* ── Etiqueta no padrão do modelo ── */
     .etiqueta {
       background: #fff;
-      border: 1.5px solid #cbd5e0;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,.07);
-      ${isSingle ? 'max-width: 480px; margin: 0 auto;' : ''}
+      border: 2.5px solid #1e3a5f;
+      border-radius: 16px;
+      padding: 22px 26px;
+      ${isSingle ? 'max-width: 540px; margin: 0 auto;' : ''}
     }
 
-    .etiqueta-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
+    .etq-top {
+      display: flex; align-items: center; gap: 18px; margin-bottom: 16px;
     }
-    .etiqueta-logo {
-      font-size: 12px;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: 0.04em;
+    .etq-logo-badge {
+      background: #1e3a5f;
+      border-radius: 999px;
+      padding: 14px 22px;
+      display: flex; align-items: center; justify-content: center;
     }
-    .etiqueta-sistema {
-      font-size: 9px;
-      color: rgba(255,255,255,.75);
-      margin-top: 2px;
+    .etq-logo-badge img { height: 34px; width: auto; display: block; }
+    .etq-titulo {
+      font-size: 20px; font-weight: 800; line-height: 1.15;
+      color: #1a202c; letter-spacing: 0.01em;
     }
-    .etiqueta-crit {
-      font-size: 9px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 12px;
+
+    .etq-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .etq-codigo {
+      font-size: 26px; font-weight: 800; letter-spacing: 0.16em;
+      color: #1a202c;
+    }
+    .etq-categoria {
+      border: 1.5px solid #1e3a5f; border-radius: 999px;
+      padding: 8px 18px; font-size: 14px; font-weight: 700; color: #1e3a5f;
       white-space: nowrap;
     }
 
-    .etiqueta-body {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 12px 8px;
-    }
-    .etiqueta-info { flex: 1; min-width: 0; }
-    .etiqueta-tag {
-      font-size: 18px;
-      font-weight: 700;
-      color: #1a56db;
-      letter-spacing: 0.03em;
-      margin-bottom: 3px;
-    }
-    .etiqueta-produto {
-      font-size: 12px;
-      font-weight: 600;
-      color: #2d3748;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .etiqueta-local {
-      font-size: 10px;
-      color: #718096;
-      margin-bottom: 5px;
-    }
-    .etiqueta-detalhes {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px 10px;
-    }
-    .eq-detalhe {
-      font-size: 9px;
-      color: #a0aec0;
-    }
-    .eq-detalhe strong { color: #4a5568; }
+    .etq-divider { border-top: 2px solid #e8edf3; margin: 0 0 18px; }
 
-    .etiqueta-qr {
-      flex-shrink: 0;
+    .etq-body { display: flex; gap: 22px; align-items: flex-start; }
+    .etq-qr { flex-shrink: 0; }
+    .etq-qr img { display: block; }
+    .etq-info { flex: 1; min-width: 0; }
+    .etq-info-titulo {
+      font-size: 16px; font-weight: 800; color: #1e3a5f;
+      letter-spacing: 0.03em; margin-bottom: 8px;
     }
-    .etiqueta-qr img {
-      display: block;
-      border: 1px solid #e2e8f0;
-      border-radius: 4px;
-    }
+    .etq-info-texto { font-size: 13px; line-height: 1.55; color: #4a5568; margin-bottom: 10px; }
+    .etq-url { font-size: 10.5px; color: #94a3b8; word-break: break-all; line-height: 1.4; }
 
-    .etiqueta-footer {
-      border-top: 1px solid #f1f5f9;
-      padding: 6px 12px;
-      background: #f8fafc;
-    }
-    .etiqueta-url {
-      font-size: 7.5px;
-      color: #a0aec0;
-      word-break: break-all;
-      margin-bottom: 2px;
-      font-family: monospace;
-    }
-    .etiqueta-instrucao {
-      font-size: 8px;
-      color: #cbd5e0;
-      text-align: center;
-    }
-
-    /* ── Impressão ── */
     @media print {
       body { background: #fff; padding: 0; }
       .toolbar { display: none !important; }
-      .grade {
-        max-width: 100%;
-        gap: 8mm;
-        grid-template-columns: ${isSingle ? '1fr' : 'repeat(2, 1fr)'};
-      }
-      .etiqueta {
-        break-inside: avoid;
-        box-shadow: none;
-        border: 1pt solid #cbd5e0;
-        ${isSingle ? 'max-width: 120mm; margin: 0 auto;' : ''}
-      }
+      .grade { max-width: 100%; gap: 8mm;
+               grid-template-columns: ${isSingle ? '1fr' : 'repeat(2, 1fr)'}; }
+      .etiqueta { break-inside: avoid; ${isSingle ? 'max-width: 150mm; margin: 0 auto;' : ''} }
       @page { margin: 10mm; size: A4 portrait; }
     }
   </style>
 </head>
 <body>
-
   <div class="toolbar">
     <div>
-      <h2>🏷️ Etiqueta${lista.length > 1 ? 's' : ''} de Ativo${lista.length > 1 ? 's' : ''} — Concredur</h2>
+      <h2>🏷️ Etiqueta${lista.length > 1 ? 's' : ''} de Ativo${lista.length > 1 ? 's' : ''}</h2>
       <small>${lista.length} etiqueta${lista.length > 1 ? 's' : ''} · QR Code de autenticidade</small>
     </div>
     <button class="btn-sec" onclick="window.close()">✕ Fechar</button>
     <button class="btn-imp" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
   </div>
-
   <div class="grade">
     ${etiquetasHTML}
   </div>
-
   <script>
-    // Aguarda imagens QR carregarem antes de disparar a impressão automática
-    // (só para etiqueta única — para múltiplas, o usuário clica em imprimir)
     ${isSingle ? `
     const imgs = document.querySelectorAll('img');
-    let carregadas = 0;
-    imgs.forEach(img => {
-      if (img.complete) { carregadas++; if (carregadas === imgs.length) setTimeout(() => window.print(), 300); }
-      else img.addEventListener('load', () => { carregadas++; if (carregadas === imgs.length) setTimeout(() => window.print(), 300); });
+    let n = 0;
+    imgs.forEach(i => {
+      if (i.complete) { if (++n === imgs.length) setTimeout(() => window.print(), 400); }
+      else i.addEventListener('load', () => { if (++n === imgs.length) setTimeout(() => window.print(), 400); });
     });` : ''}
   <\/script>
 </body>
 </html>`;
 
-  const win = window.open('', '_blank', `width=${isSingle ? 560 : 960},height=700`);
+  const win = window.open('', '_blank', `width=${isSingle ? 620 : 1000},height=720`);
   if (!win) { alert('Permita pop-ups neste site para abrir a etiqueta de impressão.'); return; }
   win.document.write(html);
   win.document.close();
