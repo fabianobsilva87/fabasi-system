@@ -394,6 +394,8 @@ if ($('btn-salvar')) {
 
     // Bug fix: UPDATE quando em modo edição (?edit=ID), INSERT quando novo
     const idEdicao = $('eq-id-edicao')?.value;
+    // Novo ativo recebe um qrcode_token (UUID) automaticamente para a etiqueta QR
+    if (!idEdicao) payload.qrcode_token = crypto.randomUUID();
     const { error } = idEdicao
       ? await db.from('equipamentos').update(payload).eq('id', idEdicao)
       : await db.from('equipamentos').insert([payload]);
@@ -492,7 +494,7 @@ function filtrarEquipamentos(delta) {
       <td><span class="tag-badge ${critCls}">Classe ${escapeHTML(crit)}</span></td>
       <td>${eq.qrcode_token
         ? `<button class="btn-primary" style="padding:3px 10px;font-size:11px;" title="Abrir etiqueta de impressão com QR Code" onclick="exibirJanelaQRCode('${escapeHTML(eq.qrcode_token)}','${escapeHTML(tag)}','${eq.id}')">🏷️ Etiqueta</button>`
-        : '<span style="font-size:11px;color:#a0aec0;">Sem token</span>'}</td>
+        : `<button class="btn-primary" style="padding:3px 10px;font-size:11px;background:#10b981;border-color:#10b981;" title="Gerar QR Code para este ativo" onclick="gerarTokenEquipamento('${eq.id}')">➕ Gerar QR</button>`}</td>
       <td>
         <button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button>
         <button class="btn-excluir" onclick="excluirEquipamento('${eq.id}')">✕</button>
@@ -505,6 +507,33 @@ async function excluirEquipamento(id) {
   if (confirm('Remover ativo?')) { await db.from('equipamentos').delete().eq('id', id); carregarEquipamentos(); }
 }
 function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id; }
+
+// Gera um qrcode_token para um ativo que ainda não tem (registros antigos)
+async function gerarTokenEquipamento(id) {
+  const token = crypto.randomUUID();
+  const { error } = await db.from('equipamentos').update({ qrcode_token: token }).eq('id', id);
+  if (error) { alert('Erro ao gerar QR Code: ' + error.message); return; }
+  // Atualiza o cache local e a tabela sem recarregar a página inteira
+  const eq = globalEquipamentos.find(e => String(e.id) === String(id));
+  if (eq) eq.qrcode_token = token;
+  filtrarEquipamentos(0);
+  // Abre a etiqueta recém-gerada
+  if (eq) exibirJanelaQRCode(token, eq.tag, id);
+}
+
+// Gera tokens para TODOS os ativos que ainda não têm — em lote
+async function gerarTokensFaltantes() {
+  const semToken = globalEquipamentos.filter(e => !e.qrcode_token);
+  if (!semToken.length) { alert('Todos os ativos já possuem QR Code.'); return; }
+  if (!confirm(`Gerar QR Code para ${semToken.length} ativo(s) sem token?`)) return;
+  for (const eq of semToken) {
+    const token = crypto.randomUUID();
+    const { error } = await db.from('equipamentos').update({ qrcode_token: token }).eq('id', eq.id);
+    if (!error) eq.qrcode_token = token;
+  }
+  filtrarEquipamentos(0);
+  alert(`✓ QR Code gerado para ${semToken.length} ativo(s).`);
+}
 
 async function atualizarSelectEquipamentos() {
   const { data } = await db.from('equipamentos').select('id, tag, produto, categoria');
