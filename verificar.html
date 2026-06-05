@@ -139,6 +139,16 @@
     return new Date(d).toLocaleDateString('pt-BR');
   }
 
+  function statusBadge(status) {
+    const cores = {
+      'Aberta':       { bg:'#fef3c7', txt:'#92400e' },
+      'Em Andamento': { bg:'#dbeafe', txt:'#1e40af' },
+      'Concluída':    { bg:'#d1fae5', txt:'#065f46' },
+    };
+    const c = cores[status] || { bg:'#f1f5f9', txt:'#475569' };
+    return `<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:12px;background:${c.bg};color:${c.txt};">${escapeHTML(status||'—')}</span>`;
+  }
+
   function assinaturaHTML(url) {
     return url
       ? `<img src="${url}" alt="Assinatura" style="max-width:160px;max-height:55px;display:block;margin:0 auto;border:1px solid #e2e8f0;border-radius:4px;">`
@@ -297,7 +307,11 @@
           ${eq.validade ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Validade / Próxima Troca</div><p style="font-size:13px;font-weight:600;color:#1a202c;">${fmtDate(eq.validade)}</p>` : ''}
           <hr class="divider">
           <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Registro do Ativo</div>
-          <p style="font-size:12px;color:#4a5568;">Cadastrado em: <strong>${fmtDate(eq.created_at)}</strong></p>`;
+          <p style="font-size:12px;color:#4a5568;">Cadastrado em: <strong>${fmtDate(eq.created_at)}</strong></p>
+          <div id="historico-ativo"></div>`;
+
+        // ── Histórico: fichas PMOC + Ordens de Serviço vinculadas a este equipamento ──
+        await carregarHistoricoAtivo(eq.id);
 
       } else {
         mostrarErro('Tipo de documento desconhecido.');
@@ -306,6 +320,88 @@
     } catch (err) {
       mostrarErro('Erro ao consultar: ' + err.message);
     }
+  }
+
+  // Busca e renderiza o histórico de PMOC e O.S. de um equipamento
+  async function carregarHistoricoAtivo(equipamentoId) {
+    const alvo = document.getElementById('historico-ativo');
+    if (!alvo) return;
+
+    const [pmocRes, osRes] = await Promise.allSettled([
+      db.from('fichas_pmoc')
+        .select('id, created_at, tecnico_nome, observacoes, meta_pmoc')
+        .eq('equipamento_id', equipamentoId)
+        .order('created_at', { ascending: false }),
+      db.from('ordens_servico')
+        .select('id, created_at, tipo_os, status_os, descricao_defeito, laudo_tecnico, colaboradores(nome)')
+        .eq('equipamento_id', equipamentoId)
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const fichas = pmocRes.status === 'fulfilled' ? (pmocRes.value?.data || []) : [];
+    const oss    = osRes.status   === 'fulfilled' ? (osRes.value?.data   || []) : [];
+
+    // ── Bloco PMOC ──
+    let pmocHTML = '';
+    if (fichas.length) {
+      const itens = fichas.map(f => {
+        const meta = lerMetaPMOC(f);
+        const dataInsp = meta.data_inspecao ? fmtDate(meta.data_inspecao) : fmtDate(f.created_at);
+        const freq     = meta.frequencia || '—';
+        const obs      = meta._obsLimpa || f.observacoes || '';
+        return `
+          <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#f8fafc;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              <strong style="font-size:12px;color:#1e3a5f;">📋 Inspeção ${dataInsp}</strong>
+              <span style="font-size:10px;color:#718096;">${escapeHTML(freq)}</span>
+            </div>
+            <div style="font-size:11px;color:#4a5568;">Técnico: <strong>${escapeHTML(f.tecnico_nome)}</strong></div>
+            ${obs ? `<div style="font-size:11px;color:#718096;margin-top:4px;">${escapeHTML(obs)}</div>` : ''}
+          </div>`;
+      }).join('');
+      pmocHTML = `
+        <hr class="divider">
+        <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">
+          📋 Fichas PMOC (${fichas.length})
+        </div>
+        ${itens}`;
+    } else {
+      pmocHTML = `
+        <hr class="divider">
+        <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">📋 Fichas PMOC</div>
+        <p style="font-size:12px;color:#a0aec0;">Nenhuma ficha PMOC registrada para este ativo.</p>`;
+    }
+
+    // ── Bloco Ordens de Serviço ──
+    let osHTML = '';
+    if (oss.length) {
+      const itens = oss.map(os => {
+        const codigo = `OS-${os.id.toString().slice(0,6).toUpperCase()}`;
+        return `
+          <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#f8fafc;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              <strong style="font-size:12px;color:#1e3a5f;">🛠️ ${escapeHTML(codigo)} — ${escapeHTML(os.tipo_os)}</strong>
+              ${statusBadge(os.status_os)}
+            </div>
+            <div style="font-size:10px;color:#a0aec0;margin-bottom:4px;">${fmtDate(os.created_at)}${os.colaboradores?.nome ? ' · ' + escapeHTML(os.colaboradores.nome) : ''}</div>
+            ${os.descricao_defeito ? `<div style="font-size:11px;color:#4a5568;"><strong>Ocorrência:</strong> ${escapeHTML(os.descricao_defeito)}</div>` : ''}
+            ${os.laudo_tecnico ? `<div style="font-size:11px;color:#718096;margin-top:3px;"><strong>Laudo:</strong> ${escapeHTML(os.laudo_tecnico)}</div>` : ''}
+          </div>`;
+      }).join('');
+      osHTML = `
+        <hr class="divider">
+        <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">
+          🛠️ Ordens de Serviço (${oss.length})
+        </div>
+        ${itens}`;
+    } else {
+      osHTML = `
+        <hr class="divider">
+        <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">🛠️ Ordens de Serviço</div>
+        <p style="font-size:12px;color:#a0aec0;">Nenhuma O.S. registrada para este ativo.</p>`;
+    }
+
+    alvo.innerHTML = pmocHTML + osHTML;
   }
 
   verificar();
