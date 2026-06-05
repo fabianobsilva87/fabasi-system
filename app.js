@@ -512,7 +512,14 @@ function editarEquipamento(id) { location.href = 'equipamentos.html?edit=' + id;
 async function gerarTokenEquipamento(id) {
   const token = crypto.randomUUID();
   const { error } = await db.from('equipamentos').update({ qrcode_token: token }).eq('id', id);
-  if (error) { alert('Erro ao gerar QR Code: ' + error.message); return; }
+  if (error) {
+    if (error.message && error.message.includes('qrcode_token')) {
+      alert('⚠️ A coluna "qrcode_token" ainda não existe no banco.\n\nExecute o script fix_qrcode_token.sql no Supabase (SQL Editor) antes de gerar os QR Codes.');
+    } else {
+      alert('Erro ao gerar QR Code: ' + error.message);
+    }
+    return;
+  }
   // Atualiza o cache local e a tabela sem recarregar a página inteira
   const eq = globalEquipamentos.find(e => String(e.id) === String(id));
   if (eq) eq.qrcode_token = token;
