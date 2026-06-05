@@ -340,8 +340,10 @@
   <script src="app.js"></script>
   <script>
     // Inicializar estado do formulário no carregamento
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       toggleCamposEquipamento();
+      // Se houver ?edit=ID na URL, carrega os dados para edição
+      await carregarEquipamentoParaEdicao();
     });
   </script>
 </body>

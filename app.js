@@ -388,11 +388,63 @@ if ($('btn-salvar')) {
     if (Object.keys(extras).length) payload.extras_tecnico = extras;
     if ($('eq-potencia')?.value) payload.potencia = $('eq-potencia').value.trim();
     if ($('eq-validade')?.value) payload.validade = $('eq-validade').value.trim();
-    const { error } = await db.from('equipamentos').insert([payload]);
+
+    // Bug fix: UPDATE quando em modo edição (?edit=ID), INSERT quando novo
+    const idEdicao = $('eq-id-edicao')?.value;
+    const { error } = idEdicao
+      ? await db.from('equipamentos').update(payload).eq('id', idEdicao)
+      : await db.from('equipamentos').insert([payload]);
+
     if (error) { msgForm('msg-equipamento', 'Erro: ' + error.message, 'red'); return; }
-    msgForm('msg-equipamento', '✓ Equipamento salvo!', 'green');
+    msgForm('msg-equipamento', idEdicao ? '✓ Equipamento atualizado!' : '✓ Equipamento salvo!', 'green');
     setTimeout(() => location.href = 'gerir-equipamentos.html', 1200);
   });
+}
+
+// Carrega os dados de um equipamento no formulário (modo edição via ?edit=ID)
+async function carregarEquipamentoParaEdicao() {
+  const params = new URLSearchParams(window.location.search);
+  const editId = params.get('edit');
+  if (!editId) return;
+
+  const { data: eq, error } = await db.from('equipamentos').select('*').eq('id', editId).single();
+  if (error || !eq) { msgForm('msg-equipamento', 'Equipamento não encontrado para edição.', 'red'); return; }
+
+  // Campo oculto que marca o modo edição
+  let idInput = $('eq-id-edicao');
+  if (!idInput) {
+    idInput = document.createElement('input');
+    idInput.type = 'hidden';
+    idInput.id   = 'eq-id-edicao';
+    document.body.appendChild(idInput);
+  }
+  idInput.value = eq.id;
+
+  // Categoria primeiro (dispara campos condicionais), depois os demais campos
+  if ($('eq-categoria')) { $('eq-categoria').value = eq.categoria || ''; toggleCamposEquipamento(); }
+  if ($('eq-tag'))         $('eq-tag').value         = eq.tag         || '';
+  if ($('eq-marca'))       $('eq-marca').value       = eq.marca       || '';
+  if ($('eq-produto'))     $('eq-produto').value     = eq.produto     || '';
+  if ($('eq-serie'))       $('eq-serie').value       = eq.nr_serie    || '';
+  if ($('eq-patrimonio'))  $('eq-patrimonio').value  = eq.patrimonio  || '';
+  if ($('eq-bloco'))       $('eq-bloco').value       = eq.bloco       || '';
+  if ($('eq-setor'))       $('eq-setor').value       = eq.setor       || '';
+  if ($('eq-sala'))        $('eq-sala').value        = eq.sala        || '';
+  if ($('eq-instituicao')) $('eq-instituicao').value = eq.instituicao || '';
+  if ($('eq-potencia') && eq.potencia) $('eq-potencia').value = eq.potencia;
+  if ($('eq-validade') && eq.validade) $('eq-validade').value = eq.validade;
+
+  // Preenche os campos técnicos extras (extras_tecnico JSONB)
+  const extras = eq.extras_tecnico || {};
+  Object.entries(extras).forEach(([k, v]) => {
+    const el = $('eq-' + k);
+    if (el) el.value = v;
+  });
+
+  // Atualiza o título e o botão para refletir o modo edição
+  const btn = $('btn-salvar');
+  if (btn) { btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706'; }
+  msgForm('msg-equipamento', '✏️ Editando equipamento ' + (eq.tag || ''), 'blue');
 }
 
 async function carregarEquipamentos() {
@@ -1130,15 +1182,24 @@ function gerarUrlValidacao(id, tipo) {
   return `${base}/verificar.html?id=${id}&tipo=${tipo}`;
 }
 
-function exibirJanelaQRCode(qrcodeToken, tag, eqId) {
-  // Recupera todos os dados do equipamento do cache global
-  const eq  = globalEquipamentos.find(e => String(e.id) === String(eqId)) || {};
+async function exibirJanelaQRCode(qrcodeToken, tag, eqId) {
+  // Recupera do cache global; se não houver, busca direto do banco
+  let eq = globalEquipamentos.find(e => String(e.id) === String(eqId));
+  if (!eq) {
+    const { data } = await db.from('equipamentos').select('*').eq('id', eqId).single();
+    eq = data || {};
+  }
   const url = gerarUrlValidacao(qrcodeToken, 'equipamento');
   _abrirJanelaEtiqueta([{ eq, url }]);
 }
 
 // Imprime etiquetas de múltiplos equipamentos de uma vez (4 por folha A4)
-function imprimirTodasEtiquetas() {
+async function imprimirTodasEtiquetas() {
+  // Garante que o cache esteja populado
+  if (!globalEquipamentos.length) {
+    const { data } = await db.from('equipamentos').select('*').order('tag', { ascending: true });
+    globalEquipamentos = data || [];
+  }
   const comToken = globalEquipamentos.filter(e => e.qrcode_token);
   if (!comToken.length) { alert('Nenhum ativo com QR Code cadastrado.'); return; }
   const lista = comToken.map(eq => ({ eq, url: gerarUrlValidacao(eq.qrcode_token, 'equipamento') }));
