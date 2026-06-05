@@ -289,8 +289,13 @@ function toggleModoRecuperacao(ativar) {
   if ($('login-password-group')) $('login-password-group').style.display = ativar ? 'none' : 'flex';
   if ($('link-recuperar')) $('link-recuperar').style.display = ativar ? 'none' : 'inline';
   if ($('link-voltar'))    $('link-voltar').style.display    = ativar ? 'inline' : 'none';
-  if ($('btn-login')) $('btn-login').querySelector('span').nextSibling.textContent =
-    ativar ? ' Enviar Link' : ' Entrar no Sistema';
+  if ($('btn-login')) {
+    const btnEl = $('btn-login');
+    // Preserva o ícone <span> e substitui apenas o texto do botão com segurança
+    const spanEl = btnEl.querySelector('span');
+    btnEl.textContent = ativar ? ' Enviar Link' : ' Entrar no Sistema';
+    if (spanEl) btnEl.prepend(spanEl);
+  }
 }
 
 // ===================== FLUXOGRAMA DE CRITICIDADE =====================
@@ -1439,29 +1444,56 @@ if ($('btn-login')) {
 
     if (fluxoAtivacaoDireta) {
       if (!senha || senha.length < 6) { if (msgEl) msgEl.textContent = 'A senha deve ter pelo menos 6 caracteres.'; return; }
-      const { data, error } = await db.auth.signUp({ email: emailAlvoAtivacao, password: senha });
-      if (error && error.message.includes('already registered')) {
-        const { error: e2 } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senha });
-        if (e2) { if (msgEl) msgEl.textContent = 'Erro: ' + e2.message; return; }
-      } else if (error) { if (msgEl) msgEl.textContent = 'Erro: ' + error.message; return; }
-      await db.from('profiles').update({ status:'ativo' }).eq('email', emailAlvoAtivacao);
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 600);
+      if (msgEl) msgEl.textContent = 'Ativando conta...';
+      const { data: signUpData, error: signUpErr } = await db.auth.signUp({ email: emailAlvoAtivacao, password: senha });
+      if (signUpErr && signUpErr.message.includes('already registered')) {
+        // Usuário já existe — tenta login direto
+        const { data: signInData, error: signInErr } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senha });
+        if (signInErr) { if (msgEl) msgEl.textContent = 'Erro: ' + signInErr.message; return; }
+        if (!signInData?.user) { if (msgEl) msgEl.textContent = '⚠️ E-mail não confirmado. Confirme no painel do Supabase.'; return; }
+      } else if (signUpErr) {
+        if (msgEl) msgEl.textContent = 'Erro: ' + signUpErr.message; return;
+      }
+      // Profile update em background
+      try { await db.from('profiles').update({ status:'ativo' }).eq('email', emailAlvoAtivacao); } catch(e) {}
+      window.location.href = 'dashboard.html';
       return;
     }
 
     const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
-    if (error) { if (msgEl) msgEl.textContent = 'Credenciais inválidas. Verifique e tente novamente.'; return; }
-    if (data?.user) {
-      const { data: { user: userLogado } } = await db.auth.getUser();
-      if (userLogado) {
-        const { data: perfilExistente } = await db.from('profiles').select('id').eq('id', userLogado.id).maybeSingle();
-        if (!perfilExistente) {
-          await db.from('profiles').insert([{ id:userLogado.id, email:userLogado.email, nome:userLogado.user_metadata?.full_name||'Administrador', role:'admin', status:'ativo' }]);
-        } else {
-          await db.from('profiles').update({ status:'ativo' }).eq('id', userLogado.id);
-        }
+
+    if (error) {
+      if (msgEl) msgEl.textContent = 'Credenciais inválidas. Verifique e tente novamente.';
+      return;
+    }
+
+    // Supabase v2: data.user pode ser null se e-mail não foi confirmado no painel
+    if (!data?.user) {
+      if (msgEl) msgEl.textContent = '⚠️ E-mail ainda não confirmado. Acesse o painel do Supabase → Authentication → Users e clique em "Confirm" para este usuário.';
+      return;
+    }
+
+    // Redirect imediato — operações de profile são fire-and-forget (não bloqueiam)
+    window.location.href = 'dashboard.html';
+
+    // Atualiza/cria perfil em background sem bloquear o redirect
+    try {
+      const uid   = data.user.id;
+      const email = data.user.email;
+      const { data: perfil } = await db.from('profiles').select('id').eq('id', uid).maybeSingle();
+      if (!perfil) {
+        await db.from('profiles').insert([{
+          id: uid, email,
+          nome:   data.user.user_metadata?.full_name || 'Administrador',
+          role:   'admin',
+          status: 'ativo',
+        }]);
+      } else {
+        await db.from('profiles').update({ status: 'ativo' }).eq('id', uid);
       }
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 600);
+    } catch(e) {
+      // Falha no profile não impede o login — apenas loga no console
+      console.warn('Profile sync falhou (não crítico):', e.message);
     }
   });
 }
