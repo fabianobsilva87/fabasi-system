@@ -11,7 +11,7 @@
 //  por Row Level Security (RLS) no painel do Supabase.
 // =====================================================================
 
-const ENV = 'producao'; // 'homologacao' | 'producao'
+const ENV = 'homologacao'; // 'homologacao' | 'producao'
 
 const SUPABASE_CONFIG = {
   homologacao: {
