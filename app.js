@@ -1265,9 +1265,7 @@ function _abrirJanelaEtiqueta(lista) {
     return `
     <div class="etiqueta">
       <div class="etq-top">
-        <div class="etq-logo">
-          <div class="etq-logo-badge"><img src="${LOGO_ETIQUETA}" alt="Logo"></div>
-        </div>
+        <div class="etq-logo"><img src="${LOGO_ETIQUETA}" alt="Logo"></div>
         <div class="etq-titulo">
           MANUTENÇÃO<br>${titulo}
         </div>
@@ -1327,28 +1325,26 @@ function _abrirJanelaEtiqueta(lista) {
       background: #fff;
       border: 2.5px solid #1e3a5f;
       border-radius: 16px;
-      padding: 22px 26px;
+      overflow: hidden;
       ${isSingle ? 'max-width: 540px; margin: 0 auto;' : ''}
     }
 
     .etq-top {
-      display: flex; align-items: center; gap: 18px; margin-bottom: 16px;
-    }
-    .etq-logo-badge {
+      display: flex; align-items: center; gap: 20px;
       background: #1e3a5f;
-      border-radius: 999px;
-      padding: 14px 22px;
-      display: flex; align-items: center; justify-content: center;
+      padding: 18px 26px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    .etq-logo-badge img { height: 34px; width: auto; display: block; }
+    .etq-logo img { height: 40px; width: auto; display: block; }
     .etq-titulo {
       font-size: 20px; font-weight: 800; line-height: 1.15;
-      color: #1a202c; letter-spacing: 0.01em;
+      color: #fff; letter-spacing: 0.01em;
     }
 
     .etq-meta {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 14px; margin-bottom: 14px; flex-wrap: wrap;
+      gap: 14px; padding: 18px 26px 14px; flex-wrap: wrap;
     }
     .etq-codigo {
       font-size: 26px; font-weight: 800; letter-spacing: 0.16em;
@@ -1360,9 +1356,9 @@ function _abrirJanelaEtiqueta(lista) {
       white-space: nowrap;
     }
 
-    .etq-divider { border-top: 2px solid #e8edf3; margin: 0 0 18px; }
+    .etq-divider { border-top: 2px solid #e8edf3; margin: 0 26px 18px; }
 
-    .etq-body { display: flex; gap: 22px; align-items: flex-start; }
+    .etq-body { display: flex; gap: 22px; align-items: flex-start; padding: 0 26px 22px; }
     .etq-qr { flex-shrink: 0; }
     .etq-qr img { display: block; }
     .etq-info { flex: 1; min-width: 0; }
@@ -1374,7 +1370,7 @@ function _abrirJanelaEtiqueta(lista) {
     .etq-url { font-size: 10.5px; color: #94a3b8; word-break: break-all; line-height: 1.4; }
 
     @media print {
-      body { background: #fff; padding: 0; }
+      body { background: #fff; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .toolbar { display: none !important; }
       .grade { max-width: 100%; gap: 8mm;
                grid-template-columns: ${isSingle ? '1fr' : 'repeat(2, 1fr)'}; }

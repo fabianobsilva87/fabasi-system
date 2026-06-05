@@ -329,11 +329,11 @@
 
     const [pmocRes, osRes] = await Promise.allSettled([
       db.from('fichas_pmoc')
-        .select('id, created_at, tecnico_nome, observacoes, meta_pmoc')
+        .select('id, created_at, tecnico_nome, observacoes, meta_pmoc, foto_url, assinatura_tecnico_url, assinatura_fiscal_url, assinatura_digital')
         .eq('equipamento_id', equipamentoId)
         .order('created_at', { ascending: false }),
       db.from('ordens_servico')
-        .select('id, created_at, tipo_os, status_os, descricao_defeito, laudo_tecnico, colaboradores(nome)')
+        .select('id, created_at, tipo_os, status_os, descricao_defeito, laudo_tecnico, foto_url, colaboradores(nome)')
         .eq('equipamento_id', equipamentoId)
         .order('created_at', { ascending: false }),
     ]);
@@ -341,14 +341,52 @@
     const fichas = pmocRes.status === 'fulfilled' ? (pmocRes.value?.data || []) : [];
     const oss    = osRes.status   === 'fulfilled' ? (osRes.value?.data   || []) : [];
 
+    const labelChk = {
+      'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora',
+      'limpeza-condensadora':'Limpeza Condensadora','verificacao-dreno':'Verificação de Dreno',
+      'verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
+      'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos','limpeza-geral':'Limpeza Geral',
+    };
+    const statusChk = {
+      OK:'<span style="color:#059669;font-weight:700;">✓ OK</span>',
+      NOK:'<span style="color:#dc2626;font-weight:700;">✗ NOK</span>',
+      NA:'<span style="color:#a0aec0;">N/A</span>',
+    };
+
     // ── Bloco PMOC ──
     let pmocHTML = '';
     if (fichas.length) {
-      const itens = fichas.map(f => {
+      const itens = fichas.map((f, i) => {
         const meta = lerMetaPMOC(f);
         const dataInsp = meta.data_inspecao ? fmtDate(meta.data_inspecao) : fmtDate(f.created_at);
         const freq     = meta.frequencia || '—';
+        const tipo     = meta.tipo_equipamento || '—';
+        const fiscal   = meta.fiscal_nome || '—';
         const obs      = meta._obsLimpa || f.observacoes || '';
+        const checklist = meta.checklist || {};
+        const chkRows = Object.entries(checklist).map(([k,v]) =>
+          `<tr><td style="padding:3px 6px;font-size:11px;">${escapeHTML(labelChk[k]||k)}</td><td style="padding:3px 6px;text-align:center;font-size:11px;">${statusChk[v]||escapeHTML(v)}</td></tr>`
+        ).join('');
+        const assinTec = lerAssinatura(f, 'assinatura_tecnico_url', 'assinatura_digital');
+        const assinFis = lerAssinatura(f, 'assinatura_fiscal_url', 'assinatura_fiscal');
+
+        const detalhes = `
+          <div id="pmoc-det-${i}" style="display:none;border-top:1px dashed #cbd5e0;margin-top:8px;padding-top:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Tipo:</span> <strong>${escapeHTML(tipo)}</strong></div>
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Frequência:</span> <strong>${escapeHTML(freq)}</strong></div>
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Técnico:</span> <strong>${escapeHTML(f.tecnico_nome)}</strong></div>
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Fiscal:</span> <strong>${escapeHTML(fiscal)}</strong></div>
+            </div>
+            ${chkRows ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:6px 0 3px;">Checklist de Manutenção</div><table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:4px;">${chkRows}</table>` : ''}
+            ${obs ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Observações</div><div style="font-size:11px;color:#4a5568;background:#fff;padding:6px 8px;border-radius:4px;border:1px solid #e2e8f0;">${escapeHTML(obs)}</div>` : ''}
+            ${f.foto_url ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Evidência Fotográfica</div><img src="${f.foto_url}" style="max-width:100%;max-height:180px;border-radius:4px;border:1px solid #e2e8f0;">` : ''}
+            ${(assinTec || assinFis) ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Assinaturas</div><div style="display:flex;gap:12px;flex-wrap:wrap;">
+              ${assinTec ? `<div style="text-align:center;"><img src="${assinTec}" style="max-width:140px;max-height:50px;border-bottom:1px solid #cbd5e0;"><div style="font-size:9px;color:#718096;">Técnico</div></div>` : ''}
+              ${assinFis ? `<div style="text-align:center;"><img src="${assinFis}" style="max-width:140px;max-height:50px;border-bottom:1px solid #cbd5e0;"><div style="font-size:9px;color:#718096;">Fiscal</div></div>` : ''}
+            </div>` : ''}
+          </div>`;
+
         return `
           <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#f8fafc;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
@@ -356,7 +394,8 @@
               <span style="font-size:10px;color:#718096;">${escapeHTML(freq)}</span>
             </div>
             <div style="font-size:11px;color:#4a5568;">Técnico: <strong>${escapeHTML(f.tecnico_nome)}</strong></div>
-            ${obs ? `<div style="font-size:11px;color:#718096;margin-top:4px;">${escapeHTML(obs)}</div>` : ''}
+            <button onclick="toggleDetalhe('pmoc-det-${i}', this)" style="margin-top:6px;font-size:11px;padding:4px 12px;background:#1e3a5f;color:#fff;border:none;border-radius:5px;cursor:pointer;">🔍 Ver detalhes</button>
+            ${detalhes}
           </div>`;
       }).join('');
       pmocHTML = `
@@ -375,8 +414,21 @@
     // ── Bloco Ordens de Serviço ──
     let osHTML = '';
     if (oss.length) {
-      const itens = oss.map(os => {
+      const itens = oss.map((os, i) => {
         const codigo = `OS-${os.id.toString().slice(0,6).toUpperCase()}`;
+        const detalhes = `
+          <div id="os-det-${i}" style="display:none;border-top:1px dashed #cbd5e0;margin-top:8px;padding-top:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Tipo:</span> <strong>${escapeHTML(os.tipo_os)}</strong></div>
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Status:</span> ${statusBadge(os.status_os)}</div>
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Data:</span> <strong>${fmtDate(os.created_at)}</strong></div>
+              <div style="font-size:11px;"><span style="color:#a0aec0;">Técnico:</span> <strong>${escapeHTML(os.colaboradores?.nome||'—')}</strong></div>
+            </div>
+            ${os.descricao_defeito ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:6px 0 3px;">Ocorrência / Sintomas</div><div style="font-size:11px;color:#4a5568;background:#fff;padding:6px 8px;border-radius:4px;border:1px solid #e2e8f0;">${escapeHTML(os.descricao_defeito)}</div>` : ''}
+            ${os.laudo_tecnico ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Diagnóstico / Ações Executadas</div><div style="font-size:11px;color:#4a5568;background:#fff;padding:6px 8px;border-radius:4px;border:1px solid #e2e8f0;">${escapeHTML(os.laudo_tecnico)}</div>` : ''}
+            ${os.foto_url ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Evidência Fotográfica</div><img src="${os.foto_url}" style="max-width:100%;max-height:180px;border-radius:4px;border:1px solid #e2e8f0;">` : ''}
+          </div>`;
+
         return `
           <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#f8fafc;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
@@ -384,8 +436,8 @@
               ${statusBadge(os.status_os)}
             </div>
             <div style="font-size:10px;color:#a0aec0;margin-bottom:4px;">${fmtDate(os.created_at)}${os.colaboradores?.nome ? ' · ' + escapeHTML(os.colaboradores.nome) : ''}</div>
-            ${os.descricao_defeito ? `<div style="font-size:11px;color:#4a5568;"><strong>Ocorrência:</strong> ${escapeHTML(os.descricao_defeito)}</div>` : ''}
-            ${os.laudo_tecnico ? `<div style="font-size:11px;color:#718096;margin-top:3px;"><strong>Laudo:</strong> ${escapeHTML(os.laudo_tecnico)}</div>` : ''}
+            <button onclick="toggleDetalhe('os-det-${i}', this)" style="margin-top:2px;font-size:11px;padding:4px 12px;background:#1e3a5f;color:#fff;border:none;border-radius:5px;cursor:pointer;">🔍 Ver detalhes</button>
+            ${detalhes}
           </div>`;
       }).join('');
       osHTML = `
@@ -403,6 +455,16 @@
 
     alvo.innerHTML = pmocHTML + osHTML;
   }
+
+  // Expande/recolhe o painel de detalhes de um item do histórico
+  function toggleDetalhe(id, btn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const aberto = el.style.display !== 'none';
+    el.style.display = aberto ? 'none' : 'block';
+    if (btn) btn.textContent = aberto ? '🔍 Ver detalhes' : '✕ Ocultar detalhes';
+  }
+
 
   verificar();
 </script>
