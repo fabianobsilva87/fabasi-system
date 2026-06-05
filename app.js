@@ -6,8 +6,15 @@
 //  Fase 4: dashboard lê views SQL materializadas
 // =====================================================================
 
-// ── Fase 1: credenciais vêm de config.js (carregado antes no HTML) ──
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ── Credenciais: lidas de config.js (carregado antes no HTML)
+// Fallback embutido garante funcionamento mesmo se config.js falhar no deploy
+const _SUPA_URL = (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL)
+  ? SUPABASE_URL
+  : 'https://mqijbvcnalbfjbhhjjzx.supabase.co';
+const _SUPA_KEY = (typeof SUPABASE_ANON_KEY !== 'undefined' && SUPABASE_ANON_KEY)
+  ? SUPABASE_ANON_KEY
+  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaWpidmNuYWxiZmpiaGhqanp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0ODM5ODcsImV4cCI6MjA5NjA1OTk4N30.2L_zzKs_voAt5SnmcKeYSBiskX46k8SFFdJgTkIGe7Q';
+const db = supabase.createClient(_SUPA_URL, _SUPA_KEY);
 
 // ===================== ESTADO GLOBAL =====================
 let globalEquipamentos     = [];
