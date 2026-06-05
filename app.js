@@ -1518,7 +1518,6 @@ async function renderizarGraficosDashboard() {
   if (!erroView && resumoView) {
     resumo = resumoView;
   } else {
-    // Bug 4 fix: try/catch individual — se uma tabela não existir não derruba as outras
     try {
       const resultados = await Promise.allSettled([
         db.from('equipamentos').select('*', { count:'exact', head:true }),
@@ -1546,7 +1545,6 @@ async function renderizarGraficosDashboard() {
   if ($('dash-txt-fichas'))      $('dash-txt-fichas').textContent      = r.total_pmocs   ?? '0';
   if ($('dash-txt-os-abertas'))  $('dash-txt-os-abertas').textContent  = r.os_pendentes  ?? '0';
   if ($('dash-txt-os-fechadas')) $('dash-txt-os-fechadas').textContent = r.os_concluidas ?? '0';
-
 
   // Gráfico 1 — Volumetria OS (view com fallback)
   let volOS = null;
@@ -1594,6 +1592,7 @@ async function renderizarGraficosDashboard() {
       critData = Object.entries(map).map(([criticidade,total]) => ({ criticidade, total }));
     } catch(e) { console.warn('Fallback critData falhou:', e.message); critData = []; }
   }
+  if ($('chartCriticidade') && critData) {
     const cnt = { Alta:0, Media:0, Baixa:0 };
     critData.forEach(row => {
       if (row.criticidade === 'Alta')       cnt.Alta  += Number(row.total);
@@ -1621,6 +1620,7 @@ async function renderizarGraficosDashboard() {
       facData = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
     } catch(e) { console.warn('Fallback facData falhou:', e.message); facData = []; }
   }
+  if ($('chartStatusOSG') && facData) {
     const cnt = { Aberta:0, 'Em Andamento':0, Concluida:0 };
     facData.forEach(row => {
       if (row.status_os === 'Aberta')            cnt.Aberta          += Number(row.total);
