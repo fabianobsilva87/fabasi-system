@@ -249,27 +249,37 @@ async function verificarSessaoGlobal() {
     return;
   }
 
+  // Verifica sessão — APENAS getUser(), sem depender da tabela profiles
   const { data: { user }, error } = await db.auth.getUser();
   if (!user || error) { window.location.href = 'index.html'; return; }
 
-  const { data: perfil } = await db
-    .from('profiles')
-    .select('nome, role, status')
-    .eq('id', user.id)
-    .maybeSingle();
+  // Exibe email imediatamente — não bloqueia em profiles
+  if ($('user-display-email')) $('user-display-email').textContent = user.email;
 
-  if (!perfil) {
-    await db.from('profiles').insert([{
-      id:     user.id,
-      email:  user.email,
-      nome:   user.user_metadata?.full_name || 'Administrador',
-      role:   'admin',
-      status: 'ativo',
-    }]).select().maybeSingle();
-    if ($('user-display-email')) $('user-display-email').textContent = user.email;
-  } else {
-    if ($('user-display-email'))
-      $('user-display-email').textContent = perfil.nome || user.email;
+  // Tenta buscar o nome do perfil em background — falha silenciosa se RLS bloquear
+  try {
+    const { data: perfil } = await db
+      .from('profiles')
+      .select('nome, role, status')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (perfil) {
+      if ($('user-display-email'))
+        $('user-display-email').textContent = perfil.nome || user.email;
+    } else {
+      // Perfil não existe — cria em background sem bloquear a página
+      db.from('profiles').insert([{
+        id:     user.id,
+        email:  user.email,
+        nome:   user.user_metadata?.full_name || user.email,
+        role:   'admin',
+        status: 'ativo',
+      }]).then(() => {}).catch(() => {});
+    }
+  } catch(e) {
+    // RLS ou outro erro em profiles — não impede o uso do sistema
+    console.warn('profiles sync:', e.message);
   }
 }
 verificarSessaoGlobal();
@@ -1413,21 +1423,20 @@ if ($('btn-login')) {
   let fluxoAtivacaoDireta = false;
   let emailAlvoAtivacao   = '';
 
-  (async () => {
-    if (!paramsUrl.get('token')) { try { await db.auth.signOut(); } catch(e) {} }
-    if (paramsUrl.get('email') && paramsUrl.get('token') === 'ativar_direto') {
-      fluxoAtivacaoDireta = true;
-      emailAlvoAtivacao   = decodeURIComponent(paramsUrl.get('email'));
-      if ($('email')) { $('email').value = emailAlvoAtivacao; $('email').readOnly = true; }
-      if ($('login-password-group')) $('login-password-group').style.display = 'flex';
-      if ($('link-recuperar')) $('link-recuperar').style.display = 'none';
-      if ($('link-voltar'))    $('link-voltar').style.display    = 'inline';
-      if ($('login-title')) $('login-title').textContent  = 'Criar Senha de Acesso';
-      if ($('login-desc'))  $('login-desc').textContent   = 'Defina sua senha definitiva abaixo para ativar a sua conta instantaneamente.';
-      if ($('lbl-password')) $('lbl-password').textContent = 'Nova Senha Definitiva';
-      if ($('btn-login')) { const sp = document.createElement('span'); sp.textContent = '✓'; $('btn-login').innerHTML = ''; $('btn-login').appendChild(sp); $('btn-login').append(' Ativar e Entrar'); }
-    }
-  })();
+  // Modo ativação direta via link (token=ativar_direto na URL)
+  if (paramsUrl.get('email') && paramsUrl.get('token') === 'ativar_direto') {
+    fluxoAtivacaoDireta = true;
+    emailAlvoAtivacao   = decodeURIComponent(paramsUrl.get('email'));
+    if ($('email'))              { $('email').value = emailAlvoAtivacao; $('email').readOnly = true; }
+    if ($('login-password-group')) $('login-password-group').style.display = 'flex';
+    if ($('link-recuperar'))     $('link-recuperar').style.display = 'none';
+    if ($('link-voltar'))        $('link-voltar').style.display    = 'inline';
+    if ($('login-title'))        $('login-title').textContent  = 'Criar Senha de Acesso';
+    if ($('login-desc'))         $('login-desc').textContent   = 'Defina sua senha definitiva para ativar sua conta.';
+    if ($('lbl-password'))       $('lbl-password').textContent = 'Nova Senha Definitiva';
+    const btnEl = $('btn-login');
+    if (btnEl) { btnEl.textContent = '✓ Ativar e Entrar'; }
+  }
 
   $('btn-login').addEventListener('click', async () => {
     const email = $('email')?.value.trim();
@@ -1436,30 +1445,44 @@ if ($('btn-login')) {
 
     if (!email) { if (msgEl) msgEl.textContent = 'Informe o e-mail.'; return; }
 
+    // Modo recuperação de senha
     if (modoRecuperacao) {
-      const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/index.html` });
-      if (msgEl) msgEl.textContent = error ? 'Erro: ' + error.message : '✅ Link enviado! Verifique seu e-mail.';
+      const { error } = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: `${location.origin}/index.html`,
+      });
+      if (msgEl) msgEl.textContent = error
+        ? 'Erro: ' + error.message
+        : '✅ Link enviado! Verifique seu e-mail.';
       return;
     }
 
+    // Modo ativação direta
     if (fluxoAtivacaoDireta) {
-      if (!senha || senha.length < 6) { if (msgEl) msgEl.textContent = 'A senha deve ter pelo menos 6 caracteres.'; return; }
-      if (msgEl) msgEl.textContent = 'Ativando conta...';
-      const { data: signUpData, error: signUpErr } = await db.auth.signUp({ email: emailAlvoAtivacao, password: senha });
-      if (signUpErr && signUpErr.message.includes('already registered')) {
-        // Usuário já existe — tenta login direto
-        const { data: signInData, error: signInErr } = await db.auth.signInWithPassword({ email: emailAlvoAtivacao, password: senha });
-        if (signInErr) { if (msgEl) msgEl.textContent = 'Erro: ' + signInErr.message; return; }
-        if (!signInData?.user) { if (msgEl) msgEl.textContent = '⚠️ E-mail não confirmado. Confirme no painel do Supabase.'; return; }
-      } else if (signUpErr) {
-        if (msgEl) msgEl.textContent = 'Erro: ' + signUpErr.message; return;
+      if (!senha || senha.length < 6) {
+        if (msgEl) msgEl.textContent = 'A senha deve ter pelo menos 6 caracteres.';
+        return;
       }
-      // Profile update em background
-      try { await db.from('profiles').update({ status:'ativo' }).eq('email', emailAlvoAtivacao); } catch(e) {}
+      if (msgEl) msgEl.textContent = 'Ativando conta...';
+
+      // Tenta criar — se já existe, faz login direto
+      const { error: signUpErr } = await db.auth.signUp({ email: emailAlvoAtivacao, password: senha });
+      if (signUpErr && !signUpErr.message.includes('already registered')) {
+        if (msgEl) msgEl.textContent = 'Erro: ' + signUpErr.message;
+        return;
+      }
+
+      const { data: sinData, error: sinErr } = await db.auth.signInWithPassword({
+        email: emailAlvoAtivacao, password: senha,
+      });
+      if (sinErr)        { if (msgEl) msgEl.textContent = 'Erro: ' + sinErr.message; return; }
+      if (!sinData?.user){ if (msgEl) msgEl.textContent = '⚠️ E-mail não confirmado no Supabase.'; return; }
+
       window.location.href = 'dashboard.html';
       return;
     }
 
+    // Modo login normal
+    if (msgEl) msgEl.textContent = '';
     const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
 
     if (error) {
@@ -1467,34 +1490,13 @@ if ($('btn-login')) {
       return;
     }
 
-    // Supabase v2: data.user pode ser null se e-mail não foi confirmado no painel
     if (!data?.user) {
-      if (msgEl) msgEl.textContent = '⚠️ E-mail ainda não confirmado. Acesse o painel do Supabase → Authentication → Users e clique em "Confirm" para este usuário.';
+      if (msgEl) msgEl.textContent = '⚠️ E-mail não confirmado. Confirme no painel do Supabase → Authentication → Users.';
       return;
     }
 
-    // Redirect imediato — operações de profile são fire-and-forget (não bloqueiam)
+    // Login OK — redireciona imediatamente
     window.location.href = 'dashboard.html';
-
-    // Atualiza/cria perfil em background sem bloquear o redirect
-    try {
-      const uid   = data.user.id;
-      const email = data.user.email;
-      const { data: perfil } = await db.from('profiles').select('id').eq('id', uid).maybeSingle();
-      if (!perfil) {
-        await db.from('profiles').insert([{
-          id: uid, email,
-          nome:   data.user.user_metadata?.full_name || 'Administrador',
-          role:   'admin',
-          status: 'ativo',
-        }]);
-      } else {
-        await db.from('profiles').update({ status: 'ativo' }).eq('id', uid);
-      }
-    } catch(e) {
-      // Falha no profile não impede o login — apenas loga no console
-      console.warn('Profile sync falhou (não crítico):', e.message);
-    }
   });
 }
 
