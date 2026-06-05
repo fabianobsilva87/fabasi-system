@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="config.js"></script>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div class="app-container">
@@ -42,6 +42,7 @@
 
     <div class="section-content">
 
+      <!-- ===== ABA: COLABORADORES ===== -->
       <div id="aba-lista" class="app-sub-panel">
         <div class="card">
           <h3 class="card-title">👷 Registrar Novo Técnico / Colaborador</h3>
@@ -56,6 +57,7 @@
             <div class="form-group"><label>Data de Contratação</label><input type="date" id="colab-contratacao"></div>
           </div>
 
+          <!-- ASSINATURA DIGITAL -->
           <div style="margin-top:20px; padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
             <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">🖋️ Assinatura Digital do Técnico</label>
             <p style="font-size:11px;color:#718096;margin-bottom:10px;">O técnico pode assinar diretamente no celular. A assinatura será usada automaticamente nos laudos PMOC e O.S.</p>
@@ -105,6 +107,7 @@
         </div>
       </div>
 
+      <!-- ===== ABA: CARGOS E FUNÇÕES ===== -->
       <div id="aba-cargo" class="app-sub-panel" style="display:none;">
         <div class="card">
           <h3 class="card-title">🪪 Novo Cargo / Função</h3>
@@ -136,41 +139,21 @@
         </div>
       </div>
 
-    </div>
+    </div><!-- /section-content -->
   </main>
 </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
 <script>
-let canvasColab, ctxColab, desenhandoColab = false;
-
+// ===================== CANVAS — instância da classe unificada do app.js =====================
+// Bug 1 fix: em vez de duplicar a lógica de canvas com variáveis locais (canvasColab/ctxColab),
+// instanciamos a classe CanvasAssinatura do app.js e atribuímos à variável global canvasColab.
 function inicializarCanvasColaborador() {
-  canvasColab = document.getElementById('canvas-colab-assinatura');
-  if (!canvasColab) return;
-  ctxColab = canvasColab.getContext('2d');
-  ctxColab.lineWidth = 2.5;
-  ctxColab.strokeStyle = '#1a202c';
-  ctxColab.lineCap = 'round';
-  ctxColab.lineJoin = 'round';
-
-  const getPos = (e) => {
-    const rect = canvasColab.getBoundingClientRect();
-    const scaleX = canvasColab.width / rect.width;
-    const scaleY = canvasColab.height / rect.height;
-    const src = e.touches ? e.touches[0] : e;
-    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
-  };
-
-  canvasColab.addEventListener('mousedown',  (e) => { desenhandoColab = true; ctxColab.beginPath(); const p = getPos(e); ctxColab.moveTo(p.x, p.y); });
-  canvasColab.addEventListener('mousemove',  (e) => { if (!desenhandoColab) return; e.preventDefault(); const p = getPos(e); ctxColab.lineTo(p.x, p.y); ctxColab.stroke(); });
-  window.addEventListener('mouseup',         ()  => { desenhandoColab = false; });
-  canvasColab.addEventListener('touchstart', (e) => { desenhandoColab = true; ctxColab.beginPath(); const p = getPos(e); ctxColab.moveTo(p.x, p.y); }, { passive: true });
-  canvasColab.addEventListener('touchmove',  (e) => { if (!desenhandoColab) return; e.preventDefault(); const p = getPos(e); ctxColab.lineTo(p.x, p.y); ctxColab.stroke(); }, { passive: false });
-  window.addEventListener('touchend',        ()  => { desenhandoColab = false; });
+  canvasColab = new CanvasAssinatura('canvas-colab-assinatura');
 }
 
 function limparCanvasColabAssinatura() {
-  if (ctxColab && canvasColab) ctxColab.clearRect(0, 0, canvasColab.width, canvasColab.height);
+  canvasColab?.limpar();
 }
 
 function limparAssinaturaColaborador() {
@@ -180,6 +163,7 @@ function limparAssinaturaColaborador() {
   limparCanvasColabAssinatura();
 }
 
+// ===================== EDITAR COLABORADOR =====================
 function editarColaborador(id) {
   const c = _colabCache.find(x => x.id === id);
   if (!c) return;
@@ -191,10 +175,10 @@ function editarColaborador(id) {
   document.getElementById('colab-funcao').value = c.funcao_id || '';
   document.getElementById('colab-contratacao').value = c.data_contratacao || '';
 
-  // ── Sincronização Híbrida: Lê assinatura_url (Storage) ou fallback antiga assinatura_digital ──
-  const urlAssinatura = c.assinatura_url || c.assinatura_digital;
-  if (urlAssinatura && (urlAssinatura.startsWith('data:image') || urlAssinatura.startsWith('http'))) {
-    document.getElementById('img-assinatura-atual').src = urlAssinatura;
+  // Bug 1 fix: usa lerAssinaturaURL para checar Storage URL e Base64 legado
+  const urlAssin = lerAssinaturaURL(c, 'assinatura_url', 'assinatura_digital');
+  if (urlAssin) {
+    document.getElementById('img-assinatura-atual').src = urlAssin;
     document.getElementById('assinatura-preview-existente').style.display = 'block';
     document.getElementById('canvas-colab-assinatura').style.display = 'none';
     limparCanvasColabAssinatura();
@@ -208,7 +192,6 @@ function editarColaborador(id) {
   btn.textContent = '💾 Salvar Alterações';
   btn.style.background = '#d97706';
   document.getElementById('btn-cancelar-colab').style.display = 'inline-block';
-
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -227,6 +210,7 @@ function resetarFormColaborador() {
   document.getElementById('btn-cancelar-colab').style.display = 'none';
 }
 
+// ===================== CONTROLE DE ABAS =====================
 function alternarAbasColab(aba) {
   ['lista','cargo'].forEach(a => {
     const el = document.getElementById('aba-' + a);
@@ -234,6 +218,7 @@ function alternarAbasColab(aba) {
   });
 }
 
+// ===================== INIT =====================
 window.addEventListener('DOMContentLoaded', async () => {
   inicializarCanvasColaborador();
   await atualizarSelectFuncoes();

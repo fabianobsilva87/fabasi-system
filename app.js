@@ -398,14 +398,23 @@ function filtrarEquipamentos(delta) {
   const tbody  = $('tbody-equipamentos-gerir'); if (!tbody) return;
   if (!slice.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum ativo encontrado.</td></tr>'; return; }
   tbody.innerHTML = slice.map(eq => {
-    const critCls = eq.criticidade === 'Alta' ? 'danger' : eq.criticidade === 'Baixa' ? 'success' : '';
+    // Bug 2 fix: normalizar todas as propriedades com fallback '' antes do escapeHTML
+    const tag      = eq.tag         || '';
+    const produto  = eq.produto      || '';
+    const marca    = eq.marca        || '';
+    const bloco    = eq.bloco        || '';
+    const setor    = eq.setor        || '';
+    const sala     = eq.sala         || '';
+    const crit     = eq.criticidade  || 'Média';
+    const critCls  = crit === 'Alta' ? 'danger' : crit === 'Baixa' ? 'success' : '';
+    const local    = [bloco, setor].filter(Boolean).join(' / ') || '—';
     return `<tr>
-      <td><span class="tag-badge">${escapeHTML(eq.tag)}</span></td>
-      <td><strong>${escapeHTML(eq.produto)}</strong><br><small style="color:#a0aec0">${escapeHTML(eq.marca)}</small></td>
-      <td>${escapeHTML(eq.bloco)} / ${escapeHTML(eq.setor)}<br><small style="color:#a0aec0">${escapeHTML(eq.sala)}</small></td>
-      <td><span class="tag-badge ${critCls}">Classe ${escapeHTML(eq.criticidade || 'Média')}</span></td>
+      <td><span class="tag-badge">${escapeHTML(tag)}</span></td>
+      <td><strong>${escapeHTML(produto)}</strong><br><small style="color:#a0aec0">${escapeHTML(marca)}</small></td>
+      <td>${escapeHTML(local)}<br><small style="color:#a0aec0">${escapeHTML(sala)}</small></td>
+      <td><span class="tag-badge ${critCls}">Classe ${escapeHTML(crit)}</span></td>
       <td>${eq.qrcode_token
-        ? `<button class="btn-primary" style="padding:3px 10px;font-size:11px;gap:4px;" title="Abrir etiqueta de impressão com QR Code" onclick="exibirJanelaQRCode('${escapeHTML(eq.qrcode_token)}','${escapeHTML(eq.tag)}','${eq.id}')">🏷️ Etiqueta</button>`
+        ? `<button class="btn-primary" style="padding:3px 10px;font-size:11px;" title="Abrir etiqueta de impressão com QR Code" onclick="exibirJanelaQRCode('${escapeHTML(eq.qrcode_token)}','${escapeHTML(tag)}','${eq.id}')">🏷️ Etiqueta</button>`
         : '<span style="font-size:11px;color:#a0aec0;">Sem token</span>'}</td>
       <td>
         <button class="btn-primary" style="background:#4a5568;padding:3px 8px;font-size:11px;" onclick="editarEquipamento('${eq.id}')">✍️</button>
@@ -482,8 +491,9 @@ async function carregarColaboradores() {
   const { data } = await db.from('colaboradores').select('*, funcoes(nome)').order('nome', { ascending: true });
   _colabCache = data || [];
   tbody.innerHTML = _colabCache.length ? _colabCache.map(c => {
-    const temAssinatura = !!(c.assinatura_url || c.assinatura_digital?.startsWith('data:image'));
-    const badgeAssinatura = temAssinatura
+    // Bug 1 fix: usa lerAssinaturaURL para checar ambas as colunas
+    const urlAssin = lerAssinaturaURL(c, 'assinatura_url', 'assinatura_digital');
+    const badgeAssinatura = urlAssin
       ? `<span class="tag-badge success" style="font-size:10px;">✓ Cadastrada</span>`
       : `<span class="tag-badge" style="font-size:10px;color:#a0aec0;">— Sem assinatura</span>`;
     return `<tr>
@@ -535,17 +545,17 @@ if ($('btn-salvar-colaborador')) {
     }
     msgForm('msg-colaborador', 'Salvando...', 'blue');
 
-    // ── Fase 2: assinatura → Storage (URL), não Base64 no DB ──
+    // ── Assinatura → Storage (URL); fallback preserva URL ou Base64 existente ──
     let assinatura_url = null;
     if (canvasColab && canvasColab.temConteudo()) {
       const blob = await canvasColab.toBlob();
       assinatura_url = await uploadAssinatura(blob, 'colaboradores', cpf.replace(/\D/g,''));
     }
-    // Edição: preservar URL anterior se canvas não foi redesenhado
+    // Edição: preservar assinatura anterior (URL Storage ou Base64 legado) se canvas intocado
     if (!assinatura_url && $('canvas-colab-assinatura')?.style.display === 'none') {
-      const idEd  = $('colab-id-edicao')?.value;
+      const idEd   = $('colab-id-edicao')?.value;
       const cached = _colabCache.find(x => x.id === idEd);
-      if (cached?.assinatura_url) assinatura_url = cached.assinatura_url;
+      assinatura_url = lerAssinaturaURL(cached, 'assinatura_url', 'assinatura_digital') || null;
     }
 
     const payload = {
@@ -894,7 +904,19 @@ async function carregarOrdensServico() {
     .select('*, equipamentos(tag,produto,bloco,setor,nr_serie), colaboradores(nome,assinatura_url,assinatura_digital)')
     .order('created_at', { ascending: false });
   tbody.innerHTML = (data||[]).map(os => {
+    // Bug 3 fix: serializar o objeto completo em base64 para o botão de impressão
     const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(os))));
+    // Bug 3 fix: serializar campos de texto como JSON para data-attributes
+    // evita quebra por aspas simples/duplas/crases dentro dos valores
+    const osDataB64 = btoa(unescape(encodeURIComponent(JSON.stringify({
+      id:    os.id,
+      eqId:  os.equipamento_id  || '',
+      colId: os.colaborador_id  || '',
+      tipo:  os.tipo_os         || '',
+      st:    os.status_os       || '',
+      def:   os.descricao_defeito || '',
+      laud:  os.laudo_tecnico   || '',
+    }))));
     return `<tr>
       <td><strong>OS-AC-${os.id.toString().slice(0,5).toUpperCase()}</strong></td>
       <td>${fmtDate(os.created_at)}</td>
@@ -903,12 +925,23 @@ async function carregarOrdensServico() {
       <td>${escapeHTML(os.tipo_os)}</td>
       <td>${statusBadge(os.status_os)}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap;">
-        <button class="btn-primary" style="padding:4px 10px;font-size:11px;" onclick="emitirRelatorioOS(JSON.parse(decodeURIComponent(escape(atob('${b64}')))))">🖨️ Imprimir</button>
-        <button class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="editarOS('${os.id}','${os.equipamento_id||''}','${os.colaborador_id||''}','${escapeHTML(os.tipo_os)}','${escapeHTML(os.status_os)}',\`${(os.descricao_defeito||'').replace(/\`/g,'')}\`,\`${(os.laudo_tecnico||'').replace(/\`/g,'')}\`)">✏️ Editar</button>
-        <button class="btn-excluir" style="padding:4px 10px;font-size:11px;" onclick="excluirOS('${os.id}')">✕ Excluir</button>
+        <button class="btn-primary" style="padding:4px 10px;font-size:11px;"
+          onclick="emitirRelatorioOS(JSON.parse(decodeURIComponent(escape(atob('${b64}')))))">🖨️ Imprimir</button>
+        <button class="btn-secondary" style="padding:4px 10px;font-size:11px;"
+          onclick="_editarOSFromB64('${osDataB64}')">✏️ Editar</button>
+        <button class="btn-excluir" style="padding:4px 10px;font-size:11px;"
+          onclick="excluirOS('${os.id}')">✕ Excluir</button>
       </td>
     </tr>`;
   }).join('');
+}
+
+// Bug 3 fix: helper que desserializa os dados da OS antes de chamar editarOS
+function _editarOSFromB64(b64) {
+  try {
+    const d = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    editarOS(d.id, d.eqId, d.colId, d.tipo, d.st, d.def, d.laud);
+  } catch(e) { console.error('_editarOSFromB64 falhou:', e); }
 }
 
 // ===================== FACILITIES =====================
@@ -1444,16 +1477,27 @@ async function renderizarGraficosDashboard() {
   if (!erroView && resumoView) {
     resumo = resumoView;
   } else {
-    // Fallback: queries diretas (banco sem migration aplicada)
-    const [{ count: cAtivos }, { count: cFichas }, { count: cAbAC }, { count: cFecAC }, { count: cAbFac }, { count: cFecFac }] = await Promise.all([
-      db.from('equipamentos').select('*', { count:'exact', head:true }),
-      db.from('fichas_pmoc').select('*', { count:'exact', head:true }),
-      db.from('ordens_servico').select('*', { count:'exact', head:true }).in('status_os', ['Aberta','Em Andamento']),
-      db.from('ordens_servico').select('*', { count:'exact', head:true }).eq('status_os', 'Concluída'),
-      db.from('ordens_servico_geral').select('*', { count:'exact', head:true }).in('status_os', ['Aberta','Em Andamento']),
-      db.from('ordens_servico_geral').select('*', { count:'exact', head:true }).eq('status_os', 'Concluída'),
-    ]);
-    resumo = { total_ativos: cAtivos??0, total_pmocs: cFichas??0, os_pendentes: (cAbAC??0)+(cAbFac??0), os_concluidas: (cFecAC??0)+(cFecFac??0) };
+    // Bug 4 fix: try/catch individual — se uma tabela não existir não derruba as outras
+    try {
+      const resultados = await Promise.allSettled([
+        db.from('equipamentos').select('*', { count:'exact', head:true }),
+        db.from('fichas_pmoc').select('*', { count:'exact', head:true }),
+        db.from('ordens_servico').select('*', { count:'exact', head:true }).in('status_os', ['Aberta','Em Andamento']),
+        db.from('ordens_servico').select('*', { count:'exact', head:true }).eq('status_os', 'Concluída'),
+        db.from('ordens_servico_geral').select('*', { count:'exact', head:true }).in('status_os', ['Aberta','Em Andamento']),
+        db.from('ordens_servico_geral').select('*', { count:'exact', head:true }).eq('status_os', 'Concluída'),
+      ]);
+      const val = (i) => resultados[i].status === 'fulfilled' ? (resultados[i].value?.count ?? 0) : 0;
+      resumo = {
+        total_ativos:  val(0),
+        total_pmocs:   val(1),
+        os_pendentes:  val(2) + val(4),
+        os_concluidas: val(3) + val(5),
+      };
+    } catch(e) {
+      console.warn('Dashboard fallback falhou:', e.message);
+      resumo = { total_ativos:0, total_pmocs:0, os_pendentes:0, os_concluidas:0 };
+    }
   }
 
   const r = resumo || {};
@@ -1469,13 +1513,17 @@ async function renderizarGraficosDashboard() {
   if (!erroVol && volOSView) {
     volOS = volOSView;
   } else {
-    const [{ data: osAC }, { data: osFac }] = await Promise.all([
-      db.from('ordens_servico').select('status_os'),
-      db.from('ordens_servico_geral').select('status_os'),
-    ]);
-    const map = {};
-    [...(osAC||[]), ...(osFac||[])].forEach(o => { map[o.status_os] = (map[o.status_os]||0)+1; });
-    volOS = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
+    try {
+      const [r1, r2] = await Promise.allSettled([
+        db.from('ordens_servico').select('status_os'),
+        db.from('ordens_servico_geral').select('status_os'),
+      ]);
+      const osAC  = r1.status === 'fulfilled' ? (r1.value?.data || []) : [];
+      const osFac = r2.status === 'fulfilled' ? (r2.value?.data || []) : [];
+      const map = {};
+      [...osAC, ...osFac].forEach(o => { map[o.status_os] = (map[o.status_os]||0)+1; });
+      volOS = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
+    } catch(e) { console.warn('Fallback volOS falhou:', e.message); volOS = []; }
   }
   if ($('chartStatusOS') && volOS) {
     const cnt = { Aberta:0, 'Em Andamento':0, Concluida:0 };
@@ -1498,12 +1546,13 @@ async function renderizarGraficosDashboard() {
   if (!erroCrit && critView) {
     critData = critView;
   } else {
-    const { data: eqCrit } = await db.from('equipamentos').select('criticidade');
-    const map = {};
-    (eqCrit||[]).forEach(e => { map[e.criticidade||'Média'] = (map[e.criticidade||'Média']||0)+1; });
-    critData = Object.entries(map).map(([criticidade,total]) => ({ criticidade, total }));
+    try {
+      const { data: eqCrit } = await db.from('equipamentos').select('criticidade');
+      const map = {};
+      (eqCrit||[]).forEach(e => { map[e.criticidade||'Média'] = (map[e.criticidade||'Média']||0)+1; });
+      critData = Object.entries(map).map(([criticidade,total]) => ({ criticidade, total }));
+    } catch(e) { console.warn('Fallback critData falhou:', e.message); critData = []; }
   }
-  if ($('chartCriticidade') && critData) {
     const cnt = { Alta:0, Media:0, Baixa:0 };
     critData.forEach(row => {
       if (row.criticidade === 'Alta')       cnt.Alta  += Number(row.total);
@@ -1524,12 +1573,13 @@ async function renderizarGraficosDashboard() {
   if (!erroFac && facView) {
     facData = facView;
   } else {
-    const { data: osFac } = await db.from('ordens_servico_geral').select('status_os');
-    const map = {};
-    (osFac||[]).forEach(o => { map[o.status_os] = (map[o.status_os]||0)+1; });
-    facData = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
+    try {
+      const { data: osFac } = await db.from('ordens_servico_geral').select('status_os');
+      const map = {};
+      (osFac||[]).forEach(o => { map[o.status_os] = (map[o.status_os]||0)+1; });
+      facData = Object.entries(map).map(([status_os,total]) => ({ status_os, total }));
+    } catch(e) { console.warn('Fallback facData falhou:', e.message); facData = []; }
   }
-  if ($('chartStatusOSG') && facData) {
     const cnt = { Aberta:0, 'Em Andamento':0, Concluida:0 };
     facData.forEach(row => {
       if (row.status_os === 'Aberta')            cnt.Aberta          += Number(row.total);
@@ -1550,14 +1600,18 @@ async function renderizarGraficosDashboard() {
   if (!erroLogs && logsView) {
     logs = logsView;
   } else {
-    const [{ data: logsAC }, { data: logsFac }] = await Promise.all([
-      db.from('ordens_servico').select('created_at,status_os,tipo_os,equipamentos(tag)').order('created_at',{ascending:false}).limit(5),
-      db.from('ordens_servico_geral').select('created_at,status_os,servico_requisitado,setor').order('created_at',{ascending:false}).limit(5),
-    ]);
-    logs = [
-      ...(logsAC||[]).map(l=>({ data:l.created_at, status:l.status_os, desc:l.tipo_os, ref:l.equipamentos?.tag||'—', origem:'❄️' })),
-      ...(logsFac||[]).map(l=>({ data:l.created_at, status:l.status_os, desc:l.servico_requisitado||'—', ref:l.setor||'—', origem:'🏢' })),
-    ].sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,8);
+    try {
+      const [r1, r2] = await Promise.allSettled([
+        db.from('ordens_servico').select('created_at,status_os,tipo_os,equipamentos(tag)').order('created_at',{ascending:false}).limit(5),
+        db.from('ordens_servico_geral').select('created_at,status_os,servico_requisitado,setor').order('created_at',{ascending:false}).limit(5),
+      ]);
+      const logsAC  = r1.status === 'fulfilled' ? (r1.value?.data || []) : [];
+      const logsFac = r2.status === 'fulfilled' ? (r2.value?.data || []) : [];
+      logs = [
+        ...logsAC.map(l =>({ data:l.created_at, status:l.status_os, desc:l.tipo_os||'—', ref:l.equipamentos?.tag||'—', origem:'❄️' })),
+        ...logsFac.map(l=>({ data:l.created_at, status:l.status_os, desc:l.servico_requisitado||'—', ref:l.setor||'—', origem:'🏢' })),
+      ].sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,8);
+    } catch(e) { console.warn('Fallback logs falhou:', e.message); logs = []; }
   }
   const el = $('dash-atividades');
   if (el && logs) {
