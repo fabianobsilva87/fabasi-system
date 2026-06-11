@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concredur — Solicitações de Compra (SC/SS)</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Suprimentos</div>
+        <div class="nav-item active" onclick="location.href='compras-sc.html'"><span>🛒</span> Solicitações (SC/SS)</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <h2>🛒 Solicitações de Compra / Serviço (SC/SS)</h2>
+      </div>
+
+      <div class="section-content">
+
+        <!-- ===== INDICADORES ===== -->
+        <div class="dash-cards-grid">
+          <div class="dash-card">
+            <div class="dash-card-icon">📋</div>
+            <p class="dash-card-title">Total de Solicitações</p>
+            <h3 id="sc-stat-total" class="dash-card-value">—</h3>
+          </div>
+          <div class="dash-card dash-card-warning">
+            <div class="dash-card-icon">⏳</div>
+            <p class="dash-card-title">Pendentes</p>
+            <h3 id="sc-stat-pendentes" class="dash-card-value">—</h3>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-icon">🔎</div>
+            <p class="dash-card-title">Em Cotação</p>
+            <h3 id="sc-stat-cotacao" class="dash-card-value">—</h3>
+          </div>
+          <div class="dash-card dash-card-success">
+            <div class="dash-card-icon">✅</div>
+            <p class="dash-card-title">Aprovadas</p>
+            <h3 id="sc-stat-aprovadas" class="dash-card-value">—</h3>
+          </div>
+        </div>
+
+        <!-- ===== FORMULÁRIO ===== -->
+        <div class="card">
+          <h3 class="card-title" id="sc-form-titulo">📝 Nova Solicitação de Compra / Serviço</h3>
+          <input type="hidden" id="sc-id-edicao" value="">
+
+          <div class="form-grid thirds">
+            <div class="form-group">
+              <label>Tipo *</label>
+              <select id="sc-tipo" class="form-input-style">
+                <option value="SC">SC — Solicitação de Compra</option>
+                <option value="SS">SS — Solicitação de Serviço</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Setor *</label>
+              <input type="text" id="sc-setor" placeholder="Ex: TI, Manutenção, RH...">
+            </div>
+            <div class="form-group">
+              <label>Prioridade</label>
+              <select id="sc-prioridade" class="form-input-style">
+                <option value="Normal">Normal</option>
+                <option value="Alta">Alta</option>
+                <option value="Urgente">Urgente</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Data da Solicitação</label>
+              <input type="date" id="sc-data">
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="sc-status" class="form-input-style">
+                <option value="Rascunho">Rascunho</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Em Cotação">Em Cotação</option>
+                <option value="Aprovada">Aprovada</option>
+                <option value="Rejeitada">Rejeitada</option>
+                <option value="Concluída">Concluída</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top:12px;">
+            <label>Descrição / Objeto da Solicitação *</label>
+            <textarea id="sc-descricao" rows="2" placeholder="Descreva o que está sendo solicitado..."></textarea>
+          </div>
+
+          <div class="form-group" style="margin-top:12px;">
+            <label>Justificativa</label>
+            <textarea id="sc-justificativa" rows="2" placeholder="Motivo da solicitação (opcional)..."></textarea>
+          </div>
+
+          <!-- ITENS -->
+          <div style="margin-top:18px;">
+            <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">📦 Itens da Solicitação *</label>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th style="width:50%;">Descrição</th><th>Quantidade</th><th>Unidade</th><th></th></tr>
+                </thead>
+                <tbody id="sc-itens-tbody"></tbody>
+              </table>
+            </div>
+            <button type="button" class="btn-refresh" style="margin-top:8px;" onclick="adicionarItemSC()">➕ Adicionar Item</button>
+          </div>
+
+          <div class="btn-row" style="margin-top:18px;">
+            <button id="btn-salvar-sc" class="btn-primary">💾 Registrar Solicitação</button>
+            <button id="btn-cancelar-sc" class="btn-secondary" style="display:none;" onclick="resetarFormSC()">✕ Cancelar Edição</button>
+          </div>
+          <p id="msg-sc" class="msg-form"></p>
+        </div>
+
+        <!-- ===== FILTROS ===== -->
+        <div class="card">
+          <h3 class="card-title">Filtros</h3>
+          <div class="form-grid thirds">
+            <div class="form-group">
+              <label>Buscar (número, descrição, setor, solicitante)</label>
+              <input type="text" id="sc-filtro-texto" placeholder="Buscar..." oninput="filtrarSolicitacoesCompra()">
+            </div>
+            <div class="form-group">
+              <label>Tipo</label>
+              <select id="sc-filtro-tipo" class="form-input-style" onchange="filtrarSolicitacoesCompra()">
+                <option value="">Todos</option>
+                <option value="SC">SC</option>
+                <option value="SS">SS</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="sc-filtro-status" class="form-input-style" onchange="filtrarSolicitacoesCompra()">
+                <option value="">Todos</option>
+                <option value="Rascunho">Rascunho</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Em Cotação">Em Cotação</option>
+                <option value="Aprovada">Aprovada</option>
+                <option value="Rejeitada">Rejeitada</option>
+                <option value="Concluída">Concluída</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== LISTA ===== -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Solicitações Registradas</h3>
+            <button class="btn-refresh" onclick="carregarSolicitacoesCompra()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Número</th><th>Tipo</th><th>Descrição</th><th>Setor</th>
+                  <th>Solicitante</th><th>Prioridade</th><th>Status</th><th>Data</th><th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-solicitacoes-compra"><tr><td colspan="9" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', async () => {
+      $('sc-data').value = hoje();
+      adicionarItemSC(); // primeira linha de item já visível
+      await carregarSolicitacoesCompra();
+    });
+  </script>
+</body>
+</html>
