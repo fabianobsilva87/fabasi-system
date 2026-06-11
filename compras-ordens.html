@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concredur — Ordens de Compra (OC)</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+    </div>
+    <nav>
+      <div class="nav-label">Suprimentos & Compras</div>
+      <div class="nav-item" onclick="location.href='compras-solicitacoes.html'"><span>📝</span> Solicitações (SC/SS)</div>
+      <div class="nav-item" onclick="location.href='compras-cotacoes.html'"><span>⚖️</span> Cotações & Alçadas</div>
+      <div class="nav-item active" onclick="location.href='compras-ordens.html'"><span>📦</span> Ordens de Compra (OC)</div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print"><h2>📦 Ordens de Compra (OC) & Almoxarifado</h2></div>
+    <div class="section-content">
+      <div class="card">
+        <h3 class="card-title">Emissão de Ordem Oficial de Fornecimento</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nº Ordem</th><th>Fornecedor</th><th>Valor Total</th><th>Status OC</th><th>Status Envio</th><th>Ações</th></tr>
+            </thead>
+            <tbody id="tbody-compras-ordens">
+              <tr><td colspan="6" class="td-loading">Aguardando carregamento de OCs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

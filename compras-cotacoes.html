@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concredur — Cotações & Alçadas de Preço</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+    </div>
+    <nav>
+      <div class="nav-label">Visão Geral</div>
+      <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+      <div class="nav-label">Refrigeração</div>
+      <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+      <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+      <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+      <div class="nav-label">Suprimentos & Compras</div>
+      <div class="nav-item" onclick="location.href='compras-solicitacoes.html'"><span>📝</span> Solicitações (SC/SS)</div>
+      <div class="nav-item active" onclick="location.href='compras-cotacoes.html'"><span>⚖️</span> Cotações & Alçadas</div>
+      <div class="nav-item" onclick="location.href='compras-ordens.html'"><span>📦</span> Ordens de Compra (OC)</div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print"><h2>⚖️ Mapa Comparativo de Preços & Alçadas</h2></div>
+    <div class="section-content">
+      <div class="card" id="painel-analise-cotacao" style="display:none;">
+        <h3 class="card-title">Análise Avançada da Cotação: <span id="txt-num-cotacao"></span></h3>
+        <!-- Dynamic price comparison matrix loaded here -->
+        <div id="matrix-container" class="table-wrap"></div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Processos Licitatórios / Cotações Ativas</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nº Cotação</th><th>Vínculo SC</th><th>Objeto de Compra</th><th>Status Atual</th><th>Alçada Exigida</th><th>Ações</th></tr>
+            </thead>
+            <tbody id="tbody-compras-cotacoes">
+              <tr><td colspan="6" class="td-loading">Carregando processos seletivos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', carriers => {
+    carregarComprasCotacoes();
+  });
+</script>
+</body>
+</html>
