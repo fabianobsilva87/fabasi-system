@@ -2654,3 +2654,395 @@ function _renderStatsCOT() {
 if ($('btn-salvar-cot')) {
   $('btn-salvar-cot').addEventListener('click', salvarCotacao);
 }
+
+// =====================================================================
+//  MÓDULO DE COMPRAS — Ordens de Compra (OC)
+//  Tabelas: compras_ordens, compras_ordens_recebimentos
+//  Itens/fornecedor da OC são herdados da cotação vencedora (somente leitura)
+// =====================================================================
+
+let _ocCache = [];
+let _ocItensRef = [];      // [{item_id, descricao, quantidade, unidade, valor_unitario, subtotal}]
+let _ocFornecedorRef = null; // {nome, cnpj, email, contato_nome, link_site}
+let _ocTotalRef = 0;
+
+// ── Geração de número OC-AAAA-NNN ───────────────────────────────────
+async function gerarNumeroOC() {
+  const ano = new Date().getFullYear();
+  const prefixo = `OC-${ano}-`;
+  const { data } = await db.from('compras_ordens').select('numero').like('numero', prefixo + '%');
+  let max = 0;
+  (data || []).forEach(r => {
+    const seq = parseInt(String(r.numero).split('-').pop(), 10);
+    if (!isNaN(seq) && seq > max) max = seq;
+  });
+  return prefixo + String(max + 1).padStart(3, '0');
+}
+
+// ── Select de cotações de origem (Aprovadas) ────────────────────────
+async function carregarSelectCotacoesOC() {
+  const sel = $('oc-cotacao'); if (!sel) return;
+  const idCotAtual = sel.dataset.cotacaoAtual || '';
+
+  const { data } = await db.from('compras_cotacoes')
+    .select('id, numero, status, compras_solicitacoes(numero, descricao)')
+    .order('created_at', { ascending: false });
+
+  sel.innerHTML = '<option value="">-- Selecione a Cotação --</option>';
+  (data || []).forEach(c => {
+    if (!['Aprovada', 'OC Emitida'].includes(c.status) && c.id !== idCotAtual) return;
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = `${c.numero} — ${c.compras_solicitacoes?.numero || ''} ${c.compras_solicitacoes?.descricao || ''}`;
+    sel.appendChild(opt);
+  });
+  if (idCotAtual) sel.value = idCotAtual;
+}
+
+// ── Ao selecionar a cotação, carrega fornecedor vencedor + itens/preços ──
+async function onSelecionarCotacaoOC() {
+  const cotId = $('oc-cotacao').value;
+  const refForn = $('oc-fornecedor-referencia');
+  const refItens = $('oc-itens-referencia');
+
+  _ocItensRef = [];
+  _ocFornecedorRef = null;
+  _ocTotalRef = 0;
+
+  if (!cotId) { refForn.innerHTML = ''; refItens.innerHTML = ''; return; }
+
+  const { data: cot } = await db.from('compras_cotacoes').select('vencedor_fornecedor_id').eq('id', cotId).single();
+  if (!cot?.vencedor_fornecedor_id) {
+    refForn.innerHTML = '<p style="font-size:12px;color:var(--danger);margin:8px 0;">⚠️ Esta cotação não possui fornecedor vencedor definido.</p>';
+    refItens.innerHTML = '';
+    return;
+  }
+
+  const { data: forn } = await db.from('compras_cotacoes_fornecedores').select('*').eq('id', cot.vencedor_fornecedor_id).single();
+  _ocFornecedorRef = forn || null;
+
+  const { data: precos } = await db.from('compras_cotacoes_precos')
+    .select('valor_unitario, solicitacao_item_id, compras_solicitacoes_itens(descricao, quantidade, unidade)')
+    .eq('fornecedor_id', cot.vencedor_fornecedor_id);
+
+  _ocItensRef = (precos || []).map(p => ({
+    item_id: p.solicitacao_item_id,
+    descricao: p.compras_solicitacoes_itens?.descricao || '—',
+    quantidade: p.compras_solicitacoes_itens?.quantidade || 0,
+    unidade: p.compras_solicitacoes_itens?.unidade || 'UN',
+    valor_unitario: p.valor_unitario || 0,
+    subtotal: (p.valor_unitario || 0) * (p.compras_solicitacoes_itens?.quantidade || 0),
+  }));
+  _ocTotalRef = _ocItensRef.reduce((acc, i) => acc + i.subtotal, 0);
+
+  refForn.innerHTML = _ocFornecedorRef ? `
+    <div class="card" style="background:var(--gray-50);margin-top:10px;">
+      <h4 style="margin:0 0 8px;">🏷️ Fornecedor Vencedor</h4>
+      <p style="font-size:13px;margin:2px 0;"><strong>${escapeHTML(_ocFornecedorRef.nome)}</strong></p>
+      <p style="font-size:12px;color:var(--gray-500);margin:2px 0;">CNPJ: ${escapeHTML(_ocFornecedorRef.cnpj) !== '—' ? escapeHTML(_ocFornecedorRef.cnpj) : '—'} · E-mail: ${escapeHTML(_ocFornecedorRef.email) !== '—' ? escapeHTML(_ocFornecedorRef.email) : '—'}</p>
+      <p style="font-size:12px;color:var(--gray-500);margin:2px 0;">Contato: ${escapeHTML(_ocFornecedorRef.contato_nome) !== '—' ? escapeHTML(_ocFornecedorRef.contato_nome) : '—'} ${_ocFornecedorRef.link_site ? '· <a href="' + escapeHTML(_ocFornecedorRef.link_site) + '" target="_blank">' + escapeHTML(_ocFornecedorRef.link_site) + '</a>' : ''}</p>
+    </div>` : '';
+
+  refItens.innerHTML = _ocItensRef.length ? `
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <thead><tr><th>Item</th><th>Qtd.</th><th>Unidade</th><th>Valor Unit.</th><th>Subtotal</th></tr></thead>
+        <tbody>${_ocItensRef.map(i => `
+          <tr>
+            <td>${escapeHTML(i.descricao)}</td>
+            <td>${i.quantidade}</td>
+            <td>${escapeHTML(i.unidade)}</td>
+            <td>${fmtMoney(i.valor_unitario)}</td>
+            <td>${fmtMoney(i.subtotal)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;">Total da OC</td><td style="font-weight:700;">${fmtMoney(_ocTotalRef)}</td></tr></tfoot>
+      </table>
+    </div>` : '<p style="font-size:12px;color:var(--gray-400);margin:8px 0;">Nenhum item com preço definido para o fornecedor vencedor.</p>';
+}
+
+// ── Salvar (criar ou atualizar) ──────────────────────────────────────
+async function salvarOrdemCompra() {
+  const idEdicao = $('oc-id-edicao').value;
+  const cotacaoId = $('oc-cotacao').value;
+  const localEntrega = $('oc-local-entrega').value.trim();
+  const centroCusto = $('oc-centro-custo').value.trim();
+  const referencia = $('oc-referencia').value.trim();
+  const instrucoes = $('oc-instrucoes').value.trim();
+  const garantia = $('oc-garantia').value.trim();
+  const statusOC = $('oc-status').value;
+  const statusEnvio = $('oc-status-envio').value;
+
+  if (!cotacaoId) { msgForm('msg-oc', '⚠️ Selecione a cotação de origem.', 'red'); return; }
+  if (!_ocFornecedorRef) { msgForm('msg-oc', '⚠️ A cotação selecionada não possui fornecedor vencedor definido.', 'red'); return; }
+
+  msgForm('msg-oc', '⏳ Salvando...', 'blue');
+
+  const payload = {
+    cotacao_id: cotacaoId,
+    local_entrega: localEntrega || null,
+    centro_custo: centroCusto || null,
+    referencia_interna: referencia || null,
+    instrucoes_entrega: instrucoes || null,
+    garantia_exigida: garantia || null,
+    status_oc: statusOC,
+    status_envio: statusEnvio,
+  };
+
+  let ordemId = idEdicao;
+
+  if (idEdicao) {
+    const { error } = await db.from('compras_ordens').update(payload).eq('id', idEdicao);
+    if (error) { msgForm('msg-oc', '❌ Erro ao atualizar: ' + error.message, 'red'); return; }
+  } else {
+    payload.numero = await gerarNumeroOC();
+    const { data: nova, error } = await db.from('compras_ordens').insert(payload).select('id').single();
+    if (error) { msgForm('msg-oc', '❌ Erro ao registrar: ' + error.message, 'red'); return; }
+    ordemId = nova.id;
+  }
+
+  // Marca a cotação como "OC Emitida"
+  await db.from('compras_cotacoes').update({ status: 'OC Emitida' }).eq('id', cotacaoId);
+
+  msgForm('msg-oc', idEdicao ? '✅ Ordem de Compra atualizada com sucesso!' : '✅ Ordem de Compra registrada com sucesso!', 'green');
+
+  if (!idEdicao) {
+    // Mantém o formulário aberto em modo edição para permitir registrar recebimentos
+    await editarOrdemCompra(ordemId);
+  } else {
+    await renderRecebimentoOC(ordemId);
+  }
+  await carregarOrdensCompra();
+}
+
+// ── Reset / edição ────────────────────────────────────────────────────
+function resetarFormOC() {
+  $('oc-id-edicao').value = '';
+  $('oc-cotacao').dataset.cotacaoAtual = '';
+  $('oc-cotacao').value = '';
+  $('oc-local-entrega').value = '';
+  $('oc-centro-custo').value = '';
+  $('oc-referencia').value = '';
+  $('oc-instrucoes').value = '';
+  $('oc-garantia').value = '';
+  $('oc-status').value = 'Rascunho';
+  $('oc-status-envio').value = 'Não Enviada';
+  $('oc-fornecedor-referencia').innerHTML = '';
+  $('oc-itens-referencia').innerHTML = '';
+  $('oc-recebimento-container').innerHTML = '';
+  _ocItensRef = [];
+  _ocFornecedorRef = null;
+  _ocTotalRef = 0;
+  $('oc-form-titulo').textContent = '📝 Nova Ordem de Compra';
+  $('btn-salvar-oc').textContent = '💾 Registrar Ordem de Compra';
+  $('btn-salvar-oc').style.background = '';
+  $('btn-cancelar-oc').style.display = 'none';
+  carregarSelectCotacoesOC();
+}
+
+async function editarOrdemCompra(id) {
+  let o = _ocCache.find(x => x.id === id);
+  if (!o) {
+    const { data } = await db.from('compras_ordens').select('*, compras_cotacoes(numero, status, compras_solicitacoes(numero, descricao))').eq('id', id).single();
+    o = data;
+  }
+  if (!o) return;
+
+  $('oc-id-edicao').value = o.id;
+  $('oc-local-entrega').value = o.local_entrega || '';
+  $('oc-centro-custo').value = o.centro_custo || '';
+  $('oc-referencia').value = o.referencia_interna || '';
+  $('oc-instrucoes').value = o.instrucoes_entrega || '';
+  $('oc-garantia').value = o.garantia_exigida || '';
+  $('oc-status').value = o.status_oc || 'Rascunho';
+  $('oc-status-envio').value = o.status_envio || 'Não Enviada';
+
+  $('oc-cotacao').dataset.cotacaoAtual = o.cotacao_id || '';
+  await carregarSelectCotacoesOC();
+  $('oc-cotacao').value = o.cotacao_id || '';
+  await onSelecionarCotacaoOC();
+
+  await renderRecebimentoOC(o.id);
+
+  $('oc-form-titulo').textContent = `✏️ Editando ${o.numero}`;
+  $('btn-salvar-oc').textContent = '💾 Salvar Alterações';
+  $('btn-salvar-oc').style.background = '#d97706';
+  $('btn-cancelar-oc').style.display = 'inline-block';
+  document.getElementById('oc-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function excluirOrdemCompra(id, numero) {
+  if (!confirm(`Excluir a OC ${numero}? Esta ação não pode ser desfeita.`)) return;
+  await db.from('compras_ordens_recebimentos').delete().eq('ordem_id', id);
+  await db.from('compras_ordens').delete().eq('id', id);
+  await carregarOrdensCompra();
+}
+
+// ── Recebimento de itens ──────────────────────────────────────────────
+async function renderRecebimentoOC(ordemId) {
+  const cont = $('oc-recebimento-container');
+  if (!cont) return;
+  if (!_ocItensRef.length) { cont.innerHTML = ''; return; }
+
+  const { data: recebimentos } = await db.from('compras_ordens_recebimentos').select('*').eq('ordem_id', ordemId);
+  const recebidoPorItem = {};
+  (recebimentos || []).forEach(r => {
+    recebidoPorItem[r.solicitacao_item_id] = (recebidoPorItem[r.solicitacao_item_id] || 0) + (r.quantidade_recebida || 0);
+  });
+
+  cont.innerHTML = `
+    <div style="margin-top:18px;border-top:1px solid var(--gray-200);padding-top:14px;">
+      <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">📥 Recebimento de Itens</label>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Pedido</th><th>Recebido</th><th>Receber agora</th><th></th></tr></thead>
+          <tbody>
+            ${_ocItensRef.map(i => {
+              const recebido = recebidoPorItem[i.item_id] || 0;
+              const restante = Math.max(0, i.quantidade - recebido);
+              return `
+                <tr>
+                  <td>${escapeHTML(i.descricao)}</td>
+                  <td>${i.quantidade} ${escapeHTML(i.unidade)}</td>
+                  <td>${recebido} ${escapeHTML(i.unidade)}</td>
+                  <td><input type="number" min="0" max="${restante}" step="1" id="oc-receber-${i.item_id}" class="form-input-style" style="width:90px;" placeholder="0" ${restante === 0 ? 'disabled' : ''}></td>
+                  <td>${restante === 0
+                    ? '<span class="tag-badge success">✓ Completo</span>'
+                    : `<button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarRecebimentoOC('${ordemId}','${i.item_id}')">Registrar</button>`}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function registrarRecebimentoOC(ordemId, itemId) {
+  const input = $('oc-receber-' + itemId);
+  const qtd = parseInt(input.value, 10);
+  if (!qtd || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
+
+  await db.from('compras_ordens_recebimentos').insert({
+    ordem_id: ordemId,
+    solicitacao_item_id: itemId,
+    quantidade_recebida: qtd,
+    data_recebimento: new Date().toISOString(),
+  });
+
+  // Recalcula status geral da OC
+  const { data: recebimentos } = await db.from('compras_ordens_recebimentos').select('*').eq('ordem_id', ordemId);
+  const recebidoPorItem = {};
+  (recebimentos || []).forEach(r => {
+    recebidoPorItem[r.solicitacao_item_id] = (recebidoPorItem[r.solicitacao_item_id] || 0) + (r.quantidade_recebida || 0);
+  });
+  const totalmenteRecebido = _ocItensRef.every(i => (recebidoPorItem[i.item_id] || 0) >= i.quantidade);
+  const algumRecebido = _ocItensRef.some(i => (recebidoPorItem[i.item_id] || 0) > 0);
+  const novoStatus = totalmenteRecebido ? 'Recebida' : (algumRecebido ? 'Parcial' : 'Rascunho');
+
+  await db.from('compras_ordens').update({ status_oc: novoStatus }).eq('id', ordemId);
+  $('oc-status').value = novoStatus;
+
+  await renderRecebimentoOC(ordemId);
+  await carregarOrdensCompra();
+}
+
+// ── Badges ────────────────────────────────────────────────────────────
+function _badgeStatusOC(status) {
+  const map = {
+    'Rascunho': 'tag-badge', 'Enviada': 'tag-badge andamento', 'Confirmada': 'tag-badge semestral',
+    'Parcial': 'tag-badge warning', 'Recebida': 'tag-badge success', 'Cancelada': 'tag-badge danger',
+  };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status || '—')}</span>`;
+}
+
+function _badgeEnvioOC(status) {
+  return status === 'Enviada'
+    ? '<span class="tag-badge success">📤 Enviada</span>'
+    : '<span class="tag-badge">Não Enviada</span>';
+}
+
+// ── Listagem ──────────────────────────────────────────────────────────
+async function carregarOrdensCompra() {
+  const tbody = $('tbody-ordens-compra');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_ordens')
+    .select('*, compras_cotacoes(numero, vencedor_fornecedor_id, compras_solicitacoes(numero, descricao))')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _ocCache = data || [];
+
+  // Carrega nomes dos fornecedores vencedores e totais
+  const fornIds = [...new Set(_ocCache.map(o => o.compras_cotacoes?.vencedor_fornecedor_id).filter(Boolean))];
+  let fornecedoresMap = {}, precosPorForn = {};
+  if (fornIds.length) {
+    const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id, nome').in('id', fornIds);
+    (fornecedores || []).forEach(f => fornecedoresMap[f.id] = f.nome);
+    const { data: precos } = await db.from('compras_cotacoes_precos').select('fornecedor_id, solicitacao_item_id, valor_unitario').in('fornecedor_id', fornIds);
+    (precos || []).forEach(p => { (precosPorForn[p.fornecedor_id] = precosPorForn[p.fornecedor_id] || []).push(p); });
+  }
+  const itemIds = [...new Set(Object.values(precosPorForn).flat().map(p => p.solicitacao_item_id))];
+  let qtdMap = {};
+  if (itemIds.length) {
+    const { data: itens } = await db.from('compras_solicitacoes_itens').select('id, quantidade').in('id', itemIds);
+    (itens || []).forEach(i => qtdMap[i.id] = i.quantidade);
+  }
+
+  _ocCache.forEach(o => {
+    const fornId = o.compras_cotacoes?.vencedor_fornecedor_id;
+    const precos = precosPorForn[fornId] || [];
+    o._fornecedorNome = fornecedoresMap[fornId] || '—';
+    o._total = precos.reduce((acc, p) => acc + (p.valor_unitario || 0) * (qtdMap[p.solicitacao_item_id] || 0), 0);
+  });
+
+  _renderStatsOC();
+  filtrarOrdensCompra();
+}
+
+function _renderStatsOC() {
+  $('oc-stat-total').textContent     = _ocCache.length;
+  $('oc-stat-rascunho').textContent  = _ocCache.filter(o => o.status_oc === 'Rascunho').length;
+  $('oc-stat-enviadas').textContent  = _ocCache.filter(o => o.status_envio === 'Enviada').length;
+  $('oc-stat-recebidas').textContent = _ocCache.filter(o => o.status_oc === 'Recebida').length;
+}
+
+function filtrarOrdensCompra() {
+  const tbody = $('tbody-ordens-compra');
+  if (!tbody) return;
+
+  const termo  = ($('oc-filtro-texto')?.value || '').toLowerCase().trim();
+  const status = $('oc-filtro-status')?.value || '';
+  const envio  = $('oc-filtro-envio')?.value || '';
+
+  let dados = [..._ocCache];
+  if (status) dados = dados.filter(o => o.status_oc === status);
+  if (envio)  dados = dados.filter(o => o.status_envio === envio);
+  if (termo) {
+    dados = dados.filter(o => `${o.numero} ${o.compras_cotacoes?.numero || ''} ${o._fornecedorNome}`.toLowerCase().includes(termo));
+  }
+
+  tbody.innerHTML = dados.length ? dados.map(o => `
+    <tr>
+      <td><strong>${escapeHTML(o.numero)}</strong></td>
+      <td style="font-size:12px;color:var(--gray-500);">${escapeHTML(o.compras_cotacoes?.numero || '—')}<br>${escapeHTML(o.compras_cotacoes?.compras_solicitacoes?.descricao || '')}</td>
+      <td>${escapeHTML(o._fornecedorNome)}</td>
+      <td style="font-weight:700;">${o._total ? fmtMoney(o._total) : '—'}</td>
+      <td>${_badgeEnvioOC(o.status_envio)}</td>
+      <td>${_badgeStatusOC(o.status_oc)}</td>
+      <td>${o.created_at ? fmtDate(o.created_at.split('T')[0]) : '—'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarOrdemCompra('${o.id}')">✏️ Editar</button>
+        <button class="btn-excluir" onclick="excluirOrdemCompra('${o.id}','${escapeHTML(o.numero)}')">✕</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma ordem de compra encontrada.</td></tr>';
+}
+
+if ($('btn-salvar-oc')) {
+  $('btn-salvar-oc').addEventListener('click', salvarOrdemCompra);
+}

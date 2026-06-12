@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concredur — Ordens de Compra (OC)</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Suprimentos</div>
+        <div class="nav-item" onclick="location.href='compras-sc.html'"><span>🛒</span> Solicitações (SC/SS)</div>
+        <div class="nav-item" onclick="location.href='compras-cot.html'"><span>📊</span> Cotações (COT)</div>
+        <div class="nav-item active" onclick="location.href='compras-oc.html'"><span>📦</span> Ordens de Compra (OC)</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <h2>📦 Ordens de Compra (OC)</h2>
+      </div>
+
+      <div class="section-content">
+
+        <!-- ===== INDICADORES ===== -->
+        <div class="dash-cards-grid">
+          <div class="dash-card">
+            <div class="dash-card-icon">📦</div>
+            <p class="dash-card-title">Total de OCs</p>
+            <h3 id="oc-stat-total" class="dash-card-value">—</h3>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-icon">📝</div>
+            <p class="dash-card-title">Rascunho</p>
+            <h3 id="oc-stat-rascunho" class="dash-card-value">—</h3>
+          </div>
+          <div class="dash-card dash-card-warning">
+            <div class="dash-card-icon">📤</div>
+            <p class="dash-card-title">Enviadas</p>
+            <h3 id="oc-stat-enviadas" class="dash-card-value">—</h3>
+          </div>
+          <div class="dash-card dash-card-success">
+            <div class="dash-card-icon">✅</div>
+            <p class="dash-card-title">Recebidas</p>
+            <h3 id="oc-stat-recebidas" class="dash-card-value">—</h3>
+          </div>
+        </div>
+
+        <!-- ===== FORMULÁRIO ===== -->
+        <div class="card">
+          <h3 class="card-title" id="oc-form-titulo">📝 Nova Ordem de Compra</h3>
+          <input type="hidden" id="oc-id-edicao" value="">
+
+          <div class="form-group">
+            <label>Cotação Aprovada de Origem *</label>
+            <select id="oc-cotacao" class="form-input-style" onchange="onSelecionarCotacaoOC()">
+              <option value="">-- Selecione a Cotação --</option>
+            </select>
+          </div>
+
+          <div id="oc-fornecedor-referencia"></div>
+          <div id="oc-itens-referencia"></div>
+
+          <div class="form-grid thirds" style="margin-top:12px;">
+            <div class="form-group"><label>Local de Entrega</label><input type="text" id="oc-local-entrega" placeholder="Ex: Almoxarifado Central — Bloco A"></div>
+            <div class="form-group"><label>Centro de Custo</label><input type="text" id="oc-centro-custo" placeholder="Ex: 1001 — TI"></div>
+            <div class="form-group"><label>Referência Interna</label><input type="text" id="oc-referencia" placeholder="Nº de pedido / referência interna"></div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group"><label>Instruções de Entrega</label><textarea id="oc-instrucoes" rows="2" placeholder="Ex: Agendar entrega com TI..."></textarea></div>
+            <div class="form-group"><label>Garantia Exigida</label><textarea id="oc-garantia" rows="2" placeholder="Ex: 12 meses de garantia..."></textarea></div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Status da OC</label>
+              <select id="oc-status" class="form-input-style">
+                <option value="Rascunho">Rascunho</option>
+                <option value="Enviada">Enviada</option>
+                <option value="Confirmada">Confirmada</option>
+                <option value="Parcial">Parcial</option>
+                <option value="Recebida">Recebida</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status de Envio</label>
+              <select id="oc-status-envio" class="form-input-style">
+                <option value="Não Enviada">Não Enviada</option>
+                <option value="Enviada">Enviada</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:18px;">
+            <button id="btn-salvar-oc" class="btn-primary">💾 Registrar Ordem de Compra</button>
+            <button id="btn-cancelar-oc" class="btn-secondary" style="display:none;" onclick="resetarFormOC()">✕ Cancelar Edição</button>
+          </div>
+          <p id="msg-oc" class="msg-form"></p>
+
+          <!-- RECEBIMENTO (somente em edição) -->
+          <div id="oc-recebimento-container"></div>
+        </div>
+
+        <!-- ===== FILTROS ===== -->
+        <div class="card">
+          <h3 class="card-title">Filtros</h3>
+          <div class="form-grid thirds">
+            <div class="form-group">
+              <label>Buscar (número, cotação, fornecedor)</label>
+              <input type="text" id="oc-filtro-texto" placeholder="Buscar..." oninput="filtrarOrdensCompra()">
+            </div>
+            <div class="form-group">
+              <label>Status da OC</label>
+              <select id="oc-filtro-status" class="form-input-style" onchange="filtrarOrdensCompra()">
+                <option value="">Todos</option>
+                <option value="Rascunho">Rascunho</option>
+                <option value="Enviada">Enviada</option>
+                <option value="Confirmada">Confirmada</option>
+                <option value="Parcial">Parcial</option>
+                <option value="Recebida">Recebida</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status de Envio</label>
+              <select id="oc-filtro-envio" class="form-input-style" onchange="filtrarOrdensCompra()">
+                <option value="">Todos</option>
+                <option value="Não Enviada">Não Enviada</option>
+                <option value="Enviada">Enviada</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== LISTA ===== -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Ordens de Compra Registradas</h3>
+            <button class="btn-refresh" onclick="carregarOrdensCompra()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Número</th><th>Cotação</th><th>Fornecedor</th><th>Total</th>
+                  <th>Envio</th><th>Status</th><th>Data</th><th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-ordens-compra"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', async () => {
+      await carregarSelectCotacoesOC();
+      await carregarOrdensCompra();
+    });
+  </script>
+</body>
+</html>
