@@ -1187,12 +1187,16 @@ function _editarOSFromB64(b64) {
 // ===================== FACILITIES =====================
 if ($('btn-salvar-osg')) {
   $('btn-salvar-osg').addEventListener('click', async () => {
+    const foto_antes_url  = await uploadFoto($('osg-foto-antes')?.files[0],  'osg/antes',  'msg-osg');
+    const foto_depois_url = await uploadFoto($('osg-foto-depois')?.files[0], 'osg/depois', 'msg-osg');
     const payload = {
       setor:               $('osg-setor').value,
       servico_requisitado: $('osg-requisitado').value,
       falha_relatada:      $('osg-falha').value,
       status_os:           $('osg-status').value,
     };
+    if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
+    if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
     const { error } = await db.from('ordens_servico_geral').insert([payload]);
     if (!error) { resetarFormOSG(); carregarOSGeral(); carregarCentralUnificadaOS(); }
   });
@@ -1201,16 +1205,22 @@ if ($('btn-salvar-osg')) {
 async function carregarOSGeral() {
   const tbody = $('tbody-osg'); if (!tbody) return;
   const { data } = await db.from('ordens_servico_geral').select('*').order('created_at', { ascending: false });
-  tbody.innerHTML = (data||[]).map(os => `<tr>
+  tbody.innerHTML = (data||[]).map(os => {
+    const miniatura = (url, label) => url
+      ? `<a href="${url}" target="_blank" title="${label}"><img src="${url}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;"></a>`
+      : `<span style="font-size:10px;color:var(--gray-400);">${label[0]}—</span>`;
+    return `<tr>
     <td><strong>${escapeHTML(os.numero_os||'OSG')}</strong></td>
     <td>${fmtDate(os.created_at)}</td>
     <td>${escapeHTML(os.setor)}</td>
     <td>${statusBadge(os.status_os)}</td>
+    <td style="display:flex;gap:4px;align-items:center;">${miniatura(os.foto_antes_url,'Antes')} ${miniatura(os.foto_depois_url,'Depois')}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
       <button class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="editarOSG('${os.id}','${(os.setor||'').replace(/'/g,'')}','${(os.servico_requisitado||'').replace(/'/g,'')}','${os.status_os}')">✏️ Editar</button>
       <button class="btn-excluir" style="padding:4px 10px;font-size:11px;" onclick="excluirOSG('${os.id}')">✕ Excluir</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 async function carregarCentralUnificadaOS() {
@@ -1335,7 +1345,11 @@ function alternarSubAbasRH(m) {
   if ($('sub-rh-cargo'))    $('sub-rh-cargo').style.display    = m === 'cargo'    ? 'block' : 'none';
 }
 function resetarFormOS()  { ['os-defeito','os-laudo','os-id-edicao'].forEach(id => { if ($(id)) $(id).value = ''; }); }
-function resetarFormOSG() { ['osg-setor','osg-requisitado','osg-falha'].forEach(id => { if ($(id)) $(id).value = ''; }); }
+function resetarFormOSG() {
+  ['osg-setor','osg-requisitado','osg-falha'].forEach(id => { if ($(id)) $(id).value = ''; });
+  if ($('osg-foto-antes'))  $('osg-foto-antes').value  = '';
+  if ($('osg-foto-depois')) $('osg-foto-depois').value = '';
+}
 
 // ===================== QR CODE =====================
 function gerarQrCodeSVG(texto, tamanho = 120) {

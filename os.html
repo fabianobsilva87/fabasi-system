@@ -98,13 +98,15 @@
               <div class="form-group"><label>Equipamento</label><input type="text" id="osg-equipamento"></div>
               <div class="form-group"><label>Status Atual</label><select id="osg-status" class="form-input-style"><option value="Aberta">Aberta</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option></select></div>
               <div class="form-group"><label>Técnico Atribuído</label><select id="osg-tecnico" class="form-input-style"></select></div>
+              <div class="form-group"><label>📷 Foto ANTES (situação encontrada)</label><input type="file" id="osg-foto-antes" accept="image/*" capture="environment" class="form-input-style"></div>
+              <div class="form-group"><label>📷 Foto DEPOIS (serviço concluído)</label><input type="file" id="osg-foto-depois" accept="image/*" capture="environment" class="form-input-style"></div>
             </div>
             <div class="btn-row"><button id="btn-salvar-osg" class="btn-primary">✓ Salvar Ordem Facilities</button><button id="btn-cancelar-edicao-osg" class="btn-secondary" style="display:none;">✕ Cancelar Edição</button></div>
             <p id="msg-osg" class="msg-form"></p>
           </div>
           <div class="card">
             <h3 class="card-title">Ordens de Serviço de Facilities Processadas</h3>
-            <div class="table-wrap"><table><thead><tr><th>Código O.S.</th><th>Chamada</th><th>Setor</th><th>Área(s)</th><th>Status</th></tr></thead><tbody id="tbody-osg"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Código O.S.</th><th>Chamada</th><th>Setor</th><th>Área(s)</th><th>Fotos</th><th>Status</th></tr></thead><tbody id="tbody-osg"></tbody></table></div>
           </div>
         </div>
 
