@@ -1322,6 +1322,8 @@ async function carregarOrdensServico() {
           onclick="emitirRelatorioOS(JSON.parse(decodeURIComponent(escape(atob('${b64}')))))">🖨️ Imprimir</button>
         <button class="btn-secondary" style="padding:4px 10px;font-size:11px;"
           onclick="_editarOSFromB64('${osDataB64}')">✏️ Editar</button>
+        <button class="btn-refresh" style="padding:4px 10px;font-size:11px;background:#7c3aed;border-color:#7c3aed;color:#fff;"
+          onclick="abrirPreDemandaOS('OS-AC','${os.id}','OS-AC-${os.id.toString().slice(0,5).toUpperCase()}','${escapeHTML(os.equipamentos?.bloco||'')} ${escapeHTML(os.equipamentos?.setor||'')}')">📦 Pré-Demanda</button>
         <button class="btn-excluir" style="padding:4px 10px;font-size:11px;"
           onclick="excluirOS('${os.id}')">✕ Excluir</button>
       </td>
@@ -1374,6 +1376,7 @@ async function carregarOSGeral() {
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
       <button class="btn-primary" style="padding:4px 10px;font-size:11px;" onclick="emitirRelatorioOSG(JSON.parse(decodeURIComponent(escape(atob('${b64}')))))">🖨️ Imprimir</button>
       <button class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="editarOSG('${os.id}','${(os.setor||'').replace(/'/g,'')}','${(os.servico_requisitado||'').replace(/'/g,'')}','${os.status_os}')">✏️ Editar</button>
+      <button class="btn-refresh" style="padding:4px 10px;font-size:11px;background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="abrirPreDemandaOS('OS-FAC','${os.id}','OSG-${os.id.toString().slice(0,5).toUpperCase()}','${escapeHTML(os.setor||'')}')">📦 Pré-Demanda</button>
       <button class="btn-excluir" style="padding:4px 10px;font-size:11px;" onclick="excluirOSG('${os.id}')">✕ Excluir</button>
     </td>
   </tr>`;
@@ -3346,4 +3349,180 @@ function filtrarOrdensCompra() {
 
 if ($('btn-salvar-oc')) {
   $('btn-salvar-oc').addEventListener('click', salvarOrdemCompra);
+}
+
+// =====================================================================
+//  INTEGRAÇÃO OS → SC/SS (Pré-Demandas de Compras)
+//  Tabela: compras_pre_demandas
+// =====================================================================
+
+let _pdItemSeq = 0;
+
+function abrirPreDemandaOS(origemTipo, origemId, origemNumero, setorSugerido = '') {
+  $('pd-origem-tipo').value = origemTipo;
+  $('pd-origem-id').value = origemId;
+  $('pd-origem-numero-val').value = origemNumero;
+  $('pd-origem-numero').textContent = origemNumero;
+  $('pd-tipo').value = 'SC';
+  $('pd-setor').value = (setorSugerido || '').trim();
+  $('pd-prioridade').value = 'Normal';
+  $('pd-descricao').value = '';
+  $('pd-itens-tbody').innerHTML = '';
+  $('msg-pd').textContent = '';
+  adicionarItemPD();
+  $('overlay-pre-demanda').style.display = 'flex';
+}
+
+function fecharModalPreDemanda() {
+  $('overlay-pre-demanda').style.display = 'none';
+}
+
+function adicionarItemPD(desc = '', qtd = 1, unidade = 'UN') {
+  const tbody = $('pd-itens-tbody');
+  if (!tbody) return;
+  const rid = 'pd-item-' + (++_pdItemSeq);
+  const tr = document.createElement('tr');
+  tr.id = rid;
+  tr.innerHTML = `
+    <td><input type="text" class="form-input-style pd-item-desc" value="${escapeHTML(desc)}" placeholder="Descrição do item/serviço"></td>
+    <td><input type="number" class="form-input-style pd-item-qtd" value="${Number(qtd) || 1}" min="1" step="1" style="width:90px;"></td>
+    <td><input type="text" class="form-input-style pd-item-unid" value="${escapeHTML(unidade) || 'UN'}" style="width:70px;"></td>
+    <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function coletarItensPD() {
+  const linhas = [...document.querySelectorAll('#pd-itens-tbody tr')];
+  return linhas.map(tr => ({
+    descricao: tr.querySelector('.pd-item-desc').value.trim(),
+    quantidade: parseInt(tr.querySelector('.pd-item-qtd').value, 10) || 1,
+    unidade: tr.querySelector('.pd-item-unid').value.trim() || 'UN',
+  })).filter(i => i.descricao);
+}
+
+async function salvarPreDemanda() {
+  const origemTipo   = $('pd-origem-tipo').value;
+  const origemId     = $('pd-origem-id').value;
+  const origemNumero = $('pd-origem-numero-val').value;
+  const tipo         = $('pd-tipo').value;
+  const setor        = $('pd-setor').value.trim();
+  const prioridade   = $('pd-prioridade').value;
+  const descricao    = $('pd-descricao').value.trim();
+  const itens        = coletarItensPD();
+
+  if (!setor || !descricao) { msgForm('msg-pd', '⚠️ Preencha Setor e Descrição.', 'red'); return; }
+  if (!itens.length) { msgForm('msg-pd', '⚠️ Adicione ao menos um item.', 'red'); return; }
+
+  msgForm('msg-pd', '⏳ Enviando...', 'blue');
+
+  const { data: { user } } = await db.auth.getUser();
+
+  const { error } = await db.from('compras_pre_demandas').insert({
+    origem_tipo: origemTipo,
+    origem_id: origemId,
+    origem_numero: origemNumero,
+    tipo_solicitacao: tipo,
+    descricao,
+    setor,
+    prioridade,
+    itens,
+    solicitante_id: user?.id || null,
+  });
+
+  if (error) { msgForm('msg-pd', '❌ Erro ao enviar: ' + error.message, 'red'); return; }
+
+  msgForm('msg-pd', '✅ Pré-demanda enviada para aprovação no módulo de Compras!', 'green');
+  setTimeout(fecharModalPreDemanda, 1200);
+}
+
+if ($('btn-salvar-pd')) {
+  $('btn-salvar-pd').addEventListener('click', salvarPreDemanda);
+}
+
+// ── Aprovação de pré-demandas (compras-sc.html) ──────────────────────
+let _pdCache = [];
+
+function _badgeTipoPD(tipo) {
+  return tipo === 'SS' ? '<span class="tag-badge andamento">🧰 SS</span>' : '<span class="tag-badge">📦 SC</span>';
+}
+
+async function carregarPreDemandas() {
+  const tbody = $('tbody-pre-demandas');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_pre_demandas')
+    .select('*, profiles(nome)')
+    .eq('status', 'Pendente')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _pdCache = data || [];
+  if ($('pd-badge-count')) $('pd-badge-count').textContent = _pdCache.length;
+
+  tbody.innerHTML = _pdCache.length ? _pdCache.map(p => `
+    <tr>
+      <td><strong>${escapeHTML(p.origem_numero)}</strong><br><span style="font-size:10px;color:var(--gray-400);">${escapeHTML(p.origem_tipo)}</span></td>
+      <td>${_badgeTipoPD(p.tipo_solicitacao)}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHTML(p.descricao)}">${escapeHTML(p.descricao)}</td>
+      <td>${escapeHTML(p.setor)}</td>
+      <td>${_badgePrioridadeSC(p.prioridade)}</td>
+      <td style="font-size:11px;">${(p.itens||[]).map(i => `${i.quantidade}x ${escapeHTML(i.descricao)}`).join('<br>')}</td>
+      <td style="color:var(--gray-500);font-size:12px;">${escapeHTML(p.profiles?.nome || '—')}<br>${fmtDate(p.created_at?.split('T')[0])}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-primary" style="padding:3px 10px;font-size:11px;background:#10b981;" onclick="aprovarPreDemanda('${p.id}')">✓ Aprovar</button>
+        <button class="btn-excluir" onclick="rejeitarPreDemanda('${p.id}')">✕ Rejeitar</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma pré-demanda pendente.</td></tr>';
+}
+
+async function aprovarPreDemanda(id) {
+  const p = _pdCache.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Aprovar esta pré-demanda e gerar uma ${p.tipo_solicitacao} a partir da ${p.origem_numero}?`)) return;
+
+  const numero = await gerarNumeroSolicitacao(p.tipo_solicitacao);
+
+  const { data: nova, error } = await db.from('compras_solicitacoes').insert({
+    numero,
+    tipo: p.tipo_solicitacao,
+    descricao: p.descricao,
+    setor: p.setor,
+    prioridade: p.prioridade,
+    status: 'Pendente',
+    justificativa: `Gerada automaticamente a partir da pré-demanda da ${p.origem_numero}.`,
+    data_necessaria: hoje(),
+    solicitante_id: p.solicitante_id,
+  }).select('id').single();
+
+  if (error) { alert('Erro ao gerar solicitação: ' + error.message); return; }
+
+  const itensPayload = (p.itens || []).map(i => ({ ...i, solicitacao_id: nova.id }));
+  if (itensPayload.length) await db.from('compras_solicitacoes_itens').insert(itensPayload);
+
+  const { data: { user } } = await db.auth.getUser();
+  await db.from('compras_pre_demandas').update({
+    status: 'Aprovada',
+    solicitacao_id: nova.id,
+    decidido_por: user?.email || null,
+    data_decisao: new Date().toISOString(),
+  }).eq('id', id);
+
+  await carregarPreDemandas();
+  await carregarSolicitacoesCompra();
+}
+
+async function rejeitarPreDemanda(id) {
+  if (!confirm('Rejeitar esta pré-demanda? Nenhuma SC/SS será criada.')) return;
+  const { data: { user } } = await db.auth.getUser();
+  await db.from('compras_pre_demandas').update({
+    status: 'Rejeitada',
+    decidido_por: user?.email || null,
+    data_decisao: new Date().toISOString(),
+  }).eq('id', id);
+  await carregarPreDemandas();
 }

@@ -69,6 +69,29 @@
           </div>
         </div>
 
+        <!-- ===== PRÉ-DEMANDAS (ORIGEM: OS) ===== -->
+        <div class="card" style="border-left:4px solid #7c3aed;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">📦 Pré-Demandas Pendentes (geradas a partir de O.S.) <span id="pd-badge-count" class="tag-badge warning">0</span></h3>
+            <button class="btn-refresh" onclick="carregarPreDemandas()">↺ Atualizar</button>
+          </div>
+          <p style="font-size:12px;color:#718096;margin-bottom:12px;">
+            Ao aprovar, o sistema gera automaticamente uma <strong>SC</strong> (materiais) ou <strong>SS</strong> (serviço de terceiros),
+            já com os itens informados pelo técnico na O.S. de origem.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Origem</th><th>Tipo</th><th>Descrição</th><th>Setor</th>
+                  <th>Prioridade</th><th>Itens</th><th>Solicitante</th><th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-pre-demandas"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- ===== FORMULÁRIO ===== -->
         <div class="card">
           <h3 class="card-title" id="sc-form-titulo">📝 Nova Solicitação de Compra / Serviço</h3>
@@ -205,6 +228,7 @@
       $('sc-data').value = hoje();
       adicionarItemSC(); // primeira linha de item já visível
       await carregarSolicitacoesCompra();
+      await carregarPreDemandas();
     });
   </script>
 </body>
