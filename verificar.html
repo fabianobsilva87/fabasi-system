@@ -29,6 +29,7 @@
     .tag-tipo { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
     .tag-pmoc { background: #dbeafe; color: #1e40af; }
     .tag-os   { background: #ede9fe; color: #5b21b6; }
+    .tag-osg  { background: #fce7f3; color: #9d174d; }
     .tag-eq   { background: #f0fdf4; color: #166534; }
     .checklist-mini { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
     .checklist-mini th { background: #f1f5f9; color: #64748b; padding: 5px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
@@ -263,6 +264,50 @@
           <div class="assinatura-row">
             <div class="assinatura-box">${assinaturaHTML(lerAssinatura(col,'assinatura_url','assinatura_digital'))}<div class="linha">${escapeHTML(col.nome||'—')}<br>Técnico Executor</div></div>
           </div>`;
+
+      // ════════════════════════ OSG (Facilities) ════════════════════════
+      } else if (tipo === 'osg') {
+        const { data: osg, error } = await db
+          .from('ordens_servico_geral')
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (error || !osg) { mostrarErro('Ordem de Serviço Facilities não encontrada na base de dados.'); return; }
+
+        const codigo = osg.numero_os || `OSG-${osg.id.toString().slice(0,5).toUpperCase()}`;
+        const statusCor = { 'Aberta':'#fef3c7','Em Andamento':'#dbeafe','Concluída':'#d1fae5' };
+        const statusTxt = { 'Aberta':'#92400e','Em Andamento':'#1e40af','Concluída':'#065f46' };
+        const st = osg.status_os || 'Aberta';
+        const areas = Array.isArray(osg.areas_tecnicas) ? osg.areas_tecnicas.join(', ') : (osg.areas_tecnicas || osg.area || '—');
+
+        document.getElementById('status-banner').className = 'status-banner valido';
+        document.getElementById('status-texto').textContent = `✅ Documento autêntico — ${codigo}`;
+        document.getElementById('spinner').remove();
+        document.getElementById('corpo').innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <span class="tag-tipo tag-osg">🏢 O.S. Facilities</span>
+            <strong style="font-size:15px;">${escapeHTML(codigo)}</strong>
+            <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;margin-left:auto;background:${statusCor[st]||'#f1f5f9'};color:${statusTxt[st]||'#374151'}">${escapeHTML(st)}</span>
+          </div>
+          <div class="field-group">
+            <div class="field full"><label>Serviço Requisitado</label><span>${escapeHTML(osg.servico_requisitado)}</span></div>
+            <div class="field"><label>Setor / Destino</label><span>${escapeHTML(osg.setor)}</span></div>
+            <div class="field"><label>Tipo de Intervenção</label><span>${escapeHTML(osg.tipo_manutencao || '—')}</span></div>
+            <div class="field"><label>Especialidades Envolvidas</label><span>${escapeHTML(areas)}</span></div>
+            <div class="field full"><label>Abertura da O.S.</label><span>${fmtDate(osg.created_at)}</span></div>
+          </div>
+          ${osg.falha_relatada ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Falha Relatada / Descrição do Serviço</div><p style="font-size:12px;line-height:1.6;color:#374151;">${escapeHTML(osg.falha_relatada)}</p>` : ''}
+          ${(osg.foto_antes_url || osg.foto_depois_url) ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Evidência Fotográfica — Antes / Depois</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div style="text-align:center;">
+                <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
+                ${osg.foto_antes_url ? `<img src="${osg.foto_antes_url}" style="max-width:100%;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+              </div>
+              <div style="text-align:center;">
+                <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
+                ${osg.foto_depois_url ? `<img src="${osg.foto_depois_url}" style="max-width:100%;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+              </div>
+            </div>` : ''}`;
 
       // ════════════════════════ EQUIPAMENTO ════════════════════════
       } else if (tipo === 'equipamento') {

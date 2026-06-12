@@ -1111,6 +1111,84 @@ function emitirRelatorioOS(os) {
   imprimir('area-os-impressao', html);
 }
 
+function emitirRelatorioOSG(os) {
+  const col = os.colaboradores || {};
+  const urlValidacao = gerarUrlValidacao(os.id, 'osg');
+  const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
+  const codigoOSG    = os.numero_os || `OSG-${os.id.toString().slice(0,5).toUpperCase()}`;
+
+  const areas = Array.isArray(os.areas_tecnicas)
+    ? os.areas_tecnicas.join(', ')
+    : (os.areas_tecnicas || os.area || '—');
+
+  const assinaturaTecnicoHTML = col?.nome
+    ? _assinaturaImg(lerAssinaturaURL(col,'assinatura_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;')
+    : _assinaturaImg(null, '');
+
+  const html = `
+  <div class="laudo-wrapper">
+    <div class="laudo-header">
+      <div><h1>🏢 Ordem de Serviço Facilities — CONCREDUR</h1><p>Registro de Solicitação Corporativa</p></div>
+      <div class="laudo-header-meta">
+        <strong>Código: ${escapeHTML(codigoOSG)}</strong><br>
+        Abertura: ${fmtDate(os.created_at)}<br>
+        Emissão: ${new Date().toLocaleDateString('pt-BR')}
+      </div>
+    </div>
+    <div class="laudo-section">
+      <div class="laudo-section-title">Dados da Chamada</div>
+      <div class="laudo-grid">
+        <div class="laudo-field"><label>Serviço Requisitado</label><span>${escapeHTML(os.servico_requisitado)}</span></div>
+        <div class="laudo-field"><label>Setor / Destino</label><span>${escapeHTML(os.setor)}</span></div>
+        <div class="laudo-field"><label>Tipo de Intervenção</label><span>${escapeHTML(os.tipo_manutencao || os.tipo_os || '—')}</span></div>
+        <div class="laudo-field"><label>Especialidades Envolvidas</label><span>${escapeHTML(areas)}</span></div>
+        <div class="laudo-field"><label>Equipamento</label><span>${escapeHTML(os.equipamento || '—')}</span></div>
+        <div class="laudo-field"><label>Status</label><span>${escapeHTML(os.status_os)}</span></div>
+        ${col?.nome ? `<div class="laudo-field"><label>Técnico Atribuído</label><span>${escapeHTML(col.nome)}</span></div>` : ''}
+      </div>
+    </div>
+    ${os.falha_relatada ? `
+    <div class="laudo-section">
+      <div class="laudo-section-title">Falha Relatada / Descrição do Serviço</div>
+      <p style="font-size:12px;line-height:1.7;min-height:60px;">${escapeHTML(os.falha_relatada)}</p>
+    </div>` : ''}
+    ${(os.foto_antes_url || os.foto_depois_url) ? `
+    <div class="laudo-section">
+      <div class="laudo-section-title">Evidência Fotográfica — Antes / Depois</div>
+      <div class="laudo-grid">
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
+          ${os.foto_antes_url ? `<img src="${os.foto_antes_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
+          ${os.foto_depois_url ? `<img src="${os.foto_depois_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+      </div>
+    </div>` : ''}
+    <div class="laudo-section">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+        <div style="flex:1;">
+          <div class="laudo-assinatura-box" style="min-width:200px;text-align:center;">
+            ${assinaturaTecnicoHTML}
+            <div class="laudo-assinatura-linha">${escapeHTML(col?.nome || 'Responsável pela Execução')}<br>Técnico Executor</div>
+          </div>
+        </div>
+        <div style="text-align:center;flex-shrink:0;">
+          ${qrCodeHTML}
+          <div style="font-size:9px;color:#718096;margin-top:5px;font-weight:600;">AUTENTICIDADE DO DOCUMENTO</div>
+          <div style="font-size:8px;color:#a0aec0;margin-top:2px;">${escapeHTML(codigoOSG)}</div>
+          <div style="font-size:8px;color:#a0aec0;">Aponte a câmera para verificar</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#a0aec0;">
+        Sistema Concredur · ${new Date().toLocaleString('pt-BR')} · Verificação: ${urlValidacao}
+      </div>
+    </div>
+  </div>`;
+  imprimir('area-osg-impressao', html);
+}
+
 // ===================== ORDENS DE SERVIÇO =====================
 if ($('btn-salvar-os')) {
   $('btn-salvar-os').addEventListener('click', async () => {
@@ -1204,11 +1282,14 @@ if ($('btn-salvar-osg')) {
 
 async function carregarOSGeral() {
   const tbody = $('tbody-osg'); if (!tbody) return;
-  const { data } = await db.from('ordens_servico_geral').select('*').order('created_at', { ascending: false });
+  const { data } = await db.from('ordens_servico_geral')
+    .select('*')
+    .order('created_at', { ascending: false });
   tbody.innerHTML = (data||[]).map(os => {
     const miniatura = (url, label) => url
       ? `<a href="${url}" target="_blank" title="${label}"><img src="${url}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;"></a>`
       : `<span style="font-size:10px;color:var(--gray-400);">${label[0]}—</span>`;
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(os))));
     return `<tr>
     <td><strong>${escapeHTML(os.numero_os||'OSG')}</strong></td>
     <td>${fmtDate(os.created_at)}</td>
@@ -1216,6 +1297,7 @@ async function carregarOSGeral() {
     <td>${statusBadge(os.status_os)}</td>
     <td style="display:flex;gap:4px;align-items:center;">${miniatura(os.foto_antes_url,'Antes')} ${miniatura(os.foto_depois_url,'Depois')}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button class="btn-primary" style="padding:4px 10px;font-size:11px;" onclick="emitirRelatorioOSG(JSON.parse(decodeURIComponent(escape(atob('${b64}')))))">🖨️ Imprimir</button>
       <button class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="editarOSG('${os.id}','${(os.setor||'').replace(/'/g,'')}','${(os.servico_requisitado||'').replace(/'/g,'')}','${os.status_os}')">✏️ Editar</button>
       <button class="btn-excluir" style="padding:4px 10px;font-size:11px;" onclick="excluirOSG('${os.id}')">✕ Excluir</button>
     </td>
