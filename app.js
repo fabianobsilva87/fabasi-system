@@ -2108,3 +2108,549 @@ function filtrarSolicitacoesCompra() {
 if ($('btn-salvar-sc')) {
   $('btn-salvar-sc').addEventListener('click', salvarSolicitacaoCompra);
 }
+
+// =====================================================================
+//  MÓDULO DE COMPRAS — Cotações (COT)
+//  Tabelas: compras_cotacoes, compras_cotacoes_fornecedores,
+//           compras_cotacoes_precos, compras_cotacoes_aprovacoes
+// =====================================================================
+
+const COMPRAS_ALCADA_N1 = 5000;
+const COMPRAS_ALCADA_N2 = 25000;
+
+function fmtMoney(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+}
+
+function nivelAlcadaCOT(total) {
+  if (total === null || total === undefined || isNaN(total) || total <= 0) return 1;
+  if (total <= COMPRAS_ALCADA_N1) return 1;
+  if (total <= COMPRAS_ALCADA_N2) return 2;
+  return 3;
+}
+
+function labelAlcadaCOT(nivel) {
+  return {
+    1: `Nível 1 (até ${fmtMoney(COMPRAS_ALCADA_N1)})`,
+    2: `Nível 2 (até ${fmtMoney(COMPRAS_ALCADA_N2)})`,
+    3: `Nível 3 (acima de ${fmtMoney(COMPRAS_ALCADA_N2)})`,
+  }[nivel] || '—';
+}
+
+let _cotCache = [];
+let _cotItensRef = [];
+let _cotFornecedoresForm = [];
+let _cotAprovacoesAtuais = [];
+
+// ── Geração de número COT-AAAA-NNN ──────────────────────────────────
+async function gerarNumeroCotacao() {
+  const ano = new Date().getFullYear();
+  const prefixo = `COT-${ano}-`;
+  const { data } = await db.from('compras_cotacoes').select('numero').like('numero', prefixo + '%');
+  let max = 0;
+  (data || []).forEach(r => {
+    const seq = parseInt(String(r.numero).split('-').pop(), 10);
+    if (!isNaN(seq) && seq > max) max = seq;
+  });
+  return prefixo + String(max + 1).padStart(3, '0');
+}
+
+// ── Select de solicitações de origem ────────────────────────────────
+async function carregarSelectSolicitacoesCOT() {
+  const sel = $('cot-solicitacao'); if (!sel) return;
+  const idSolAtual = sel.dataset.solicitacaoAtual || '';
+
+  const { data } = await db.from('compras_solicitacoes')
+    .select('id, numero, descricao, status')
+    .order('created_at', { ascending: false });
+
+  sel.innerHTML = '<option value="">-- Selecione a Solicitação --</option>';
+  (data || []).forEach(s => {
+    if (!['Pendente', 'Em Cotação'].includes(s.status) && s.id !== idSolAtual) return;
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.numero} — ${s.descricao}`;
+    sel.appendChild(opt);
+  });
+  if (idSolAtual) sel.value = idSolAtual;
+}
+
+// ── Itens de referência da solicitação selecionada ──────────────────
+async function onSelecionarSolicitacaoCOT(manterFornecedores = false) {
+  const solId = $('cot-solicitacao').value;
+  const ref = $('cot-itens-referencia');
+  _cotItensRef = [];
+
+  if (!solId) {
+    ref.innerHTML = '';
+    _cotFornecedoresForm = [];
+    renderFornecedoresCOT();
+    return;
+  }
+
+  const { data } = await db.from('compras_solicitacoes_itens')
+    .select('id, descricao, quantidade, unidade')
+    .eq('solicitacao_id', solId);
+
+  _cotItensRef = data || [];
+
+  ref.innerHTML = _cotItensRef.length ? `
+    <div class="table-wrap" style="margin:10px 0;">
+      <table>
+        <thead><tr><th>Item de Referência</th><th>Quantidade</th><th>Unidade</th></tr></thead>
+        <tbody>${_cotItensRef.map(i => `<tr><td>${escapeHTML(i.descricao)}</td><td>${i.quantidade}</td><td>${escapeHTML(i.unidade)}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>` : '<p style="font-size:12px;color:var(--gray-400);margin:8px 0;">Esta solicitação não possui itens cadastrados.</p>';
+
+  if (!manterFornecedores) {
+    _cotFornecedoresForm = [];
+    adicionarFornecedorCOT();
+  }
+  renderFornecedoresCOT();
+}
+
+// ── Fornecedores dinâmicos no formulário ────────────────────────────
+function adicionarFornecedorCOT(prefill = {}) {
+  const precos = {};
+  _cotItensRef.forEach(i => { precos[i.id] = prefill.precos?.[i.id] ?? ''; });
+  _cotFornecedoresForm.push({
+    id: prefill.id || null,
+    nome: prefill.nome || '',
+    cnpj: prefill.cnpj || '',
+    email: prefill.email || '',
+    contato_nome: prefill.contato_nome || '',
+    link_site: prefill.link_site || '',
+    precos,
+  });
+  renderFornecedoresCOT();
+}
+
+function removerFornecedorCOT(idx) {
+  _cotFornecedoresForm.splice(idx, 1);
+  renderFornecedoresCOT();
+}
+
+function atualizarCampoFornecedorCOT(idx, campo, valor) {
+  _cotFornecedoresForm[idx][campo] = valor;
+  atualizarResumoVencedorCOT();
+}
+
+function atualizarPrecoFornecedorCOT(idx, itemId, valor) {
+  _cotFornecedoresForm[idx].precos[itemId] = valor;
+  renderFornecedoresCOT();
+}
+
+function calcularTotalFornecedorCOT(forn) {
+  return _cotItensRef.reduce((acc, item) => {
+    const v = parseFloat(forn.precos[item.id]);
+    return acc + (isNaN(v) ? 0 : v * item.quantidade);
+  }, 0);
+}
+
+function renderFornecedoresCOT() {
+  const cont = $('cot-fornecedores-container');
+  if (!cont) return;
+
+  if (!_cotFornecedoresForm.length) {
+    cont.innerHTML = '<p style="font-size:12px;color:var(--gray-400);">Selecione uma solicitação e adicione ao menos um fornecedor.</p>';
+    atualizarResumoVencedorCOT();
+    return;
+  }
+
+  cont.innerHTML = _cotFornecedoresForm.map((f, idx) => {
+    const total = calcularTotalFornecedorCOT(f);
+    const linhasPrecos = _cotItensRef.map(item => `
+      <tr>
+        <td>${escapeHTML(item.descricao)}</td>
+        <td>${item.quantidade} ${escapeHTML(item.unidade)}</td>
+        <td><input type="number" min="0" step="0.01" class="form-input-style" style="width:120px;"
+              value="${f.precos[item.id] ?? ''}" placeholder="0,00"
+              onchange="atualizarPrecoFornecedorCOT(${idx}, '${item.id}', this.value)"></td>
+      </tr>`).join('');
+
+    return `
+      <div class="card" style="background:var(--gray-50);margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <h4 style="margin:0 0 10px;">Fornecedor ${idx + 1}</h4>
+          <button type="button" class="btn-excluir" onclick="removerFornecedorCOT(${idx})">✕ Remover</button>
+        </div>
+        <div class="form-grid thirds">
+          <div class="form-group"><label>Nome / Razão Social *</label>
+            <input type="text" class="form-input-style" value="${escapeHTML(f.nome)}" oninput="atualizarCampoFornecedorCOT(${idx},'nome',this.value)"></div>
+          <div class="form-group"><label>CNPJ</label>
+            <input type="text" class="form-input-style" value="${escapeHTML(f.cnpj)}" oninput="atualizarCampoFornecedorCOT(${idx},'cnpj',this.value)"></div>
+          <div class="form-group"><label>E-mail</label>
+            <input type="email" class="form-input-style" value="${escapeHTML(f.email)}" oninput="atualizarCampoFornecedorCOT(${idx},'email',this.value)"></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group"><label>Contato</label>
+            <input type="text" class="form-input-style" value="${escapeHTML(f.contato_nome)}" oninput="atualizarCampoFornecedorCOT(${idx},'contato_nome',this.value)"></div>
+          <div class="form-group"><label>Link do Site / Catálogo</label>
+            <input type="text" class="form-input-style" value="${escapeHTML(f.link_site)}" oninput="atualizarCampoFornecedorCOT(${idx},'link_site',this.value)"></div>
+        </div>
+        ${_cotItensRef.length ? `
+        <div class="table-wrap" style="margin-top:10px;">
+          <table>
+            <thead><tr><th>Item</th><th>Qtd.</th><th>Valor Unitário (R$)</th></tr></thead>
+            <tbody>${linhasPrecos}</tbody>
+          </table>
+        </div>
+        <p style="text-align:right;font-weight:700;margin-top:6px;">Total: ${fmtMoney(total)}</p>` : ''}
+      </div>`;
+  }).join('');
+
+  atualizarResumoVencedorCOT();
+}
+
+// ── Vencedor sugerido e nível de alçada ─────────────────────────────
+function atualizarResumoVencedorCOT() {
+  const sel = $('cot-vencedor');
+  if (!sel) return;
+  const valorAtual = sel.value;
+
+  if (!_cotFornecedoresForm.length) {
+    sel.innerHTML = '<option value="">—</option>';
+    if ($('cot-nivel-alcada')) $('cot-nivel-alcada').textContent = '—';
+    return;
+  }
+
+  let menorIdx = 0, menorTotal = Infinity;
+  _cotFornecedoresForm.forEach((f, idx) => {
+    const total = calcularTotalFornecedorCOT(f);
+    if (total > 0 && total < menorTotal) { menorTotal = total; menorIdx = idx; }
+  });
+
+  sel.innerHTML = _cotFornecedoresForm.map((f, idx) => {
+    const total = calcularTotalFornecedorCOT(f);
+    const nome = f.nome || `Fornecedor ${idx + 1}`;
+    return `<option value="${idx}">${escapeHTML(nome)} — ${fmtMoney(total)}</option>`;
+  }).join('');
+
+  if (valorAtual !== '' && _cotFornecedoresForm[valorAtual] !== undefined) sel.value = valorAtual;
+  else sel.value = isFinite(menorTotal) ? menorIdx : 0;
+
+  atualizarNivelAlcadaCOT();
+}
+
+function atualizarNivelAlcadaCOT() {
+  const sel = $('cot-vencedor');
+  const idx = parseInt(sel.value, 10);
+  const forn = _cotFornecedoresForm[idx];
+  const total = forn ? calcularTotalFornecedorCOT(forn) : 0;
+  const nivel = nivelAlcadaCOT(total);
+  if ($('cot-nivel-alcada')) $('cot-nivel-alcada').textContent = `${fmtMoney(total)} → ${labelAlcadaCOT(nivel)}`;
+}
+
+// ── Salvar (criar ou atualizar) ──────────────────────────────────────
+async function salvarCotacao() {
+  const idEdicao = $('cot-id-edicao').value;
+  const solicitacaoId = $('cot-solicitacao').value;
+  const prazo = $('cot-prazo').value || null;
+  const condPgto = $('cot-pagamento').value.trim();
+  const frete = $('cot-frete').value.trim();
+  const obs = $('cot-observacoes').value.trim();
+  const status = $('cot-status').value;
+
+  if (!solicitacaoId) { msgForm('msg-cot', '⚠️ Selecione a solicitação de origem.', 'red'); return; }
+  if (!_cotFornecedoresForm.length || _cotFornecedoresForm.some(f => !f.nome.trim())) {
+    msgForm('msg-cot', '⚠️ Cadastre ao menos um fornecedor com nome preenchido.', 'red');
+    return;
+  }
+
+  msgForm('msg-cot', '⏳ Salvando...', 'blue');
+
+  const vencedorIdx = parseInt($('cot-vencedor').value, 10) || 0;
+  const totalVencedor = calcularTotalFornecedorCOT(_cotFornecedoresForm[vencedorIdx]);
+  const nivel = nivelAlcadaCOT(totalVencedor);
+
+  const payloadCot = {
+    solicitacao_id: solicitacaoId,
+    prazo_retorno: prazo,
+    condicao_pagamento: condPgto || null,
+    frete: frete || null,
+    observacoes: obs || null,
+    status,
+    nivel_alcada_requerido: nivel,
+  };
+
+  let cotacaoId = idEdicao;
+
+  if (idEdicao) {
+    const { error } = await db.from('compras_cotacoes').update(payloadCot).eq('id', idEdicao);
+    if (error) { msgForm('msg-cot', '❌ Erro ao atualizar: ' + error.message, 'red'); return; }
+
+    const { data: fornAntigos } = await db.from('compras_cotacoes_fornecedores').select('id').eq('cotacao_id', idEdicao);
+    const idsAntigos = (fornAntigos || []).map(f => f.id);
+    if (idsAntigos.length) await db.from('compras_cotacoes_precos').delete().in('fornecedor_id', idsAntigos);
+    await db.from('compras_cotacoes_fornecedores').delete().eq('cotacao_id', idEdicao);
+  } else {
+    payloadCot.numero = await gerarNumeroCotacao();
+    const { data: nova, error } = await db.from('compras_cotacoes').insert(payloadCot).select('id').single();
+    if (error) { msgForm('msg-cot', '❌ Erro ao registrar: ' + error.message, 'red'); return; }
+    cotacaoId = nova.id;
+  }
+
+  const fornPayload = _cotFornecedoresForm.map(f => ({
+    cotacao_id: cotacaoId,
+    nome: f.nome.trim(),
+    cnpj: f.cnpj.trim() || null,
+    email: f.email.trim() || null,
+    contato_nome: f.contato_nome.trim() || null,
+    link_site: f.link_site.trim() || null,
+  }));
+  const { data: fornInseridos, error: errForn } = await db.from('compras_cotacoes_fornecedores').insert(fornPayload).select('id');
+  if (errForn) { msgForm('msg-cot', '⚠️ Cotação salva, mas houve erro nos fornecedores: ' + errForn.message, 'red'); return; }
+
+  const precosPayload = [];
+  fornInseridos.forEach((row, idx) => {
+    const forn = _cotFornecedoresForm[idx];
+    _cotItensRef.forEach(item => {
+      const valor = parseFloat(forn.precos[item.id]);
+      if (!isNaN(valor)) precosPayload.push({ fornecedor_id: row.id, solicitacao_item_id: item.id, valor_unitario: valor });
+    });
+  });
+  if (precosPayload.length) {
+    const { error: errPrecos } = await db.from('compras_cotacoes_precos').insert(precosPayload);
+    if (errPrecos) msgForm('msg-cot', '⚠️ Cotação salva, mas houve erro nos preços: ' + errPrecos.message, 'red');
+  }
+
+  const vencedorId = fornInseridos[vencedorIdx]?.id || null;
+  await db.from('compras_cotacoes').update({ vencedor_fornecedor_id: vencedorId }).eq('id', cotacaoId);
+
+  await garantirAprovacoesCOT(cotacaoId, nivel);
+
+  await db.from('compras_solicitacoes').update({ status: 'Em Cotação' }).eq('id', solicitacaoId).eq('status', 'Pendente');
+
+  msgForm('msg-cot', idEdicao ? '✅ Cotação atualizada com sucesso!' : '✅ Cotação registrada com sucesso!', 'green');
+  resetarFormCOT();
+  await carregarCotacoes();
+}
+
+// ── Garante linhas de aprovação para os níveis 1..nivel ──────────────
+async function garantirAprovacoesCOT(cotacaoId, nivel) {
+  const { data: existentes } = await db.from('compras_cotacoes_aprovacoes').select('nivel').eq('cotacao_id', cotacaoId);
+  const niveisExistentes = new Set((existentes || []).map(a => a.nivel));
+  const novas = [];
+  for (let n = 1; n <= nivel; n++) {
+    if (!niveisExistentes.has(n)) novas.push({ cotacao_id: cotacaoId, nivel: n, aprovador_nome: '—', status: 'Aguardando' });
+  }
+  if (novas.length) await db.from('compras_cotacoes_aprovacoes').insert(novas);
+}
+
+// ── Reset / edição ────────────────────────────────────────────────────
+function resetarFormCOT() {
+  $('cot-id-edicao').value = '';
+  $('cot-solicitacao').dataset.solicitacaoAtual = '';
+  $('cot-solicitacao').value = '';
+  $('cot-prazo').value = '';
+  $('cot-pagamento').value = '';
+  $('cot-frete').value = '';
+  $('cot-observacoes').value = '';
+  $('cot-status').value = 'Aberta';
+  _cotItensRef = [];
+  _cotFornecedoresForm = [];
+  _cotAprovacoesAtuais = [];
+  $('cot-itens-referencia').innerHTML = '';
+  renderFornecedoresCOT();
+  $('cot-aprovacoes-container').innerHTML = '';
+  $('cot-form-titulo').textContent = '📝 Nova Cotação';
+  $('btn-salvar-cot').textContent = '💾 Registrar Cotação';
+  $('btn-salvar-cot').style.background = '';
+  $('btn-cancelar-cot').style.display = 'none';
+  carregarSelectSolicitacoesCOT();
+}
+
+async function editarCotacao(id) {
+  const c = _cotCache.find(x => x.id === id);
+  if (!c) return;
+
+  $('cot-id-edicao').value = c.id;
+  $('cot-prazo').value = c.prazo_retorno || '';
+  $('cot-pagamento').value = c.condicao_pagamento || '';
+  $('cot-frete').value = c.frete || '';
+  $('cot-observacoes').value = c.observacoes || '';
+  $('cot-status').value = c.status || 'Aberta';
+
+  $('cot-solicitacao').dataset.solicitacaoAtual = c.solicitacao_id || '';
+  await carregarSelectSolicitacoesCOT();
+  $('cot-solicitacao').value = c.solicitacao_id || '';
+  await onSelecionarSolicitacaoCOT(true);
+
+  const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('*').eq('cotacao_id', id);
+  const idsForn = (fornecedores || []).map(f => f.id);
+  const { data: precos } = idsForn.length
+    ? await db.from('compras_cotacoes_precos').select('*').in('fornecedor_id', idsForn)
+    : { data: [] };
+
+  _cotFornecedoresForm = (fornecedores || []).map(f => {
+    const precosObj = {};
+    (precos || []).filter(p => p.fornecedor_id === f.id).forEach(p => { precosObj[p.solicitacao_item_id] = p.valor_unitario; });
+    return {
+      id: f.id, nome: f.nome || '', cnpj: f.cnpj || '', email: f.email || '',
+      contato_nome: f.contato_nome || '', link_site: f.link_site || '', precos: precosObj,
+    };
+  });
+  if (!_cotFornecedoresForm.length) adicionarFornecedorCOT();
+  renderFornecedoresCOT();
+
+  const idxVencedor = _cotFornecedoresForm.findIndex(f => f.id === c.vencedor_fornecedor_id);
+  if (idxVencedor >= 0) $('cot-vencedor').value = idxVencedor;
+  atualizarNivelAlcadaCOT();
+
+  await renderAprovacoesCOT(id);
+
+  $('cot-form-titulo').textContent = `✏️ Editando ${c.numero}`;
+  $('btn-salvar-cot').textContent = '💾 Salvar Alterações';
+  $('btn-salvar-cot').style.background = '#d97706';
+  $('btn-cancelar-cot').style.display = 'inline-block';
+  document.getElementById('cot-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function excluirCotacao(id, numero) {
+  if (!confirm(`Excluir a cotação ${numero}? Esta ação não pode ser desfeita.`)) return;
+  const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id').eq('cotacao_id', id);
+  const idsForn = (fornecedores || []).map(f => f.id);
+  if (idsForn.length) await db.from('compras_cotacoes_precos').delete().in('fornecedor_id', idsForn);
+  await db.from('compras_cotacoes_fornecedores').delete().eq('cotacao_id', id);
+  await db.from('compras_cotacoes_aprovacoes').delete().eq('cotacao_id', id);
+  await db.from('compras_cotacoes').delete().eq('id', id);
+  await carregarCotacoes();
+}
+
+// ── Aprovações ────────────────────────────────────────────────────────
+async function renderAprovacoesCOT(cotacaoId) {
+  const cont = $('cot-aprovacoes-container');
+  const cot = _cotCache.find(c => c.id === cotacaoId);
+  const nivelReq = cot?.nivel_alcada_requerido || 1;
+
+  const { data } = await db.from('compras_cotacoes_aprovacoes').select('*').eq('cotacao_id', cotacaoId).order('nivel');
+  _cotAprovacoesAtuais = data || [];
+
+  if (!_cotAprovacoesAtuais.length) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML = `
+    <div style="margin-top:18px;border-top:1px solid var(--gray-200);padding-top:14px;">
+      <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">✅ Aprovações (Nível de Alçada Requerido: ${nivelReq})</label>
+      ${_cotAprovacoesAtuais.map(a => `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;padding:8px 12px;background:var(--gray-50);border-radius:6px;">
+          <strong style="min-width:70px;">Nível ${a.nivel}</strong>
+          ${_badgeAprovacaoCOT(a.status)}
+          <span style="font-size:12px;color:var(--gray-500);">${escapeHTML(a.aprovador_nome || '—')}${a.data_decisao ? ' · ' + fmtDate(a.data_decisao) : ''}</span>
+          ${a.status === 'Aguardando' ? `
+            <div style="display:flex;gap:6px;margin-left:auto;">
+              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Aprovado')">✓ Aprovar</button>
+              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Rejeitado')">✕ Rejeitar</button>
+              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Dispensado')">— Dispensar</button>
+            </div>` : ''}
+        </div>`).join('')}
+    </div>`;
+}
+
+function _badgeAprovacaoCOT(status) {
+  const map = { 'Aguardando': 'tag-badge warning', 'Aprovado': 'tag-badge success', 'Rejeitado': 'tag-badge danger', 'Dispensado': 'tag-badge' };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status)}</span>`;
+}
+
+async function registrarDecisaoAprovacaoCOT(aprovacaoId, decisao) {
+  const nome = prompt('Nome do aprovador:');
+  if (!nome) return;
+
+  await db.from('compras_cotacoes_aprovacoes')
+    .update({ status: decisao, aprovador_nome: nome, data_decisao: hoje() })
+    .eq('id', aprovacaoId);
+
+  const aprov = _cotAprovacoesAtuais.find(a => a.id === aprovacaoId);
+  const cotacaoId = aprov?.cotacao_id;
+
+  const { data: todas } = await db.from('compras_cotacoes_aprovacoes').select('*').eq('cotacao_id', cotacaoId);
+  const todasDecididas = (todas || []).every(a => a.status !== 'Aguardando');
+  const algumaRejeitada = (todas || []).some(a => a.status === 'Rejeitado');
+
+  if (todasDecididas) {
+    const novoStatusCot = algumaRejeitada ? 'Rejeitada' : 'Aprovada';
+    const { data: cot } = await db.from('compras_cotacoes').select('solicitacao_id').eq('id', cotacaoId).single();
+    await db.from('compras_cotacoes').update({ status: novoStatusCot }).eq('id', cotacaoId);
+    if (cot?.solicitacao_id) await db.from('compras_solicitacoes').update({ status: novoStatusCot }).eq('id', cot.solicitacao_id);
+  }
+
+  await carregarCotacoes();
+  await renderAprovacoesCOT(cotacaoId);
+  const cAtual = _cotCache.find(c => c.id === cotacaoId);
+  if (cAtual) $('cot-status').value = cAtual.status;
+}
+
+// ── Listagem ──────────────────────────────────────────────────────────
+function _badgeStatusCOT(status) {
+  const map = {
+    'Aberta': 'tag-badge', 'Em Análise': 'tag-badge andamento', 'Aguard. Aprovação': 'tag-badge warning',
+    'Aprovada': 'tag-badge success', 'Rejeitada': 'tag-badge danger', 'OC Emitida': 'tag-badge semestral',
+  };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status || '—')}</span>`;
+}
+
+async function carregarCotacoes() {
+  const tbody = $('tbody-cotacoes');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_cotacoes')
+    .select('*, compras_solicitacoes(numero, descricao)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _cotCache = data || [];
+
+  const vencedorIds = _cotCache.map(c => c.vencedor_fornecedor_id).filter(Boolean);
+  let fornecedoresMap = {}, precosPorForn = {};
+  if (vencedorIds.length) {
+    const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id, nome').in('id', vencedorIds);
+    (fornecedores || []).forEach(f => fornecedoresMap[f.id] = f.nome);
+    const { data: precos } = await db.from('compras_cotacoes_precos').select('fornecedor_id, solicitacao_item_id, valor_unitario').in('fornecedor_id', vencedorIds);
+    (precos || []).forEach(p => { (precosPorForn[p.fornecedor_id] = precosPorForn[p.fornecedor_id] || []).push(p); });
+  }
+
+  const itemIds = [...new Set(Object.values(precosPorForn).flat().map(p => p.solicitacao_item_id))];
+  let qtdMap = {};
+  if (itemIds.length) {
+    const { data: itens } = await db.from('compras_solicitacoes_itens').select('id, quantidade').in('id', itemIds);
+    (itens || []).forEach(i => qtdMap[i.id] = i.quantidade);
+  }
+
+  _renderStatsCOT();
+
+  tbody.innerHTML = _cotCache.length ? _cotCache.map(c => {
+    const precos = precosPorForn[c.vencedor_fornecedor_id] || [];
+    const total = precos.reduce((acc, p) => acc + (p.valor_unitario || 0) * (qtdMap[p.solicitacao_item_id] || 0), 0);
+    const nomeVencedor = fornecedoresMap[c.vencedor_fornecedor_id] || '—';
+    return `
+      <tr>
+        <td><strong>${escapeHTML(c.numero)}</strong></td>
+        <td style="font-size:12px;color:var(--gray-500);">${escapeHTML(c.compras_solicitacoes?.numero || '—')}<br>${escapeHTML(c.compras_solicitacoes?.descricao || '')}</td>
+        <td>${fmtDate(c.prazo_retorno)}</td>
+        <td>${escapeHTML(nomeVencedor)}</td>
+        <td style="font-weight:700;">${total ? fmtMoney(total) : '—'}</td>
+        <td style="text-align:center;">${c.nivel_alcada_requerido || '—'}</td>
+        <td>${_badgeStatusCOT(c.status)}</td>
+        <td style="display:flex;gap:4px;">
+          <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarCotacao('${c.id}')">✏️ Editar</button>
+          <button class="btn-excluir" onclick="excluirCotacao('${c.id}','${escapeHTML(c.numero)}')">✕</button>
+        </td>
+      </tr>`;
+  }).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma cotação encontrada.</td></tr>';
+}
+
+function _renderStatsCOT() {
+  $('cot-stat-total').textContent = _cotCache.length;
+  $('cot-stat-analise').textContent = _cotCache.filter(c => c.status === 'Em Análise' || c.status === 'Aberta').length;
+  $('cot-stat-aguardando').textContent = _cotCache.filter(c => c.status === 'Aguard. Aprovação').length;
+  $('cot-stat-aprovadas').textContent = _cotCache.filter(c => c.status === 'Aprovada').length;
+}
+
+if ($('btn-salvar-cot')) {
+  $('btn-salvar-cot').addEventListener('click', salvarCotacao);
+}
