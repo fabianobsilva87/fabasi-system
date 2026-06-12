@@ -957,6 +957,22 @@ function emitirRelatorioPMOC(b64) {
     'verificacao-eletrica': 'Verificação Elétrica', 'verificacao-fluido': 'Verificação de Fluido',
     'teste-operacao': 'Teste de Operação', 'verificacao-ruidos': 'Verificação de Ruídos', 'limpeza-geral': 'Limpeza Geral',
   };
+  // ── Periodicidade de cada item do checklist (para agrupar no laudo) ──
+  const PERIODO_CHK = {
+    fil_01:'M', bio_01:'M', bio_02:'M', mec_01:'M', ger_01:'M', ger_02:'M', ger_03:'M', ger_04:'M', ger_05:'M',
+    beb_01:'M', beb_02:'M', beb_03:'M', beb_04:'M', clm_01:'M', clm_02:'M', clm_03:'M', clm_04:'M', clm_05:'M',
+    ven_01:'M', ven_02:'M', ven_03:'M',
+    fil_02:'T', bio_03:'T', ele_01:'T', ele_02:'T', mec_02:'T',
+    beb_05:'T', beb_06:'T', beb_07:'T', beb_08:'T', clm_06:'T', clm_07:'T', clm_08:'T', clm_09:'T',
+    ven_04:'T', ven_05:'T', ven_06:'T',
+    ref_01:'S', ref_02:'S', ele_03:'S', ele_04:'S', mec_03:'S', bio_04:'S', ins_01:'S',
+    beb_09:'S', beb_10:'S', beb_11:'S', beb_12:'S', clm_10:'S', clm_11:'S', clm_12:'S', clm_13:'S',
+    ven_07:'S', ven_08:'S',
+    ref_03:'A', mec_04:'A', mec_05:'A', ele_05:'A', ele_06:'A', bio_05:'A', ins_02:'A', ins_03:'A',
+    beb_13:'A', beb_14:'A', beb_15:'A', clm_14:'A', clm_15:'A', clm_16:'A', ven_09:'A', ven_10:'A',
+  };
+  const LABEL_PERIODO = { M:'🔧 Rotinas Mensais', T:'📅 Rotinas Trimestrais', S:'📆 Rotinas Semestrais', A:'📋 Rotinas Anuais' };
+
   const statusChk = {
     C:  '<span class="ok">✓ Conforme</span>',
     NC: '<span class="nok">✗ Não Conforme</span>',
@@ -965,9 +981,26 @@ function emitirRelatorioPMOC(b64) {
     OK:  '<span class="ok">✓ OK</span>',
     NOK: '<span class="nok">✗ NOK</span>',
   };
-  const chkRows = Object.entries(checklist).map(([k,v]) =>
-    `<tr><td>${labelChk[k]||k}</td><td style="text-align:center;">${statusChk[v]||v}</td></tr>`
-  ).join('');
+
+  // Agrupa os itens respondidos por periodicidade, na ordem M → T → S → A
+  const gruposChk = { M: [], T: [], S: [], A: [] };
+  Object.entries(checklist).forEach(([k,v]) => {
+    const periodo = PERIODO_CHK[k] || 'M'; // chaves legadas caem em "Mensal"
+    gruposChk[periodo].push(`<tr><td>${labelChk[k]||k}</td><td style="text-align:center;">${statusChk[v]||v}</td></tr>`);
+  });
+
+  const chkBlocos = ['M','T','S','A'].map(periodo => {
+    if (!gruposChk[periodo].length) return '';
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:10px;font-weight:700;color:#1a56db;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">${LABEL_PERIODO[periodo]}</div>
+        <table class="laudo-checklist-table">
+          <thead><tr><th>Item Verificado</th><th style="text-align:center;width:80px;">Status</th></tr></thead>
+          <tbody>${gruposChk[periodo].join('')}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+  const chkRows = Object.values(gruposChk).some(g => g.length) ? chkBlocos : '';
 
   const assinaturaTecnicoHTML = _assinaturaImg(lerAssinaturaURL(f,'assinatura_tecnico_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
   const assinaturaFiscalHTML  = _assinaturaImg(lerAssinaturaURL(f,'assinatura_fiscal_url','assinatura_fiscal'), 'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
@@ -1031,11 +1064,8 @@ function emitirRelatorioPMOC(b64) {
     </div>
     ${chkRows ? `
     <div class="laudo-section">
-      <div class="laudo-section-title">Checklist de Manutenção</div>
-      <table class="laudo-checklist-table">
-        <thead><tr><th>Item Verificado</th><th style="text-align:center;width:80px;">Status</th></tr></thead>
-        <tbody>${chkRows}</tbody>
-      </table>
+      <div class="laudo-section-title">Checklist de Manutenção — por Periodicidade</div>
+      ${chkRows}
     </div>` : ''}
     ${obsLimpa ? `
     <div class="laudo-section">
