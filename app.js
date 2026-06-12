@@ -574,7 +574,7 @@ function onEquipamentoSelecionado() {
 
 // ===================== COLABORADORES & FUNÇÕES =====================
 async function atualizarSelectColaboradores() {
-  const { data } = await db.from('colaboradores').select('id, nome, assinatura_url, assinatura_digital');
+  const { data } = await db.from('colaboradores').select('id, nome, assinatura_url, assinatura_digital, registro_classe');
   ['pmoc-tecnico','os-tecnico','osg-tecnico'].map($).filter(Boolean).forEach(sel => {
     sel.innerHTML = '<option value="">-- Selecione o Colaborador --</option>';
     (data || []).forEach(c => {
@@ -585,6 +585,18 @@ async function atualizarSelectColaboradores() {
       sel.appendChild(opt);
     });
   });
+
+  // Select do Responsável Técnico (RT) — apenas colaboradores com registro de classe
+  const selRT = $('pmoc-rt');
+  if (selRT) {
+    selRT.innerHTML = '<option value="">-- Nenhum (laudo sem RT) --</option>';
+    (data || []).filter(c => c.registro_classe).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${c.nome} — ${c.registro_classe}`;
+      selRT.appendChild(opt);
+    });
+  }
 }
 
 async function atualizarSelectFuncoes() {
@@ -614,13 +626,14 @@ async function carregarColaboradores() {
       <td>${c.cpf ? c.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4') : '—'}</td>
       <td>${escapeHTML(c.funcoes?.nome)}</td>
       <td>${c.data_contratacao ? fmtDate(c.data_contratacao) : '—'}</td>
+      <td>${c.registro_classe ? `<span class="tag-badge andamento">${escapeHTML(c.registro_classe)}</span>` : '<span style="color:#a0aec0;font-size:11px;">—</span>'}</td>
       <td>${badgeAssinatura}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarColaborador('${c.id}')">✏️ Editar</button>
         <button class="btn-excluir" onclick="excluirColaborador('${c.id}')">✕</button>
       </td>
     </tr>`;
-  }).join('') : '<tr><td colspan="6" class="td-loading">Sem registros.</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="td-loading">Sem registros.</td></tr>';
 }
 
 async function excluirColaborador(id) {
@@ -676,6 +689,7 @@ if ($('btn-salvar-colaborador')) {
       cpf:              cpf.replace(/\D/g,''),
       funcao_id:        $('colab-funcao')?.value || null,
       data_contratacao: $('colab-contratacao')?.value || null,
+      registro_classe:  $('colab-registro-classe')?.value.trim() || null,
       assinatura_url,
     };
 
@@ -745,6 +759,22 @@ if ($('btn-salvar-ficha')) {
     const { data: colab }     = await db.from('colaboradores').select('nome, assinatura_url, assinatura_digital').eq('id', tecnico_id).single();
     const { data: { user } }  = await db.auth.getUser();
 
+    // ── Responsável Técnico (RT) — opcional ──
+    const rtId = $('pmoc-rt')?.value || '';
+    let rt_nome = null, rt_registro = null, assinatura_rt_url = null;
+    if (rtId) {
+      const { data: rt } = await db.from('colaboradores')
+        .select('nome, assinatura_url, assinatura_digital, registro_classe')
+        .eq('id', rtId).single();
+      if (rt) {
+        rt_nome           = rt.nome;
+        rt_registro       = rt.registro_classe || null;
+        assinatura_rt_url = lerAssinaturaURL(rt, 'assinatura_url', 'assinatura_digital') || null;
+      }
+    }
+    meta_pmoc.rt_nome     = rt_nome;
+    meta_pmoc.rt_registro = rt_registro;
+
     const payload = {
       equipamento_id,
       tecnico_nome:         colab?.nome || 'Técnico',
@@ -753,6 +783,9 @@ if ($('btn-salvar-ficha')) {
       user_id:              user?.id,
       assinatura_tecnico_url: lerAssinaturaURL(colab,'assinatura_url','assinatura_digital') || null,
       assinatura_fiscal_url:  assinatura_fiscal_url || null,
+      rt_nome:              rt_nome,
+      rt_registro:          rt_registro,
+      assinatura_rt_url:    assinatura_rt_url,
     };
     if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
     if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
@@ -938,6 +971,13 @@ function emitirRelatorioPMOC(b64) {
 
   const assinaturaTecnicoHTML = _assinaturaImg(lerAssinaturaURL(f,'assinatura_tecnico_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
   const assinaturaFiscalHTML  = _assinaturaImg(lerAssinaturaURL(f,'assinatura_fiscal_url','assinatura_fiscal'), 'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;');
+
+  // ── Responsável Técnico (RT) — opcional ──
+  const rtNome     = f.rt_nome     || meta.rt_nome     || null;
+  const rtRegistro = f.rt_registro || meta.rt_registro || null;
+  const assinaturaRtHTML = rtNome
+    ? _assinaturaImg(f.assinatura_rt_url, 'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;')
+    : '';
   const urlValidacao = gerarUrlValidacao(f.id, 'pmoc');
   const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
   const codigoLaudo  = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
@@ -1005,7 +1045,7 @@ function emitirRelatorioPMOC(b64) {
     ${fotoHTML}
     <div class="laudo-section">
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
-        <div style="display:flex;gap:32px;align-items:flex-end;flex:1;">
+        <div style="display:flex;gap:24px;align-items:flex-end;flex:1;flex-wrap:wrap;">
           <div class="laudo-assinatura-box" style="min-width:160px;text-align:center;">
             ${assinaturaTecnicoHTML}
             <div class="laudo-assinatura-linha">${escapeHTML(f.tecnico_nome)}<br>Técnico Executor</div>
@@ -1014,6 +1054,11 @@ function emitirRelatorioPMOC(b64) {
             ${assinaturaFiscalHTML}
             <div class="laudo-assinatura-linha">${escapeHTML(fiscalNome)}<br>Fiscal / Validador do Serviço</div>
           </div>
+          ${rtNome ? `
+          <div class="laudo-assinatura-box" style="min-width:160px;text-align:center;">
+            ${assinaturaRtHTML}
+            <div class="laudo-assinatura-linha">${escapeHTML(rtNome)}<br>Responsável Técnico${rtRegistro ? ' — ' + escapeHTML(rtRegistro) : ''}</div>
+          </div>` : ''}
         </div>
         <div style="text-align:center;flex-shrink:0;">
           ${qrCodeHTML}
@@ -2009,6 +2054,7 @@ function resetarFormPMOC() {
   if ($('pmoc-data'))      $('pmoc-data').value       = '';
   if ($('pmoc-foto-antes'))  $('pmoc-foto-antes').value  = '';
   if ($('pmoc-foto-depois')) $('pmoc-foto-depois').value = '';
+  if ($('pmoc-rt'))          $('pmoc-rt').value          = '';
   const titulo = $('titulo-formulario-pmoc') || document.querySelector('#sub-pmoc-form h3');
   if (titulo) titulo.textContent = '📋 Novo Laudo PMOC';
   const btnSalvar = $('btn-salvar-ficha');

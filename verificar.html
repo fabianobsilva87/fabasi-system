@@ -175,17 +175,92 @@
         const freq       = meta.frequencia       || '—';
         const tipo_eq    = meta.tipo_equipamento || '—';
         const fiscalNome = meta.fiscal_nome      || '—';
+        const rtNome     = f.rt_nome     || meta.rt_nome     || null;
+        const rtRegistro = f.rt_registro || meta.rt_registro || null;
         const checklist  = meta.checklist        || {};
         const eq         = f.equipamentos        || {};
         const codigo     = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
 
         const labelChk = {
+          fil_01:'[FIL-01] Filtros de Ar (G4/F7/F9) — Higienização ou Substituição',
+          bio_01:'[BIO-01] Bandeja de Condensados — Limpeza e Pastilha Sanitizante',
+          bio_02:'[BIO-02] Rede de Drenagem — Desobstrução e Teste de Escoamento',
+          mec_01:'[MEC-01] Conjunto Ventilação — Ruídos, Coxins e Fixadores',
+          fil_02:'[FIL-02] Diferencial de Pressão de Filtros — Medição com Manômetro',
+          bio_03:'[BIO-03] Serpentinas — Limpeza Química com Produto Específico por Pressão',
+          ele_01:'[ELE-01] Medição de Corrente/Tensão dos Compressores e Motores',
+          ele_02:'[ELE-02] Reaperto Geral dos Bornes de Comando e Potência',
+          mec_02:'[MEC-02] Lubrificação de Rolamentos e Buchas do Motoventilador',
+          ref_01:'[REF-01] Verificação de Carga de Gás Refrigerante (Pressão de Alta/Baixa)',
+          ref_02:'[REF-02] Verificação de Vazamentos no Circuito Frigorífico (Detector de Gás)',
+          ele_03:'[ELE-03] Medição de Isolamento Elétrico (Megôhmetro) dos Motores',
+          ele_04:'[ELE-04] Teste dos Dispositivos de Proteção (Pressostatos e Termostatos)',
+          mec_03:'[MEC-03] Inspeção e Substituição de Correias e Polias (se aplicável)',
+          bio_04:'[BIO-04] Coleta de Amostra de Água para Análise Microbiológica',
+          ins_01:'[INS-01] Inspeção Estrutural — Suportes, Fixações e Isolamento Térmico das Linhas',
+          ref_03:'[REF-03] Substituição de Gás Refrigerante (se necessário) e Registro ART/Boletim',
+          mec_04:'[MEC-04] Substituição de Rolamentos, Buchas e Selos Mecânicos Desgastados',
+          mec_05:'[MEC-05] Limpeza e Inspeção do Compressor — Verificação de Óleo e Visor',
+          ele_05:'[ELE-05] Revisão de Capacitores e Contatores com Desgaste Visível',
+          ele_06:'[ELE-06] Termografia Elétrica do Painel de Comando e Cabos de Alimentação',
+          bio_05:'[BIO-05] Higienização Completa e Laudos Microbiológicos do Sistema de Ar',
+          ins_02:'[INS-02] Revisão Geral do PMOC — Atualização de Documentação e ART',
+          ins_03:'[INS-03] Análise de Desempenho — Delta T Evaporador, COP e Eficiência do Sistema',
+          beb_01:'[BEB-01] Limpeza Externa — Gabinete, Torneiras e Bica (produto neutro)',
+          beb_02:'[BEB-02] Verificação do Funcionamento do Sistema de Refrigeração (temperatura adequada)',
+          beb_03:'[BEB-03] Inspeção Visual de Vazamentos nas Conexões e Tubulações',
+          beb_04:'[BEB-04] Verificação e Higienização da Bandeja Coletora',
+          beb_05:'[BEB-05] Higienização Interna Completa com Solução Sanitizante (hipoclorito)',
+          beb_06:'[BEB-06] Limpeza e Verificação do Reservatório Interno de Água',
+          beb_07:'[BEB-07] Verificação de Carga de Gás / Funcionamento do Compressor',
+          beb_08:'[BEB-08] Verificação de Validade e Condição do Elemento Filtrante',
+          beb_09:'[BEB-09] Substituição do Elemento Filtrante (carvão ativado / sedimentos)',
+          beb_10:'[BEB-10] Análise Microbiológica da Água (coleta para laudo laboratorial)',
+          beb_11:'[BEB-11] Verificação e Regulagem da Temperatura de Saída da Água',
+          beb_12:'[BEB-12] Aplicação de Lacre e Registro de Sanitização com Número de Protocolo',
+          beb_13:'[BEB-13] Revisão Completa do Sistema de Refrigeração (compressor, termostato, serpentina)',
+          beb_14:'[BEB-14] Substituição de Vedações, O-rings e Torneiras com Desgaste Aparente',
+          beb_15:'[BEB-15] Laudo Sanitário Anual — Documentação e Registro em Livro de Controle ANVISA',
+          clm_01:"[CLM-01] Limpeza do Reservatório de Água — Remoção de Lodo e Calcário",
+          clm_02:'[CLM-02] Limpeza e Inspeção do Painel Evaporativo (sem danificar as células)',
+          clm_03:'[CLM-03] Verificação do Nível e Funcionamento da Boia de Controle de Água',
+          clm_04:"[CLM-04] Verificação da Bomba d'Água — Funcionamento e Fluxo de Distribuição",
+          clm_05:'[CLM-05] Inspeção do Ventilador Axial — Ruídos, Vibração e Fixação da Hélice',
+          clm_06:'[CLM-06] Limpeza Química do Reservatório — Descalcificação com Produto Específico',
+          clm_07:'[CLM-07] Verificação e Limpeza dos Distribuidores de Água (chuveiros/aspersores)',
+          clm_08:'[CLM-08] Medição de Corrente do Motor do Ventilador e da Bomba (amperagem)',
+          clm_09:'[CLM-09] Lubrificação de Rolamentos do Motor e da Bomba',
+          clm_10:'[CLM-10] Inspeção do Estado do Painel Evaporativo — Avaliação para Substituição',
+          clm_11:'[CLM-11] Análise Microbiológica da Água do Reservatório (Controle de Legionela)',
+          clm_12:'[CLM-12] Verificação do Sistema Elétrico — Quadro, Contactores e Proteções',
+          clm_13:'[CLM-13] Tratamento Biocida da Água — Aplicação de Produto Antiincrustante',
+          clm_14:'[CLM-14] Substituição do Painel Evaporativo (celulose ou polipropileno)',
+          clm_15:'[CLM-15] Revisão Geral da Bomba — Impelidor, Eixo e Vedação Mecânica',
+          clm_16:'[CLM-16] Laudo e Documentação Técnica Anual — Relatório de Controle de Qualidade da Água',
+          ven_01:'[VEN-01] Limpeza das Pás / Hélice e Grelha de Proteção (remoção de poeira acumulada)',
+          ven_02:'[VEN-02] Verificação de Ruídos Anormais, Vibração Excessiva e Folgas Mecânicas',
+          ven_03:'[VEN-03] Verificação de Fixação — Parafusos, Bucins e Suportes',
+          ven_04:'[VEN-04] Lubrificação dos Rolamentos / Buchas com Graxa Adequada',
+          ven_05:'[VEN-05] Medição de Corrente do Motor (amperagem nominal x real)',
+          ven_06:'[VEN-06] Verificação e Reaperto das Conexões Elétricas no Quadro de Comando',
+          ven_07:'[VEN-07] Medição de Isolamento Elétrico (Megôhmetro) do Motor',
+          ven_08:'[VEN-08] Análise de Vibração com Acelerômetro — Verificação de Desbalanceamento',
+          ven_09:'[VEN-09] Substituição de Rolamentos e Buchas com Desgaste Aparente',
+          ven_10:'[VEN-10] Balanceamento Dinâmico das Pás / Hélice (se aplicável)',
+          ger_01:'[GER-01] Inspeção Visual Geral do Equipamento — Estado de Conservação e Integridade',
+          ger_02:'[GER-02] Limpeza Geral — Remoção de Poeira, Oxidação e Sujidades',
+          ger_03:'[GER-03] Verificação de Fixação — Suportes, Parafusos e Estrutura',
+          ger_04:'[GER-04] Verificação Elétrica — Conexões, Chave Geral e Proteções',
+          ger_05:'[GER-05] Teste de Funcionamento e Verificação de Parâmetros Operacionais',
           'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora',
           'limpeza-condensadora':'Limpeza Condensadora','verificacao-dreno':'Verificação de Dreno',
           'verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
           'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos','limpeza-geral':'Limpeza Geral',
         };
-        const statusChk = { OK:'<span class="ok">✓ OK</span>', NOK:'<span class="nok">✗ NOK</span>', NA:'<span class="na">N/A</span>' };
+        const statusChk = {
+          C:'<span class="ok">✓ Conforme</span>', NC:'<span class="nok">✗ Não Conforme</span>', NA:'<span class="na">N/A</span>',
+          OK:'<span class="ok">✓ OK</span>', NOK:'<span class="nok">✗ NOK</span>',
+        };
         const chkRows = Object.entries(checklist).map(([k,v]) =>
           `<tr><td>${escapeHTML(labelChk[k]||k)}</td><td style="text-align:center;">${statusChk[v]||escapeHTML(v)}</td></tr>`
         ).join('');
@@ -208,6 +283,7 @@
             <div class="field"><label>Data da Inspeção</label><span>${escapeHTML(dataInsp)}</span></div>
             <div class="field"><label>Frequência</label><span>${escapeHTML(freq)}</span></div>
             <div class="field"><label>Fiscal / Validador</label><span>${escapeHTML(fiscalNome)}</span></div>
+            ${rtNome ? `<div class="field"><label>Responsável Técnico (RT)</label><span>${escapeHTML(rtNome)}${rtRegistro ? ' — ' + escapeHTML(rtRegistro) : ''}</span></div>` : ''}
           </div>
           ${chkRows ? `
           <hr class="divider">
@@ -221,6 +297,7 @@
           <div class="assinatura-row">
             <div class="assinatura-box">${assinaturaHTML(lerAssinatura(f,'assinatura_tecnico_url','assinatura_digital'))}<div class="linha">${escapeHTML(f.tecnico_nome)}<br>Técnico Executor</div></div>
             <div class="assinatura-box">${assinaturaHTML(lerAssinatura(f,'assinatura_fiscal_url','assinatura_fiscal'))}<div class="linha">${escapeHTML(fiscalNome)}<br>Fiscal / Validador</div></div>
+            ${rtNome ? `<div class="assinatura-box">${assinaturaHTML(f.assinatura_rt_url)}<div class="linha">${escapeHTML(rtNome)}<br>Responsável Técnico${rtRegistro ? ' — ' + escapeHTML(rtRegistro) : ''}</div></div>` : ''}
           </div>`;
 
       // ════════════════════════ OS ════════════════════════
