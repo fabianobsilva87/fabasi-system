@@ -1870,7 +1870,7 @@ if ($('btn-cancelar-edicao-osg')) {
 
 // =====================================================================
 //  MÓDULO DE COMPRAS — Solicitações de Compra/Serviço (SC/SS)
-//  Tabelas: compras_solicitacoes, compras_solicitacao_itens
+//  Tabelas: compras_solicitacoes, compras_solicitacoes_itens
 // =====================================================================
 
 let _scCache = [];
@@ -1885,7 +1885,7 @@ function adicionarItemSC(desc = '', qtd = 1, unidade = 'UN') {
   tr.id = rid;
   tr.innerHTML = `
     <td><input type="text" class="form-input-style sc-item-desc" value="${escapeHTML(desc)}" placeholder="Descrição do item/serviço"></td>
-    <td><input type="number" class="form-input-style sc-item-qtd" value="${Number(qtd) || 1}" min="0.01" step="0.01" style="width:90px;"></td>
+    <td><input type="number" class="form-input-style sc-item-qtd" value="${Number(qtd) || 1}" min="1" step="1" style="width:90px;"></td>
     <td><input type="text" class="form-input-style sc-item-unid" value="${escapeHTML(unidade) === '—' ? 'UN' : escapeHTML(unidade)}" style="width:70px;"></td>
     <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
   tbody.appendChild(tr);
@@ -1893,11 +1893,10 @@ function adicionarItemSC(desc = '', qtd = 1, unidade = 'UN') {
 
 function coletarItensSC() {
   const linhas = [...document.querySelectorAll('#sc-itens-tbody tr')];
-  return linhas.map((tr, idx) => ({
+  return linhas.map((tr) => ({
     descricao: tr.querySelector('.sc-item-desc').value.trim(),
-    quantidade: parseFloat(tr.querySelector('.sc-item-qtd').value) || 1,
+    quantidade: parseInt(tr.querySelector('.sc-item-qtd').value, 10) || 1,
     unidade: tr.querySelector('.sc-item-unid').value.trim() || 'UN',
-    ordem: idx,
   })).filter(i => i.descricao);
 }
 
@@ -1949,7 +1948,7 @@ async function salvarSolicitacaoCompra() {
     prioridade,
     status,
     justificativa: justifica || null,
-    data_solicitacao: data,
+    data_necessaria: data,
     solicitante_id: user?.id || null,
   };
 
@@ -1959,7 +1958,7 @@ async function salvarSolicitacaoCompra() {
     const { error } = await db.from('compras_solicitacoes').update(payload).eq('id', idEdicao);
     if (error) { msgForm('msg-sc', '❌ Erro ao atualizar: ' + error.message, 'red'); return; }
     // Remove itens antigos e recria (forma mais simples e segura)
-    await db.from('compras_solicitacao_itens').delete().eq('solicitacao_id', idEdicao);
+    await db.from('compras_solicitacoes_itens').delete().eq('solicitacao_id', idEdicao);
   } else {
     payload.numero = await gerarNumeroSolicitacao(tipo);
     const { data: nova, error } = await db.from('compras_solicitacoes').insert(payload).select('id').single();
@@ -1968,7 +1967,7 @@ async function salvarSolicitacaoCompra() {
   }
 
   const itensPayload = itens.map(i => ({ ...i, solicitacao_id: solicitacaoId }));
-  const { error: errItens } = await db.from('compras_solicitacao_itens').insert(itensPayload);
+  const { error: errItens } = await db.from('compras_solicitacoes_itens').insert(itensPayload);
   if (errItens) { msgForm('msg-sc', '⚠️ Solicitação salva, mas houve erro nos itens: ' + errItens.message, 'red'); }
   else { msgForm('msg-sc', idEdicao ? '✅ Solicitação atualizada com sucesso!' : '✅ Solicitação registrada com sucesso!', 'green'); }
 
@@ -2004,11 +2003,11 @@ function editarSolicitacaoCompra(id) {
   $('sc-justificativa').value = s.justificativa || '';
   $('sc-prioridade').value = s.prioridade || 'Normal';
   $('sc-status').value = s.status || 'Rascunho';
-  $('sc-data').value = s.data_solicitacao || hoje();
+  $('sc-data').value = s.data_necessaria || hoje();
 
   $('sc-itens-tbody').innerHTML = '';
-  (s.compras_solicitacao_itens || []).forEach(i => adicionarItemSC(i.descricao, i.quantidade, i.unidade));
-  if (!(s.compras_solicitacao_itens || []).length) adicionarItemSC();
+  (s.compras_solicitacoes_itens || []).forEach(i => adicionarItemSC(i.descricao, i.quantidade, i.unidade));
+  if (!(s.compras_solicitacoes_itens || []).length) adicionarItemSC();
 
   $('sc-form-titulo').textContent = `✏️ Editando ${s.numero}`;
   $('btn-salvar-sc').textContent = '💾 Salvar Alterações';
@@ -2020,7 +2019,7 @@ function editarSolicitacaoCompra(id) {
 
 async function excluirSolicitacaoCompra(id, numero) {
   if (!confirm(`Excluir a solicitação ${numero}? Esta ação não pode ser desfeita.`)) return;
-  await db.from('compras_solicitacao_itens').delete().eq('solicitacao_id', id);
+  await db.from('compras_solicitacoes_itens').delete().eq('solicitacao_id', id);
   await db.from('compras_solicitacoes').delete().eq('id', id);
   await carregarSolicitacoesCompra();
 }
@@ -2051,7 +2050,7 @@ async function carregarSolicitacoesCompra() {
 
   const { data, error } = await db
     .from('compras_solicitacoes')
-    .select('*, compras_solicitacao_itens(*), profiles(nome, email)')
+    .select('*, compras_solicitacoes_itens(*), profiles(nome, email)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -2098,7 +2097,7 @@ function filtrarSolicitacoesCompra() {
       <td style="color:var(--gray-500);">${escapeHTML(s.profiles?.nome || '—')}</td>
       <td>${_badgePrioridadeSC(s.prioridade)}</td>
       <td>${_badgeStatusSC(s.status)}</td>
-      <td>${fmtDate(s.data_solicitacao)}</td>
+      <td>${fmtDate(s.data_necessaria)}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarSolicitacaoCompra('${s.id}')">✏️ Editar</button>
         <button class="btn-excluir" onclick="excluirSolicitacaoCompra('${s.id}','${escapeHTML(s.numero)}')">✕</button>
