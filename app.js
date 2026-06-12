@@ -581,7 +581,7 @@ async function atualizarSelectColaboradores() {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = c.nome;
-      opt.dataset.assinaturaUrl = c.assinatura_url || '';
+      opt.dataset.assinatura = lerAssinaturaURL(c, 'assinatura_url', 'assinatura_digital') || '';
       sel.appendChild(opt);
     });
   });
