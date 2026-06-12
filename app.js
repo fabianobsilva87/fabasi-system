@@ -740,7 +740,8 @@ if ($('btn-salvar-ficha')) {
       assinatura_fiscal_url = await uploadAssinatura(blob, 'fiscal', `fiscal_${Date.now()}`);
     }
 
-    const foto_url = await uploadFoto($('pmoc-foto')?.files[0], 'pmoc', 'msg-ficha');
+    const foto_antes_url  = await uploadFoto($('pmoc-foto-antes')?.files[0],  'pmoc/antes',  'msg-ficha');
+    const foto_depois_url = await uploadFoto($('pmoc-foto-depois')?.files[0], 'pmoc/depois', 'msg-ficha');
     const { data: colab }     = await db.from('colaboradores').select('nome, assinatura_url, assinatura_digital').eq('id', tecnico_id).single();
     const { data: { user } }  = await db.auth.getUser();
 
@@ -753,7 +754,8 @@ if ($('btn-salvar-ficha')) {
       assinatura_tecnico_url: lerAssinaturaURL(colab,'assinatura_url','assinatura_digital') || null,
       assinatura_fiscal_url:  assinatura_fiscal_url || null,
     };
-    if (foto_url) payload.foto_url = foto_url;
+    if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
+    if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
 
     const idEdicao = $('pmoc-id-edicao')?.value;
     const { error } = idEdicao
@@ -939,9 +941,22 @@ function emitirRelatorioPMOC(b64) {
   const urlValidacao = gerarUrlValidacao(f.id, 'pmoc');
   const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
   const codigoLaudo  = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
-  const fotoHTML     = f.foto_url
+  const fotoHTML     = (f.foto_antes_url || f.foto_depois_url) ? `
+    <div class="laudo-section">
+      <div class="laudo-section-title">Evidência Fotográfica — Antes / Depois</div>
+      <div class="laudo-grid">
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
+          ${f.foto_antes_url ? `<img src="${f.foto_antes_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
+          ${f.foto_depois_url ? `<img src="${f.foto_depois_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+      </div>
+    </div>` : (f.foto_url
     ? `<div class="laudo-section"><div class="laudo-section-title">Evidência Fotográfica</div><img src="${f.foto_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;"></div>`
-    : '';
+    : '');
 
   const html = `
   <div class="laudo-wrapper">
@@ -1059,7 +1074,20 @@ function emitirRelatorioOS(os) {
       <div class="laudo-section-title">Diagnóstico Técnico / Ações Executadas</div>
       <p style="font-size:12px;line-height:1.7;min-height:60px;">${escapeHTML(os.laudo_tecnico || 'Não informado.')}</p>
     </div>
-    ${os.foto_url ? `<div class="laudo-section"><div class="laudo-section-title">Evidência Fotográfica</div><img src="${os.foto_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;"></div>` : ''}
+    ${(os.foto_antes_url || os.foto_depois_url) ? `
+    <div class="laudo-section">
+      <div class="laudo-section-title">Evidência Fotográfica — Antes / Depois</div>
+      <div class="laudo-grid">
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
+          ${os.foto_antes_url ? `<img src="${os.foto_antes_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
+          ${os.foto_depois_url ? `<img src="${os.foto_depois_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+      </div>
+    </div>` : (os.foto_url ? `<div class="laudo-section"><div class="laudo-section-title">Evidência Fotográfica</div><img src="${os.foto_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;"></div>` : '')}
     <div class="laudo-section">
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
         <div style="flex:1;">
@@ -1086,6 +1114,8 @@ function emitirRelatorioOS(os) {
 // ===================== ORDENS DE SERVIÇO =====================
 if ($('btn-salvar-os')) {
   $('btn-salvar-os').addEventListener('click', async () => {
+    const foto_antes_url  = await uploadFoto($('os-foto-antes')?.files[0],  'os/antes',  'msg-os');
+    const foto_depois_url = await uploadFoto($('os-foto-depois')?.files[0], 'os/depois', 'msg-os');
     const payload = {
       equipamento_id:   $('os-equipamento').value,
       colaborador_id:   $('os-tecnico').value,
@@ -1094,11 +1124,17 @@ if ($('btn-salvar-os')) {
       descricao_defeito: $('os-defeito').value.trim(),
       laudo_tecnico:    $('os-laudo').value.trim(),
     };
+    if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
+    if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
     const idEd = $('os-id-edicao').value;
     const { error } = idEd
       ? await db.from('ordens_servico').update(payload).eq('id', idEd)
       : await db.from('ordens_servico').insert([payload]);
-    if (!error) { resetarFormOS(); carregarOrdensServico(); carregarCentralUnificadaOS(); }
+    if (!error) {
+      if ($('os-foto-antes'))  $('os-foto-antes').value  = '';
+      if ($('os-foto-depois')) $('os-foto-depois').value = '';
+      resetarFormOS(); carregarOrdensServico(); carregarCentralUnificadaOS();
+    }
   });
 }
 
@@ -1875,6 +1911,8 @@ function resetarFormPMOC() {
   if ($('pmoc-id-edicao')) $('pmoc-id-edicao').value = '';
   if ($('pmoc-obs'))       $('pmoc-obs').value       = '';
   if ($('pmoc-data'))      $('pmoc-data').value       = '';
+  if ($('pmoc-foto-antes'))  $('pmoc-foto-antes').value  = '';
+  if ($('pmoc-foto-depois')) $('pmoc-foto-depois').value = '';
   const titulo = $('titulo-formulario-pmoc') || document.querySelector('#sub-pmoc-form h3');
   if (titulo) titulo.textContent = '📋 Novo Laudo PMOC';
   const btnSalvar = $('btn-salvar-ficha');
