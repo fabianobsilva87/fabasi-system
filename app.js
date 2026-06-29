@@ -2194,28 +2194,60 @@ async function _buscarCatalogo(termo) {
 
 // ── Mostra dropdown de resultados abaixo do input ───────────────────
 function _mostrarDropdownCatalogo(inputEl, resultados, onSelect) {
-  let dd = document.getElementById('cat-dropdown-' + inputEl.id);
+  // Reutiliza ou cria o container do dropdown — ancorado no <td> pai
+  const tdPai = inputEl.closest('td') || inputEl.parentElement;
+  const ddId  = 'cat-dd-' + inputEl.id;
+  let dd = document.getElementById(ddId);
   if (!dd) {
     dd = document.createElement('div');
-    dd.id = 'cat-dropdown-' + inputEl.id;
-    dd.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #cbd5e0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;min-width:320px;';
-    inputEl.parentElement.style.position = 'relative';
-    inputEl.parentElement.appendChild(dd);
+    dd.id = ddId;
+    dd.style.cssText = [
+      'position:absolute;top:100%;left:0;right:0;z-index:9999;',
+      'background:#fff;border:1px solid #cbd5e0;border-radius:6px;',
+      'box-shadow:0 4px 16px rgba(0,0,0,.14);max-height:240px;overflow-y:auto;',
+      'min-width:280px;'
+    ].join('');
+    tdPai.style.position = 'relative';
+    tdPai.appendChild(dd);
   }
-  if (!resultados.length) { dd.innerHTML = ''; dd.style.display = 'none'; return; }
+
+  // Caso sem resultados
+  if (!resultados.length || (resultados.length === 1 && resultados[0]._vazio)) {
+    dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#718096;">Nenhum item encontrado no catálogo.</div>';
+    dd.style.display = 'block';
+    return;
+  }
+
   dd.style.display = 'block';
-  dd.innerHTML = resultados.map(r => `
-    <div class="cat-dd-item" data-id="${r.id}" data-desc="${escapeHTML(r.descricao)}"
-         data-unid="${r.unidade_id}" data-sigla="${escapeHTML(r.compras_unidades_medida?.sigla || 'UN')}"
-         style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:13px;"
-         onmousedown="event.preventDefault()">
-      <strong>${escapeHTML(r.codigo)}</strong>
-      <span style="margin-left:6px;">${escapeHTML(r.descricao)}</span>
-      <span style="float:right;font-size:11px;color:#718096;">${escapeHTML(r.compras_unidades_medida?.sigla || '')} · ${escapeHTML(r.grupo)}</span>
-    </div>`).join('');
+  dd.innerHTML = resultados
+    .filter(r => !r._vazio)
+    .map(r => {
+      const sigla = r.compras_unidades_medida?.sigla || '';
+      return `<div class="cat-dd-item"
+        data-id="${r.id}"
+        data-desc="${escapeHTML(r.descricao)}"
+        data-unid="${r.unidade_id || ''}"
+        data-sigla="${escapeHTML(sigla)}"
+        style="padding:8px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;"
+        onmousedown="event.preventDefault()">
+        <span>
+          <strong style="font-family:monospace;font-size:11px;color:#4a5568;">${escapeHTML(r.codigo)}</strong>
+          <span style="margin-left:8px;">${escapeHTML(r.descricao)}</span>
+        </span>
+        <span style="flex-shrink:0;font-size:11px;color:#718096;background:#f7fafc;padding:2px 6px;border-radius:4px;">
+          ${escapeHTML(sigla)} · ${escapeHTML(r.grupo)}
+        </span>
+      </div>`;
+    }).join('');
+
   dd.querySelectorAll('.cat-dd-item').forEach(el => {
     el.addEventListener('click', () => {
-      onSelect({ id: el.dataset.id, descricao: el.dataset.desc, unidade_id: el.dataset.unid, sigla: el.dataset.sigla });
+      onSelect({
+        id:         el.dataset.id,
+        descricao:  el.dataset.desc,
+        unidade_id: el.dataset.unid,
+        sigla:      el.dataset.sigla,
+      });
       dd.style.display = 'none';
     });
     el.addEventListener('mouseover', () => el.style.background = '#f0f4ff');
@@ -2224,9 +2256,66 @@ function _mostrarDropdownCatalogo(inputEl, resultados, onSelect) {
 }
 
 function _fecharDropdownsCatalogo() {
-  document.querySelectorAll('[id^="cat-dropdown-"]').forEach(d => { d.style.display = 'none'; });
+  document.querySelectorAll('[id^="cat-dd-"]').forEach(d => { d.style.display = 'none'; });
 }
 document.addEventListener('click', _fecharDropdownsCatalogo);
+
+// ── Função central de bind do autocomplete (usada por SC e PD) ───────
+// prefixo: 'sc' para Solicitações, 'pd' para Pré-Demandas
+function _bindAutocompleteCatalogo(inp, tr, prefixo) {
+  // Prefixo determina as classes dos hidden inputs
+  const clsCatId  = prefixo === 'pd' ? '.pd-item-cat-id'  : '.sc-item-cat-id';
+  const clsUnidId = prefixo === 'pd' ? '.pd-item-unid-id' : '.sc-item-unid-id';
+  const clsSigla  = prefixo === 'pd' ? '.pd-item-sigla'   : '.sc-item-sigla';
+
+  let _debounce = null;
+
+  inp.addEventListener('input', () => {
+    // Ao digitar, remove vínculo anterior
+    const catEl  = tr.querySelector(clsCatId);
+    const unidEl = tr.querySelector(clsUnidId);
+    const siglaEl = tr.querySelector(clsSigla);
+    if (catEl)  catEl.value  = '';
+    if (unidEl) unidEl.value = '';
+    if (siglaEl) siglaEl.value = '';
+    inp.style.borderColor = '';
+    inp.style.background  = '';
+    tr.querySelectorAll('small.cat-aviso').forEach(s => s.remove());
+
+    clearTimeout(_debounce);
+    const termo = inp.value.trim();
+    if (termo.length < 2) {
+      _fecharDropdownsCatalogo();
+      return;
+    }
+    _debounce = setTimeout(async () => {
+      const resultados = await _buscarCatalogo(termo);
+      if (!resultados.length) {
+        // Mostra mensagem de "nenhum resultado" no dropdown
+        _mostrarDropdownCatalogo(inp, [{ _vazio: true }], () => {});
+        return;
+      }
+      _mostrarDropdownCatalogo(inp, resultados, (item) => {
+        inp.value = item.descricao;
+        if (catEl)  catEl.value  = item.id;
+        if (unidEl) unidEl.value = item.unidade_id;
+        if (siglaEl) siglaEl.value = item.sigla;
+        inp.style.borderColor = '#48bb78';
+        inp.style.background  = '#f0fff4';
+        tr.querySelectorAll('small.cat-aviso').forEach(s => s.remove());
+      });
+    }, 280);
+  });
+
+  inp.addEventListener('focus', () => {
+    const termo = inp.value.trim();
+    if (termo.length >= 2) inp.dispatchEvent(new Event('input'));
+  });
+
+  inp.addEventListener('blur', () => {
+    setTimeout(_fecharDropdownsCatalogo, 150);
+  });
+}
 
 // ── Linhas dinâmicas de itens no formulário (com catálogo obrigatório) ──
 function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', catalogoDesc = '') {
@@ -2255,41 +2344,11 @@ function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', cata
     <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
   tbody.appendChild(tr);
 
-  // Bind autocomplete no input de descrição
-  const inp = document.getElementById(inpId);
-  if (!inp) return;
-
-  let _debounce = null;
-  inp.addEventListener('input', () => {
-    // Ao digitar, limpa o vínculo do catálogo (obriga nova seleção)
-    tr.querySelector('.sc-item-cat-id').value = '';
-    tr.querySelector('.sc-item-unid-id').value = '';
-    tr.querySelector('.sc-item-sigla').value = '';
-    inp.style.borderColor = '';
-    inp.style.background  = '';
-    const aviso = tr.querySelector('small');
-    if (aviso) aviso.remove();
-
-    clearTimeout(_debounce);
-    _debounce = setTimeout(async () => {
-      const resultados = await _buscarCatalogo(inp.value.trim());
-      _mostrarDropdownCatalogo(inp, resultados, (item) => {
-        inp.value = item.descricao;
-        tr.querySelector('.sc-item-cat-id').value  = item.id;
-        tr.querySelector('.sc-item-unid-id').value = item.unidade_id;
-        tr.querySelector('.sc-item-sigla').value   = item.sigla;
-        inp.style.borderColor = '#48bb78';
-        inp.style.background  = '#f0fff4';
-        // Remove aviso se ainda existir
-        tr.querySelectorAll('small').forEach(s => s.remove());
-      });
-    }, 280);
-  });
-  inp.addEventListener('focus', () => {
-    if (inp.value.length >= 2) inp.dispatchEvent(new Event('input'));
-  });
-  inp.addEventListener('blur', () => {
-    setTimeout(() => _fecharDropdownsCatalogo(), 150);
+  // requestAnimationFrame — garante que o tr está no DOM antes do bind
+  requestAnimationFrame(() => {
+    const inp = tr.querySelector('.sc-item-desc');
+    if (!inp) return;
+    _bindAutocompleteCatalogo(inp, tr);
   });
 }
 
@@ -3516,30 +3575,11 @@ function adicionarItemPD(desc = '', qtd = 1, unidade = '', catalogoId = '') {
     <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
   tbody.appendChild(tr);
 
-  const inp = document.getElementById(inpId);
-  if (!inp) return;
-  let _db = null;
-  inp.addEventListener('input', () => {
-    tr.querySelector('.pd-item-cat-id').value = '';
-    tr.querySelector('.pd-item-unid-id').value = '';
-    tr.querySelector('.pd-item-sigla').value  = '';
-    inp.style.borderColor = '';
-    inp.style.background  = '';
-    clearTimeout(_db);
-    _db = setTimeout(async () => {
-      const resultados = await _buscarCatalogo(inp.value.trim());
-      _mostrarDropdownCatalogo(inp, resultados, (item) => {
-        inp.value = item.descricao;
-        tr.querySelector('.pd-item-cat-id').value  = item.id;
-        tr.querySelector('.pd-item-unid-id').value = item.unidade_id;
-        tr.querySelector('.pd-item-sigla').value   = item.sigla;
-        inp.style.borderColor = '#48bb78';
-        inp.style.background  = '#f0fff4';
-      });
-    }, 280);
+  requestAnimationFrame(() => {
+    const inp = tr.querySelector('.pd-item-desc');
+    if (!inp) return;
+    _bindAutocompleteCatalogo(inp, tr, 'pd');
   });
-  inp.addEventListener('focus', () => { if (inp.value.length >= 2) inp.dispatchEvent(new Event('input')); });
-  inp.addEventListener('blur',  () => { setTimeout(() => _fecharDropdownsCatalogo(), 150); });
 }
 
 function coletarItensPD() {
