@@ -2177,31 +2177,150 @@ if ($('btn-cancelar-edicao-osg')) {
 //  Tabelas: compras_solicitacoes, compras_solicitacoes_itens
 // =====================================================================
 
-let _scCache = [];
-let _scItemSeq = 0;
+let _scCache    = [];
+let _scItemSeq  = 0;
 
-// ── Linhas dinâmicas de itens no formulário ─────────────────────────
-function adicionarItemSC(desc = '', qtd = 1, unidade = 'UN') {
+// ── Autocomplete: busca no catálogo enquanto o usuário digita ────────
+async function _buscarCatalogo(termo) {
+  if (!termo || termo.length < 2) return [];
+  const { data } = await db.from('compras_catalogo_itens')
+    .select('id, codigo, descricao, grupo, unidade_id, compras_unidades_medida(sigla)')
+    .eq('ativo', true)
+    .ilike('descricao', `%${termo}%`)
+    .order('descricao')
+    .limit(12);
+  return data || [];
+}
+
+// ── Mostra dropdown de resultados abaixo do input ───────────────────
+function _mostrarDropdownCatalogo(inputEl, resultados, onSelect) {
+  let dd = document.getElementById('cat-dropdown-' + inputEl.id);
+  if (!dd) {
+    dd = document.createElement('div');
+    dd.id = 'cat-dropdown-' + inputEl.id;
+    dd.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #cbd5e0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;min-width:320px;';
+    inputEl.parentElement.style.position = 'relative';
+    inputEl.parentElement.appendChild(dd);
+  }
+  if (!resultados.length) { dd.innerHTML = ''; dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = resultados.map(r => `
+    <div class="cat-dd-item" data-id="${r.id}" data-desc="${escapeHTML(r.descricao)}"
+         data-unid="${r.unidade_id}" data-sigla="${escapeHTML(r.compras_unidades_medida?.sigla || 'UN')}"
+         style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:13px;"
+         onmousedown="event.preventDefault()">
+      <strong>${escapeHTML(r.codigo)}</strong>
+      <span style="margin-left:6px;">${escapeHTML(r.descricao)}</span>
+      <span style="float:right;font-size:11px;color:#718096;">${escapeHTML(r.compras_unidades_medida?.sigla || '')} · ${escapeHTML(r.grupo)}</span>
+    </div>`).join('');
+  dd.querySelectorAll('.cat-dd-item').forEach(el => {
+    el.addEventListener('click', () => {
+      onSelect({ id: el.dataset.id, descricao: el.dataset.desc, unidade_id: el.dataset.unid, sigla: el.dataset.sigla });
+      dd.style.display = 'none';
+    });
+    el.addEventListener('mouseover', () => el.style.background = '#f0f4ff');
+    el.addEventListener('mouseout',  () => el.style.background = '');
+  });
+}
+
+function _fecharDropdownsCatalogo() {
+  document.querySelectorAll('[id^="cat-dropdown-"]').forEach(d => { d.style.display = 'none'; });
+}
+document.addEventListener('click', _fecharDropdownsCatalogo);
+
+// ── Linhas dinâmicas de itens no formulário (com catálogo obrigatório) ──
+function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', catalogoDesc = '') {
   const tbody = $('sc-itens-tbody');
   if (!tbody) return;
-  const rid = 'sc-item-' + (++_scItemSeq);
-  const tr = document.createElement('tr');
+  const rid   = 'sc-item-' + (++_scItemSeq);
+  const inpId = 'sc-desc-' + _scItemSeq;
+  const tr    = document.createElement('tr');
   tr.id = rid;
+  // Se viemos de edição, desc já é o texto salvo; catalogoId é o UUID do catálogo
+  const descDisplay = desc || catalogoDesc || '';
+  const unidDisplay = unidade || '';
+  const catIdVal    = catalogoId || '';
   tr.innerHTML = `
-    <td><input type="text" class="form-input-style sc-item-desc" value="${escapeHTML(desc)}" placeholder="Descrição do item/serviço"></td>
-    <td><input type="number" class="form-input-style sc-item-qtd" value="${Number(qtd) || 1}" min="1" step="1" style="width:90px;"></td>
-    <td><input type="text" class="form-input-style sc-item-unid" value="${escapeHTML(unidade) === '—' ? 'UN' : escapeHTML(unidade)}" style="width:70px;"></td>
+    <td style="position:relative;min-width:240px;">
+      <input type="hidden" class="sc-item-cat-id" value="${escapeHTML(catIdVal)}">
+      <input type="hidden" class="sc-item-unid-id" value="">
+      <input type="text" id="${inpId}" class="form-input-style sc-item-desc" value="${escapeHTML(descDisplay)}"
+             placeholder="Digite para buscar no catálogo..." autocomplete="off"
+             style="${catIdVal ? 'border-color:#48bb78;background:#f0fff4;' : ''}">
+      ${catIdVal ? '' : '<small style="color:#e53e3e;font-size:10px;">⚠ Selecione um item do catálogo</small>'}
+    </td>
+    <td><input type="number" class="form-input-style sc-item-qtd" value="${Number(qtd) || 1}" min="0.001" step="any" style="width:90px;"></td>
+    <td><input type="text" class="sc-item-sigla" value="${escapeHTML(unidDisplay)}" readonly
+               style="width:70px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:13px;"></td>
     <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
   tbody.appendChild(tr);
+
+  // Bind autocomplete no input de descrição
+  const inp = document.getElementById(inpId);
+  if (!inp) return;
+
+  let _debounce = null;
+  inp.addEventListener('input', () => {
+    // Ao digitar, limpa o vínculo do catálogo (obriga nova seleção)
+    tr.querySelector('.sc-item-cat-id').value = '';
+    tr.querySelector('.sc-item-unid-id').value = '';
+    tr.querySelector('.sc-item-sigla').value = '';
+    inp.style.borderColor = '';
+    inp.style.background  = '';
+    const aviso = tr.querySelector('small');
+    if (aviso) aviso.remove();
+
+    clearTimeout(_debounce);
+    _debounce = setTimeout(async () => {
+      const resultados = await _buscarCatalogo(inp.value.trim());
+      _mostrarDropdownCatalogo(inp, resultados, (item) => {
+        inp.value = item.descricao;
+        tr.querySelector('.sc-item-cat-id').value  = item.id;
+        tr.querySelector('.sc-item-unid-id').value = item.unidade_id;
+        tr.querySelector('.sc-item-sigla').value   = item.sigla;
+        inp.style.borderColor = '#48bb78';
+        inp.style.background  = '#f0fff4';
+        // Remove aviso se ainda existir
+        tr.querySelectorAll('small').forEach(s => s.remove());
+      });
+    }, 280);
+  });
+  inp.addEventListener('focus', () => {
+    if (inp.value.length >= 2) inp.dispatchEvent(new Event('input'));
+  });
+  inp.addEventListener('blur', () => {
+    setTimeout(() => _fecharDropdownsCatalogo(), 150);
+  });
 }
 
 function coletarItensSC() {
   const linhas = [...document.querySelectorAll('#sc-itens-tbody tr')];
-  return linhas.map((tr) => ({
-    descricao: tr.querySelector('.sc-item-desc').value.trim(),
-    quantidade: parseInt(tr.querySelector('.sc-item-qtd').value, 10) || 1,
-    unidade: tr.querySelector('.sc-item-unid').value.trim() || 'UN',
-  })).filter(i => i.descricao);
+  return linhas.map(tr => ({
+    catalogo_id:  tr.querySelector('.sc-item-cat-id')?.value  || null,
+    unidade_id:   tr.querySelector('.sc-item-unid-id')?.value || null,
+    descricao:    tr.querySelector('.sc-item-desc')?.value.trim() || '',
+    quantidade:   parseFloat(tr.querySelector('.sc-item-qtd')?.value) || 1,
+    unidade:      tr.querySelector('.sc-item-sigla')?.value.trim() || '',
+  })).filter(i => i.descricao && i.catalogo_id);
+}
+
+// ── Valida que todos os itens têm vínculo com o catálogo ─────────────
+function _validarItensSC(itens, msgId) {
+  const linhas = [...document.querySelectorAll('#sc-itens-tbody tr')];
+  const semCat = linhas.filter(tr => !tr.querySelector('.sc-item-cat-id')?.value);
+  if (semCat.length) {
+    semCat.forEach(tr => {
+      const inp = tr.querySelector('.sc-item-desc');
+      if (inp) { inp.style.borderColor = '#e53e3e'; inp.style.background = '#fff5f5'; }
+    });
+    msgForm(msgId, '⛔ Todos os itens devem ser selecionados do catálogo. Campos marcados em vermelho precisam de seleção.', 'red');
+    return false;
+  }
+  if (!itens.length) {
+    msgForm(msgId, '⚠️ Adicione ao menos um item do catálogo.', 'red');
+    return false;
+  }
+  return true;
 }
 
 // ── Geração do número sequencial (SC-AAAA-NNN / SS-AAAA-NNN) ────────
@@ -2236,10 +2355,7 @@ async function salvarSolicitacaoCompra() {
     msgForm('msg-sc', '⚠️ Preencha Setor e Descrição.', 'red');
     return;
   }
-  if (!itens.length) {
-    msgForm('msg-sc', '⚠️ Adicione ao menos um item.', 'red');
-    return;
-  }
+  if (!_validarItensSC(itens, 'msg-sc')) return;
 
   msgForm('msg-sc', '⏳ Salvando...', 'blue');
 
@@ -2310,7 +2426,7 @@ function editarSolicitacaoCompra(id) {
   $('sc-data').value = s.data_necessaria || hoje();
 
   $('sc-itens-tbody').innerHTML = '';
-  (s.compras_solicitacoes_itens || []).forEach(i => adicionarItemSC(i.descricao, i.quantidade, i.unidade));
+  (s.compras_solicitacoes_itens || []).forEach(i => adicionarItemSC(i.descricao, i.quantidade, i.unidade, i.catalogo_id || '', i.descricao));
   if (!(s.compras_solicitacoes_itens || []).length) adicionarItemSC();
 
   $('sc-form-titulo').textContent = `✏️ Editando ${s.numero}`;
@@ -3377,27 +3493,64 @@ function fecharModalPreDemanda() {
   $('overlay-pre-demanda').style.display = 'none';
 }
 
-function adicionarItemPD(desc = '', qtd = 1, unidade = 'UN') {
+function adicionarItemPD(desc = '', qtd = 1, unidade = '', catalogoId = '') {
   const tbody = $('pd-itens-tbody');
   if (!tbody) return;
-  const rid = 'pd-item-' + (++_pdItemSeq);
-  const tr = document.createElement('tr');
+  const rid   = 'pd-item-' + (++_pdItemSeq);
+  const inpId = 'pd-desc-' + _pdItemSeq;
+  const tr    = document.createElement('tr');
   tr.id = rid;
+  const catIdVal    = catalogoId || '';
+  const descDisplay = desc || '';
   tr.innerHTML = `
-    <td><input type="text" class="form-input-style pd-item-desc" value="${escapeHTML(desc)}" placeholder="Descrição do item/serviço"></td>
-    <td><input type="number" class="form-input-style pd-item-qtd" value="${Number(qtd) || 1}" min="1" step="1" style="width:90px;"></td>
-    <td><input type="text" class="form-input-style pd-item-unid" value="${escapeHTML(unidade) || 'UN'}" style="width:70px;"></td>
+    <td style="position:relative;min-width:220px;">
+      <input type="hidden" class="pd-item-cat-id" value="${escapeHTML(catIdVal)}">
+      <input type="hidden" class="pd-item-unid-id" value="">
+      <input type="text" id="${inpId}" class="form-input-style pd-item-desc" value="${escapeHTML(descDisplay)}"
+             placeholder="Digite para buscar no catálogo..." autocomplete="off"
+             style="${catIdVal ? 'border-color:#48bb78;background:#f0fff4;' : ''}">
+    </td>
+    <td><input type="number" class="form-input-style pd-item-qtd" value="${Number(qtd) || 1}" min="0.001" step="any" style="width:80px;"></td>
+    <td><input type="text" class="pd-item-sigla" value="${escapeHTML(unidade)}" readonly
+               style="width:65px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:13px;"></td>
     <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
   tbody.appendChild(tr);
+
+  const inp = document.getElementById(inpId);
+  if (!inp) return;
+  let _db = null;
+  inp.addEventListener('input', () => {
+    tr.querySelector('.pd-item-cat-id').value = '';
+    tr.querySelector('.pd-item-unid-id').value = '';
+    tr.querySelector('.pd-item-sigla').value  = '';
+    inp.style.borderColor = '';
+    inp.style.background  = '';
+    clearTimeout(_db);
+    _db = setTimeout(async () => {
+      const resultados = await _buscarCatalogo(inp.value.trim());
+      _mostrarDropdownCatalogo(inp, resultados, (item) => {
+        inp.value = item.descricao;
+        tr.querySelector('.pd-item-cat-id').value  = item.id;
+        tr.querySelector('.pd-item-unid-id').value = item.unidade_id;
+        tr.querySelector('.pd-item-sigla').value   = item.sigla;
+        inp.style.borderColor = '#48bb78';
+        inp.style.background  = '#f0fff4';
+      });
+    }, 280);
+  });
+  inp.addEventListener('focus', () => { if (inp.value.length >= 2) inp.dispatchEvent(new Event('input')); });
+  inp.addEventListener('blur',  () => { setTimeout(() => _fecharDropdownsCatalogo(), 150); });
 }
 
 function coletarItensPD() {
   const linhas = [...document.querySelectorAll('#pd-itens-tbody tr')];
   return linhas.map(tr => ({
-    descricao: tr.querySelector('.pd-item-desc').value.trim(),
-    quantidade: parseInt(tr.querySelector('.pd-item-qtd').value, 10) || 1,
-    unidade: tr.querySelector('.pd-item-unid').value.trim() || 'UN',
-  })).filter(i => i.descricao);
+    catalogo_id: tr.querySelector('.pd-item-cat-id')?.value  || null,
+    unidade_id:  tr.querySelector('.pd-item-unid-id')?.value || null,
+    descricao:   tr.querySelector('.pd-item-desc')?.value.trim() || '',
+    quantidade:  parseFloat(tr.querySelector('.pd-item-qtd')?.value) || 1,
+    unidade:     tr.querySelector('.pd-item-sigla')?.value.trim() || '',
+  })).filter(i => i.descricao && i.catalogo_id);
 }
 
 async function salvarPreDemanda() {
@@ -3411,7 +3564,7 @@ async function salvarPreDemanda() {
   const itens        = coletarItensPD();
 
   if (!setor || !descricao) { msgForm('msg-pd', '⚠️ Preencha Setor e Descrição.', 'red'); return; }
-  if (!itens.length) { msgForm('msg-pd', '⚠️ Adicione ao menos um item.', 'red'); return; }
+  if (!itens.length) { msgForm('msg-pd', '⛔ Selecione ao menos um item do catálogo.', 'red'); return; }
 
   msgForm('msg-pd', '⏳ Enviando...', 'blue');
 
@@ -3525,4 +3678,277 @@ async function rejeitarPreDemanda(id) {
     data_decisao: new Date().toISOString(),
   }).eq('id', id);
   await carregarPreDemandas();
+}
+
+// =====================================================================
+//  CATÁLOGO DE ITENS — compras_catalogo_itens
+//  Página: compras-catalogo.html
+// =====================================================================
+
+let _catCache = [];   // cache de itens do catálogo
+let _umCache  = [];   // cache de unidades de medida
+
+// ── Prefixos de código por grupo ─────────────────────────────────────
+const _CAT_PREFIXO = {
+  'Material':   'MAT',
+  'Serviço':    'SVC',
+  'EPI':        'EPI',
+  'Ferramenta': 'FER',
+  'Químico':    'QUI',
+  'Outro':      'OUT',
+};
+
+// ── Alterna abas ─────────────────────────────────────────────────────
+function alternarAbaCatalogo(aba) {
+  ['itens','unidades'].forEach(a => {
+    const el = $('aba-catalogo-' + a);
+    if (el) el.style.display = a === aba ? '' : 'none';
+  });
+}
+
+// ── Geração de código automático ─────────────────────────────────────
+async function atualizarCodigoCatalogo() {
+  const grupo   = $('cat-grupo')?.value || 'Material';
+  const prefixo = _CAT_PREFIXO[grupo] || 'OUT';
+  if ($('cat-id-edicao')?.value) return; // em edição não altera código
+  const { data } = await db.from('compras_catalogo_itens')
+    .select('codigo')
+    .like('codigo', prefixo + '-%')
+    .order('codigo', { ascending: false })
+    .limit(1);
+  const ultimo = data?.[0]?.codigo || '';
+  const seq    = parseInt(ultimo.split('-').pop(), 10) || 0;
+  if ($('cat-codigo')) $('cat-codigo').value = `${prefixo}-${String(seq + 1).padStart(4, '0')}`;
+}
+
+// ── Carrega unidades no select do formulário ──────────────────────────
+async function carregarUnidadesMedida() {
+  const tbody = $('tbody-unidades-medida');
+
+  const { data, error } = await db.from('compras_unidades_medida')
+    .select('*')
+    .order('sigla');
+
+  if (error) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="td-loading">Erro: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _umCache = data || [];
+
+  // Popula selects de unidades em todos os formulários que os usam
+  ['cat-unidade'].map($).filter(Boolean).forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">-- Unidade --</option>';
+    _umCache.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value       = u.id;
+      opt.textContent = `${u.sigla} — ${u.descricao}`;
+      sel.appendChild(opt);
+    });
+    if (atual) sel.value = atual;
+  });
+
+  // Renderiza tabela
+  if (!tbody) return;
+  tbody.innerHTML = _umCache.length ? _umCache.map(u => `
+    <tr>
+      <td><strong>${escapeHTML(u.sigla)}</strong></td>
+      <td>${escapeHTML(u.descricao)}</td>
+      <td>${u.ativo ? '<span class="tag-badge success">Ativo</span>' : '<span class="tag-badge danger">Inativo</span>'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarUnidadeMedida(${u.id})">✏️ Editar</button>
+        <button class="btn-excluir" onclick="toggleAtivoUM(${u.id},${u.ativo})">
+          ${u.ativo ? '⛔ Desativar' : '✅ Ativar'}
+        </button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="4" class="td-loading">Nenhuma unidade cadastrada.</td></tr>';
+}
+
+async function salvarUnidadeMedida() {
+  const id      = $('um-id-edicao')?.value || '';
+  const sigla   = ($('um-sigla')?.value || '').trim().toUpperCase();
+  const desc    = ($('um-descricao')?.value || '').trim();
+
+  if (!sigla || !desc) { msgForm('msg-um', '⚠️ Preencha Sigla e Descrição.', 'red'); return; }
+  msgForm('msg-um', '⏳ Salvando...', 'blue');
+
+  const payload = { sigla, descricao: desc };
+  const { error } = id
+    ? await db.from('compras_unidades_medida').update(payload).eq('id', id)
+    : await db.from('compras_unidades_medida').insert(payload);
+
+  if (error) { msgForm('msg-um', '❌ Erro: ' + error.message, 'red'); return; }
+  msgForm('msg-um', id ? '✅ Unidade atualizada!' : '✅ Unidade cadastrada!', 'green');
+  resetarFormUM();
+  await carregarUnidadesMedida();
+}
+
+function editarUnidadeMedida(id) {
+  const u = _umCache.find(x => x.id === id);
+  if (!u) return;
+  if ($('um-id-edicao'))  $('um-id-edicao').value  = u.id;
+  if ($('um-sigla'))      $('um-sigla').value       = u.sigla;
+  if ($('um-descricao'))  $('um-descricao').value   = u.descricao;
+  if ($('um-form-titulo')) $('um-form-titulo').textContent = '✏️ Editando Unidade — ' + u.sigla;
+  if ($('btn-cancelar-um')) $('btn-cancelar-um').style.display = 'inline-block';
+  $('um-sigla')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function toggleAtivoUM(id, ativo) {
+  const acao = ativo ? 'desativar' : 'ativar';
+  if (!confirm(`Deseja ${acao} esta unidade de medida?`)) return;
+  const { error } = await db.from('compras_unidades_medida').update({ ativo: !ativo }).eq('id', id);
+  if (error) { alert('Erro: ' + error.message); return; }
+  await carregarUnidadesMedida();
+}
+
+function resetarFormUM() {
+  if ($('um-id-edicao'))   $('um-id-edicao').value   = '';
+  if ($('um-sigla'))       $('um-sigla').value        = '';
+  if ($('um-descricao'))   $('um-descricao').value    = '';
+  if ($('um-form-titulo')) $('um-form-titulo').textContent = '📐 Nova Unidade de Medida';
+  if ($('btn-cancelar-um')) $('btn-cancelar-um').style.display = 'none';
+  if ($('msg-um')) $('msg-um').textContent = '';
+}
+
+// ── Catálogo de Itens ─────────────────────────────────────────────────
+async function carregarCatalogo() {
+  const tbody = $('tbody-catalogo');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_catalogo_itens')
+    .select('*, compras_unidades_medida(sigla, descricao)')
+    .order('codigo');
+
+  if (error) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="td-loading">Erro: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _catCache = data || [];
+  _renderStatsCatalogo();
+  filtrarCatalogo();
+}
+
+function _renderStatsCatalogo() {
+  if ($('cat-stat-total'))    $('cat-stat-total').textContent    = _catCache.filter(i => i.ativo).length;
+  if ($('cat-stat-material')) $('cat-stat-material').textContent = _catCache.filter(i => i.grupo === 'Material' && i.ativo).length;
+  if ($('cat-stat-servico'))  $('cat-stat-servico').textContent  = _catCache.filter(i => i.grupo === 'Serviço' && i.ativo).length;
+  if ($('cat-stat-inativos')) $('cat-stat-inativos').textContent = _catCache.filter(i => !i.ativo).length;
+}
+
+const _CAT_GRUPO_ICON = { Material:'📦', 'Serviço':'🧰', EPI:'🦺', Ferramenta:'🔧', Químico:'🧪', Outro:'📎' };
+
+function filtrarCatalogo() {
+  const tbody = $('tbody-catalogo');
+  if (!tbody) return;
+  const termo  = ($('cat-filtro-texto')?.value || '').toLowerCase().trim();
+  const grupo  = $('cat-filtro-grupo')?.value  || '';
+  const ativo  = $('cat-filtro-ativo')?.value  || '';
+
+  let dados = [..._catCache];
+  if (grupo) dados = dados.filter(i => i.grupo === grupo);
+  if (ativo) dados = dados.filter(i => String(i.ativo) === ativo);
+  if (termo) dados = dados.filter(i =>
+    i.codigo.toLowerCase().includes(termo) ||
+    i.descricao.toLowerCase().includes(termo) ||
+    (i.especificacao || '').toLowerCase().includes(termo)
+  );
+
+  tbody.innerHTML = dados.length ? dados.map(i => `
+    <tr style="${!i.ativo ? 'opacity:.55;' : ''}">
+      <td><strong style="font-family:monospace;">${escapeHTML(i.codigo)}</strong></td>
+      <td>${escapeHTML(i.descricao)}</td>
+      <td><span class="tag-badge">${_CAT_GRUPO_ICON[i.grupo] || ''} ${escapeHTML(i.grupo)}</span></td>
+      <td><strong>${escapeHTML(i.compras_unidades_medida?.sigla || '—')}</strong>
+          <small style="color:#a0aec0;"> ${escapeHTML(i.compras_unidades_medida?.descricao || '')}</small></td>
+      <td style="font-size:11px;color:#718096;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+          title="${escapeHTML(i.especificacao || '')}">${escapeHTML(i.especificacao || '—')}</td>
+      <td>${i.ativo ? '<span class="tag-badge success">Ativo</span>' : '<span class="tag-badge danger">Inativo</span>'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarItemCatalogo('${i.id}')">✏️</button>
+        <button class="btn-excluir" onclick="toggleAtivoCatalogo('${i.id}',${i.ativo})">
+          ${i.ativo ? '⛔' : '✅'}
+        </button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="7" class="td-loading">Nenhum item encontrado.</td></tr>';
+}
+
+async function salvarItemCatalogo() {
+  const id         = $('cat-id-edicao')?.value || '';
+  const codigo     = ($('cat-codigo')?.value     || '').trim();
+  const descricao  = ($('cat-descricao')?.value  || '').trim();
+  const grupo      = $('cat-grupo')?.value       || 'Material';
+  const unidadeId  = $('cat-unidade')?.value     || '';
+  const especif    = ($('cat-especificacao')?.value || '').trim();
+  const ativo      = $('cat-ativo')?.value !== 'false';
+
+  if (!descricao)  { msgForm('msg-cat', '⚠️ Preencha a Descrição do item.', 'red'); return; }
+  if (!unidadeId)  { msgForm('msg-cat', '⚠️ Selecione a Unidade de Medida.', 'red'); return; }
+  if (!codigo)     { msgForm('msg-cat', '⚠️ Código não gerado. Selecione o Grupo e tente novamente.', 'red'); return; }
+
+  msgForm('msg-cat', '⏳ Salvando...', 'blue');
+
+  const payload = {
+    codigo,
+    descricao,
+    grupo,
+    unidade_id:    parseInt(unidadeId, 10),
+    especificacao: especif || null,
+    ativo,
+  };
+
+  const { error } = id
+    ? await db.from('compras_catalogo_itens').update(payload).eq('id', id)
+    : await db.from('compras_catalogo_itens').insert(payload);
+
+  if (error) {
+    const msg = error.message.includes('uq_catalogo_descricao')
+      ? '❌ Já existe um item com esta descrição no catálogo.'
+      : '❌ Erro ao salvar: ' + error.message;
+    msgForm('msg-cat', msg, 'red');
+    return;
+  }
+
+  msgForm('msg-cat', id ? '✅ Item atualizado com sucesso!' : '✅ Item cadastrado no catálogo!', 'green');
+  resetarFormCatalogo();
+  await carregarCatalogo();
+}
+
+function editarItemCatalogo(id) {
+  const i = _catCache.find(x => x.id === id);
+  if (!i) return;
+  if ($('cat-id-edicao'))      $('cat-id-edicao').value      = i.id;
+  if ($('cat-codigo'))         $('cat-codigo').value         = i.codigo;
+  if ($('cat-descricao'))      $('cat-descricao').value      = i.descricao;
+  if ($('cat-grupo'))          $('cat-grupo').value          = i.grupo;
+  if ($('cat-unidade'))        $('cat-unidade').value        = i.unidade_id;
+  if ($('cat-especificacao'))  $('cat-especificacao').value  = i.especificacao || '';
+  if ($('cat-ativo'))          $('cat-ativo').value          = String(i.ativo);
+  if ($('cat-form-titulo'))    $('cat-form-titulo').textContent = `✏️ Editando — ${i.codigo}`;
+  if ($('btn-cancelar-cat'))   $('btn-cancelar-cat').style.display = 'inline-block';
+  $('cat-descricao')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function toggleAtivoCatalogo(id, ativo) {
+  const acao = ativo ? 'desativar' : 'ativar';
+  if (!confirm(`Deseja ${acao} este item do catálogo?`)) return;
+  const { error } = await db.from('compras_catalogo_itens').update({ ativo: !ativo }).eq('id', id);
+  if (error) { alert('Erro: ' + error.message); return; }
+  await carregarCatalogo();
+}
+
+function resetarFormCatalogo() {
+  if ($('cat-id-edicao'))     $('cat-id-edicao').value     = '';
+  if ($('cat-codigo'))        $('cat-codigo').value        = '';
+  if ($('cat-descricao'))     $('cat-descricao').value     = '';
+  if ($('cat-grupo'))         $('cat-grupo').value         = 'Material';
+  if ($('cat-unidade'))       $('cat-unidade').value       = '';
+  if ($('cat-especificacao')) $('cat-especificacao').value = '';
+  if ($('cat-ativo'))         $('cat-ativo').value         = 'true';
+  if ($('cat-form-titulo'))   $('cat-form-titulo').textContent = '📝 Novo Item no Catálogo';
+  if ($('btn-cancelar-cat'))  $('btn-cancelar-cat').style.display = 'none';
+  if ($('msg-cat'))           $('msg-cat').textContent = '';
+  atualizarCodigoCatalogo();
 }
