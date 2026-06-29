@@ -3201,13 +3201,31 @@ let _scItemSeq  = 0;
 // ── Autocomplete: busca no catálogo enquanto o usuário digita ────────
 async function _buscarCatalogo(termo) {
   if (!termo || termo.length < 1) return [];
-  const { data } = await db.from('compras_catalogo_itens')
+  // Tenta com JOIN nas unidades; se a tabela não existir ainda, tenta sem JOIN
+  let { data, error } = await db.from('compras_catalogo_itens')
     .select('id, codigo, descricao, grupo, unidade_id, compras_unidades_medida(sigla)')
     .eq('ativo', true)
     .ilike('descricao', `%${termo}%`)
     .order('descricao')
     .limit(12);
-  return data || [];
+  if (error) {
+    // Se a tabela não existe (42P01), retorna sinal de erro para o dropdown mostrar diagnóstico
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      return [{ _vazio: true, _erro: true }];
+    }
+    // Fallback sem JOIN (caso só compras_unidades_medida ainda não exista)
+    const r2 = await db.from('compras_catalogo_itens')
+      .select('id, codigo, descricao, grupo, unidade_id')
+      .eq('ativo', true)
+      .ilike('descricao', `%${termo}%`)
+      .order('descricao')
+      .limit(12);
+    data = r2.data;
+  }
+  return (data || []).map(r => ({
+    ...r,
+    compras_unidades_medida: r.compras_unidades_medida || { sigla: '' }
+  }));
 }
 
 // ── Mostra dropdown de resultados abaixo do input ───────────────────
@@ -3231,7 +3249,10 @@ function _mostrarDropdownCatalogo(inputEl, resultados, onSelect) {
 
   // Caso sem resultados
   if (!resultados.length || (resultados.length === 1 && resultados[0]._vazio)) {
-    dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:#718096;">Nenhum item encontrado no catálogo.</div>';
+    const msg = (resultados.length === 1 && resultados[0]._erro)
+      ? '<span style="color:#e53e3e;">⛔ Catálogo indisponível. Execute o script catalogo_compras_v1.sql no Supabase.</span>'
+      : '⚠ Nenhum item encontrado. <a href="compras-catalogo.html" target="_blank" style="color:#4169e1;">Cadastre itens no Catálogo →</a>';
+    dd.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:#718096;">${msg}</div>`;
     dd.style.display = 'block';
     return;
   }
