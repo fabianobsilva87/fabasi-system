@@ -22,7 +22,7 @@ const LOGO_ETIQUETA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAY
 // ===================== ESTADO GLOBAL =====================
 let globalEquipamentos     = [];
 let paginaAtualEquipamento = 0;
-const itensPorPagina       = 8;
+let itensPorPagina         = 20;
 let chartOS = null, chartCrit = null, chartOSG = null;
 let modoRecuperacao = false;
 
@@ -132,13 +132,85 @@ async function uploadFoto(file, pasta, msgId) {
       blob = file;
     }
   }
-  const nomeArq = `${pasta}/foto_${Date.now()}.jpg`;
+  const sufixo  = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const nomeArq = `${pasta}/foto_${sufixo}.jpg`;
   const { error } = await db.storage
     .from('fotos-pmoc')
     .upload(nomeArq, blob, { contentType: 'image/jpeg', upsert: false });
   if (error) return null;
   const { data: { publicUrl } } = db.storage.from('fotos-pmoc').getPublicUrl(nomeArq);
   return publicUrl;
+}
+
+// ===================== MÚLTIPLAS FOTOS (laudo PMOC / OS) =====================
+// Faz upload de várias imagens e retorna um array de URLs públicas.
+async function uploadFotos(fileList, pasta, msgId) {
+  const files = Array.from(fileList || []).filter(Boolean);
+  if (!files.length) return [];
+  const urls = [];
+  for (let i = 0; i < files.length; i++) {
+    if (msgId) msgForm(msgId, `📤 Enviando imagem ${i + 1} de ${files.length}...`, 'blue');
+    const url = await uploadFoto(files[i], pasta, null);
+    if (url) urls.push(url);
+  }
+  return urls;
+}
+
+// Lê fotos_urls e normaliza para [{url, tipo}], onde tipo ∈ 'antes'|'depois'|'geral'.
+// Compatível com: array de objetos {url,tipo} (novo), array de strings (versão anterior)
+// e foto_url único (legado) — esses dois últimos viram tipo 'geral'.
+function lerFotos(obj) {
+  if (!obj) return [];
+  let arr = obj.fotos_urls;
+  if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { arr = []; } }
+  if (Array.isArray(arr) && arr.length) {
+    return arr.map(it => typeof it === 'string'
+      ? { url: it, tipo: 'geral' }
+      : { url: it.url, tipo: it.tipo || 'geral' }
+    ).filter(it => it.url);
+  }
+  return obj.foto_url ? [{ url: obj.foto_url, tipo: 'geral' }] : [];
+}
+
+// Renderiza um grupo de imagens (mini-galeria) sob um rótulo.
+function _grupoFotosHTML(rotulo, fotos) {
+  if (!fotos.length) return '';
+  const imgs = fotos.map(f =>
+    `<img src="${f.url}" style="max-width:48%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;object-fit:cover;">`
+  ).join('');
+  return `<div style="flex:1;min-width:240px;">` +
+         `<div style="font-size:11px;font-weight:600;color:#4a5568;text-transform:uppercase;margin-bottom:4px;">${rotulo}</div>` +
+         `<div style="display:flex;flex-wrap:wrap;gap:8px;">${imgs}</div></div>`;
+}
+
+// Galeria de evidências fotográficas para os laudos impressos (Antes / Depois).
+function galeriaFotosHTML(obj, titulo = 'Evidências Fotográficas') {
+  const fotos  = lerFotos(obj);
+  if (!fotos.length) return '';
+  const antes  = fotos.filter(f => f.tipo === 'antes');
+  const depois = fotos.filter(f => f.tipo === 'depois');
+  const geral  = fotos.filter(f => f.tipo !== 'antes' && f.tipo !== 'depois');
+  const corpo  = (antes.length || depois.length)
+    ? `<div style="display:flex;flex-wrap:wrap;gap:16px;">${_grupoFotosHTML('Antes', antes)}${_grupoFotosHTML('Depois', depois)}</div>`
+      + (geral.length ? `<div style="margin-top:10px;">${_grupoFotosHTML('Outras', geral)}</div>` : '')
+    : `<div style="display:flex;flex-wrap:wrap;gap:8px;">${
+        geral.map(f => `<img src="${f.url}" style="max-width:48%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;object-fit:cover;">`).join('')
+      }</div>`;
+  return `<div class="laudo-section"><div class="laudo-section-title">${titulo}</div>${corpo}</div>`;
+}
+
+// Preview ao vivo das imagens selecionadas, antes de salvar.
+function montarPreviewFotos(inputId, previewId) {
+  const input = $(inputId), prev = $(previewId);
+  if (!input || !prev) return;
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files || []);
+    prev.innerHTML = !files.length ? '' :
+      `<div style="font-size:12px;color:#4a5568;margin-bottom:6px;">${files.length} imagem(ns) selecionada(s)</div>` +
+      `<div style="display:flex;flex-wrap:wrap;gap:6px;">${
+        files.map(f => `<img src="${URL.createObjectURL(f)}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid #cbd5e0;">`).join('')
+      }</div>`;
+  });
 }
 
 // ── Fase 2: upload de assinatura PNG para Storage (substitui Base64 no DB) ──
@@ -346,7 +418,7 @@ function toggleItemsPorFrequencia() {
 
 // ===================== EQUIPAMENTOS =====================
 const EQ_CAMPOS_EXTRAS = {
-  AC:   ['eq-potencia','eq-ciclo','eq-tensao','eq-gas','eq-instalacao-ac','eq-validade'],
+  AC:   ['eq-ciclo','eq-tensao','eq-gas','eq-gas-qtd','eq-tec-compressor','eq-instalacao-ac','eq-validade'],
   BEB:  ['eq-cap-beb','eq-tipo-beb','eq-filtro-beb','eq-validade-filtro-beb','eq-lacre-beb','eq-validade-lacre-beb'],
   CLIM: ['eq-vazao-clim','eq-tipo-clim','eq-painel-clim','eq-validade-painel-clim','eq-tensao-clim','eq-consumo-clim'],
   VEN:  ['eq-potencia-ven','eq-tipo-ven','eq-diametro-ven','eq-tensao-ven'],
@@ -357,30 +429,69 @@ const EQ_CATEGORIA_LABEL = {
   CLIM:'🌀 Climatizador Evaporativo', VEN:'💨 Ventilador/Exaustor', OUT:'🔧 Outros',
 };
 
+// ── Capacidade (BTU/h) — select de opções padrão + campo "Outro" para valores não listados ──
+function lerCapacidadeBTU() {
+  const sel = $('eq-btu'); if (!sel) return '';
+  if (sel.value === '__outro__') return ($('eq-btu-outro')?.value || '').trim();
+  return sel.value || '';
+}
+function definirCapacidadeBTU(valor) {
+  const sel = $('eq-btu'); const outroInput = $('eq-btu-outro');
+  if (!sel) return;
+  if (!valor) {
+    sel.value = '';
+    if (outroInput) { outroInput.value = ''; outroInput.style.display = 'none'; }
+    return;
+  }
+  const existeNaLista = Array.from(sel.options).some(o => o.value === valor);
+  if (existeNaLista) {
+    sel.value = valor;
+    if (outroInput) { outroInput.value = ''; outroInput.style.display = 'none'; }
+  } else {
+    sel.value = '__outro__';
+    if (outroInput) { outroInput.value = valor; outroInput.style.display = 'block'; }
+  }
+}
+function onChangeCapacidadeBTU() {
+  const sel = $('eq-btu'); const outroInput = $('eq-btu-outro');
+  if (!sel || !outroInput) return;
+  outroInput.style.display = sel.value === '__outro__' ? 'block' : 'none';
+  if (sel.value !== '__outro__') outroInput.value = '';
+}
+
 function toggleCamposEquipamento() {
   const cat = $('eq-categoria')?.value || '';
   document.querySelectorAll('.eq-campo-condicional').forEach(el => el.style.display = 'none');
   Object.values(EQ_CAMPOS_EXTRAS).flat().forEach(id => { if ($(id)) $(id).value = ''; });
+  definirCapacidadeBTU(''); // limpa também o select de Capacidade (BTU/h) e o campo "Outro"
   if (!cat) return;
   document.querySelectorAll(`.eq-campo-${cat}`).forEach(el => el.style.display = 'block');
   document.querySelectorAll('.eq-campo-localizacao, .eq-campo-criticidade').forEach(el => el.style.display = 'block');
 }
+
 
 if ($('btn-salvar')) {
   $('btn-salvar').addEventListener('click', async () => {
     const tag = $('eq-tag')?.value.trim(); const cat = $('eq-categoria')?.value;
     if (!tag || !cat) { msgForm('msg-equipamento', 'TAG e Categoria são obrigatórias.', 'red'); return; }
     msgForm('msg-equipamento', 'Salvando...', 'blue');
+    // Localização agora vem de catálogos (instituicoes / blocos) selecionados, não mais texto livre.
+    // bloco/instituicao (texto) são mantidos em sincronia automaticamente para compatibilidade
+    // com laudos, QR público, dashboard e filtros já existentes.
+    const instId  = $('eq-instituicao-id')?.value || '';
+    const blocoId = $('eq-bloco-id')?.value       || '';
     const payload = {
       tag, categoria: cat,
       marca:      $('eq-marca')?.value.trim()      || null,
       produto:    $('eq-produto')?.value.trim()    || null,
       nr_serie:   $('eq-serie')?.value.trim()      || null,
       patrimonio: $('eq-patrimonio')?.value.trim() || null,
-      bloco:      $('eq-bloco')?.value.trim()      || null,
       setor:      $('eq-setor')?.value.trim()      || null,
       sala:       $('eq-sala')?.value.trim()       || null,
-      instituicao:$('eq-instituicao')?.value.trim()|| null,
+      instituicao_id: instId  || null,
+      bloco_id:       blocoId || null,
+      instituicao: instId  ? $('eq-instituicao-id').selectedOptions[0].textContent : null,
+      bloco:       blocoId ? $('eq-bloco-id').selectedOptions[0].textContent       : null,
       criticidade: calcularCriticidadeFluxograma(),
     };
     const extras = {};
@@ -389,7 +500,13 @@ if ($('btn-salvar')) {
       extras[id.replace('eq-','')] = el.value.trim();
     });
     if (Object.keys(extras).length) payload.extras_tecnico = extras;
-    if ($('eq-potencia')?.value) payload.potencia = $('eq-potencia').value.trim();
+    // Capacidade (BTU/h) do AC vem do select + campo "Outro"; demais categorias usam eq-potencia normalmente
+    if (cat === 'AC') {
+      const btu = lerCapacidadeBTU();
+      if (btu) payload.potencia = btu;
+    } else if ($('eq-potencia')?.value) {
+      payload.potencia = $('eq-potencia').value.trim();
+    }
     if ($('eq-validade')?.value) payload.validade = $('eq-validade').value.trim();
 
     // Bug fix: UPDATE quando em modo edição (?edit=ID), INSERT quando novo
@@ -432,11 +549,18 @@ async function carregarEquipamentoParaEdicao() {
   if ($('eq-produto'))     $('eq-produto').value     = eq.produto     || '';
   if ($('eq-serie'))       $('eq-serie').value       = eq.nr_serie    || '';
   if ($('eq-patrimonio'))  $('eq-patrimonio').value  = eq.patrimonio  || '';
-  if ($('eq-bloco'))       $('eq-bloco').value       = eq.bloco       || '';
+  if ($('eq-instituicao-id')) $('eq-instituicao-id').value = eq.instituicao_id || '';
   if ($('eq-setor'))       $('eq-setor').value       = eq.setor       || '';
   if ($('eq-sala'))        $('eq-sala').value        = eq.sala        || '';
-  if ($('eq-instituicao')) $('eq-instituicao').value = eq.instituicao || '';
-  if ($('eq-potencia') && eq.potencia) $('eq-potencia').value = eq.potencia;
+  if ($('eq-bloco-id')) {
+    await popularSelectBlocos(eq.instituicao_id || '', 'eq-bloco-id');
+    $('eq-bloco-id').value = eq.bloco_id || '';
+  }
+  if (eq.categoria === 'AC') {
+    definirCapacidadeBTU(eq.potencia || '');
+  } else if ($('eq-potencia') && eq.potencia) {
+    $('eq-potencia').value = eq.potencia;
+  }
   if ($('eq-validade') && eq.validade) $('eq-validade').value = eq.validade;
 
   // Preenche os campos técnicos extras (extras_tecnico JSONB)
@@ -457,6 +581,17 @@ async function carregarEquipamentos() {
   globalEquipamentos = data || [];
   filtrarEquipamentos(0);
   atualizarSelectEquipamentos();
+}
+
+function obterEquipamentosFiltrados() {
+  const termo = ($('search-eq-termo')?.value || '').toLowerCase();
+  const crit  = $('search-eq-criticidade')?.value || '';
+  const bloco = ($('search-eq-bloco')?.value || '').toLowerCase();
+  return globalEquipamentos.filter(e =>
+    (!termo || e.tag.toLowerCase().includes(termo) || (e.produto||'').toLowerCase().includes(termo)) &&
+    (!crit  || (e.criticidade||'') === crit) &&
+    (!bloco || (e.bloco||'').toLowerCase().includes(bloco))
+  );
 }
 
 function filtrarEquipamentos(delta) {
@@ -503,6 +638,147 @@ function filtrarEquipamentos(delta) {
   }).join('');
 }
 function mudarPaginaEquipamento(d) { filtrarEquipamentos(d); }
+function alterarItensPorPagina(v) { itensPorPagina = parseInt(v) || 20; filtrarEquipamentos(0); }
+
+// Exporta os ativos (respeitando os filtros aplicados na tela) para um arquivo .xlsx
+// Emite um relatório geral (impressão/PDF), em formato paisagem, com todos os ativos
+// cadastrados — respeita os mesmos filtros aplicados na tela (TAG/nome, criticidade, bloco).
+function emitirRelatorioGeralAtivos() {
+  const items = obterEquipamentosFiltrados();
+  if (!items.length) { alert('Nenhum ativo encontrado para gerar o relatório com os filtros atuais.'); return; }
+
+  const linhas = items.map(eq => {
+    const local   = [eq.instituicao, eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' / ') || '—';
+    const crit    = eq.criticidade || 'Média';
+    const critCls = crit === 'Alta' ? 'danger' : crit === 'Baixa' ? 'success' : 'warning';
+    return `<tr>
+      <td>${escapeHTML(eq.tag || '')}</td>
+      <td>${escapeHTML(EQ_CATEGORIA_LABEL[eq.categoria] || eq.categoria || '')}</td>
+      <td>${escapeHTML(eq.produto || '')}<br><small style="color:#718096;">${escapeHTML(eq.marca || '')}</small></td>
+      <td>${escapeHTML(local)}</td>
+      <td>${escapeHTML(eq.nr_serie || '—')}</td>
+      <td>${escapeHTML(eq.patrimonio || '—')}</td>
+      <td style="text-align:center;"><span class="tag-badge ${critCls}">${escapeHTML(crit)}</span></td>
+    </tr>`;
+  }).join('');
+
+  const html = `
+  <style>@page{size:A4 landscape;margin:12mm;}</style>
+  <div class="laudo-wrapper">
+    <div class="laudo-header">
+      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Relatório Geral de Ativos</h1><p>Inventário de equipamentos cadastrados</p></div></div>
+      <div class="laudo-header-meta">
+        <strong>Total de Ativos: ${items.length}</strong><br>
+        Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}<br>
+        Emitido às ${new Date().toLocaleTimeString('pt-BR')}
+      </div>
+    </div>
+    <div class="laudo-section">
+      <table class="laudo-checklist-table">
+        <thead>
+          <tr>
+            <th>TAG</th><th>Categoria</th><th>Equipamento / Marca</th><th>Localização</th>
+            <th>Nº Série</th><th>Patrimônio</th><th style="text-align:center;">Criticidade</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#a0aec0;">
+        Documento gerado pelo Sistema de Gestão Univag · ${new Date().toLocaleString('pt-BR')}
+      </div>
+    </div>
+  </div>`;
+  imprimir('area-relatorio-ativos', html);
+}
+
+const EQ_CATEGORIA_LABEL_PLANO = {
+  AC:'Ar Condicionado', BEB:'Bebedouro',
+  CLIM:'Climatizador Evaporativo', VEN:'Ventilador/Exaustor', OUT:'Outros',
+};
+const EQ_CLASSE_LETRA = { Alta:'A', Média:'B', Baixa:'C' };
+
+// Exporta os ativos (respeitando os filtros aplicados na tela) para um arquivo .xlsx,
+// no formato de Inventário de Ativos (aba "Inventário" + aba "Resumo" com totais por criticidade)
+function exportarEquipamentosXLS() {
+  if (typeof XLSX === 'undefined') {
+    alert('Biblioteca de exportação (XLSX) não carregada. Recarregue a página e tente novamente.');
+    return;
+  }
+  const items = obterEquipamentosFiltrados();
+  if (!items.length) { alert('Nenhum ativo encontrado para exportar com os filtros atuais.'); return; }
+
+  // ----- Aba 1: Inventário -----
+  const linhas = items.map(eq => {
+    const extras = eq.extras_tecnico || {};
+    const crit    = eq.criticidade || 'Média';
+    const isAC    = eq.categoria === 'AC';
+    return {
+      'TAG':                       eq.tag         || '',
+      'Categoria':                 EQ_CATEGORIA_LABEL_PLANO[eq.categoria] || eq.categoria || '',
+      'Produto / Modelo':          eq.produto     || '',
+      'Marca':                     eq.marca       || '',
+      'Nº de Série':               eq.nr_serie    || '',
+      'Patrimônio':                eq.patrimonio  || '',
+      'Instituição / Unidade':     eq.instituicao || '',
+      'Bloco / Edificação':        eq.bloco       || '',
+      'Setor Interno':             eq.setor       || '',
+      'Sala / Identificação':      eq.sala        || '',
+      'Criticidade':               'Classe ' + crit,
+      'Classe (A/B/C)':            EQ_CLASSE_LETRA[crit] || '',
+      'Potência Geral':            eq.potencia    || '',
+      'Validade Geral':            eq.validade ? fmtDate(eq.validade) : '',
+      'Gás Refrigerante':          extras.gas     || '',
+      'Ciclo':                     extras.ciclo   || '',
+      'Tensão (V)':                extras.tensao  || '',
+      'Quantidade de Gás (KG)':    extras['gas-qtd'] || '',
+      'Potência (BTU/h)':          isAC ? (eq.potencia || '') : '',
+      'Tecnologia do Compressor':  extras['tec-compressor']  || '',
+      'Tipo de Instalação':        extras['instalacao-ac']   || '',
+      'Possui QR Code':            eq.qrcode_token ? 'Sim' : 'Não',
+      'ID do Registro':            eq.id          || '',
+      'Data de Cadastro':          eq.created_at ? fmtDate(eq.created_at) : '',
+    };
+  });
+  const wsInv = XLSX.utils.json_to_sheet(linhas);
+  wsInv['!cols'] = [
+    { wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 14 },
+    { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 10 },
+    { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 },
+    { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 12 }, { wch: 38 }, { wch: 16 },
+  ];
+
+  // ----- Aba 2: Resumo -----
+  const qtdAlta  = items.filter(e => (e.criticidade || 'Média') === 'Alta').length;
+  const qtdMedia = items.filter(e => (e.criticidade || 'Média') === 'Média').length;
+  const qtdBaixa = items.filter(e => (e.criticidade || 'Média') === 'Baixa').length;
+  const dataExportacao = new Date().toLocaleDateString('pt-BR');
+
+  const resumoAOA = [
+    ['Resumo do Inventário de Ativos — Univag'],
+    [],
+    ['Classe de Criticidade', 'Quantidade', '% do Total'],
+    ['Classe Alta (A)',  qtdAlta,  0],
+    ['Classe Média (B)', qtdMedia, 0],
+    ['Classe Baixa (C)', qtdBaixa, 0],
+    ['TOTAL', 0],
+    [],
+    ['Data de exportação', dataExportacao],
+    ['Total de registros', items.length],
+  ];
+  const wsResumo = XLSX.utils.aoa_to_sheet(resumoAOA);
+  // Fórmulas reais do Excel (recalculadas automaticamente se os números forem editados)
+  wsResumo['C4'] = { t: 'n', f: 'B4/B7', z: '0.0%' };
+  wsResumo['C5'] = { t: 'n', f: 'B5/B7', z: '0.0%' };
+  wsResumo['C6'] = { t: 'n', f: 'B6/B7', z: '0.0%' };
+  wsResumo['B7'] = { t: 'n', f: 'SUM(B4:B6)' };
+  wsResumo['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 14 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsInv,    'Inventário');
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+  const dataHoje = hoje();
+  XLSX.writeFile(wb, `Univag_Inventario_Ativos_${dataHoje}.xlsx`);
+}
 async function excluirEquipamento(id) {
   if (confirm('Remover ativo?')) { await db.from('equipamentos').delete().eq('id', id); carregarEquipamentos(); }
 }
@@ -543,7 +819,7 @@ async function gerarTokensFaltantes() {
 }
 
 async function atualizarSelectEquipamentos() {
-  const { data } = await db.from('equipamentos').select('id, tag, produto, categoria');
+  const { data } = await db.from('equipamentos').select('id, tag, produto, categoria').order('tag', { ascending: true });
   ['pmoc-equipamento','os-equipamento'].map($).filter(Boolean).forEach(sel => {
     sel.innerHTML = '<option value="">-- Selecione o Ativo --</option>';
     (data || []).forEach(e => {
@@ -689,7 +965,6 @@ if ($('btn-salvar-colaborador')) {
       cpf:              cpf.replace(/\D/g,''),
       funcao_id:        $('colab-funcao')?.value || null,
       data_contratacao: $('colab-contratacao')?.value || null,
-      registro_classe:  $('colab-registro-classe')?.value.trim() || null,
       assinatura_url,
     };
 
@@ -716,6 +991,174 @@ if ($('btn-salvar-funcao')) {
       nivel:   $('func-nivel')?.value || 'Pleno',
     }]);
     if (!error) { msgForm('msg-funcao', '✓ Salva!', 'green'); carregarFuncoes(); atualizarSelectFuncoes(); $('func-nome').value = ''; }
+  });
+}
+
+// ===================== LOCAIS: INSTITUIÇÕES & BLOCOS (catálogo de localização dos ativos) =====================
+// Substitui os antigos campos de texto livre "Bloco/Edificação" e "Instituição/Unidade"
+// em equipamentos.html por seleção a partir de um cadastro centralizado (locais.html).
+// Bloco é sempre vinculado em cascata a uma Instituição (instituicao_id).
+
+// Popula um <select> de Instituições/Unidades. comTodasOpcao=true usa "Todas as Instituições"
+// como placeholder (uso em filtros); caso contrário usa "— Selecione —" (uso em formulários).
+async function popularSelectInstituicoes(selectId, comTodasOpcao) {
+  const sel = $(selectId); if (!sel) return;
+  const valorAtual = sel.value;
+  const { data } = await db.from('instituicoes').select('id, nome').order('nome', { ascending: true });
+  sel.innerHTML = (comTodasOpcao ? '<option value="">Todas as Instituições</option>' : '<option value="">— Selecione —</option>')
+    + (data || []).map(i => `<option value="${i.id}">${escapeHTML(i.nome)}</option>`).join('');
+  if (valorAtual) sel.value = valorAtual;
+}
+
+// Popula um <select> de Blocos/Edificações filtrado pela Instituição escolhida (cascata).
+// Sem instituicaoId, o select fica vazio e desabilitado.
+async function popularSelectBlocos(instituicaoId, selectId) {
+  const sel = $(selectId); if (!sel) return;
+  if (!instituicaoId) {
+    sel.innerHTML = '<option value="">— Selecione a instituição primeiro —</option>';
+    sel.disabled = true;
+    return;
+  }
+  const { data } = await db.from('blocos').select('id, nome').eq('instituicao_id', instituicaoId).order('nome', { ascending: true });
+  sel.disabled = false;
+  sel.innerHTML = '<option value="">— Selecione —</option>'
+    + (data || []).map(b => `<option value="${b.id}">${escapeHTML(b.nome)}</option>`).join('');
+}
+
+// Disparado pelo onchange do select de Instituição em equipamentos.html
+async function atualizarSelectBlocosCascata(manterValor) {
+  const instId = $('eq-instituicao-id')?.value || '';
+  const blocoAnterior = manterValor ? $('eq-bloco-id')?.value : '';
+  await popularSelectBlocos(instId, 'eq-bloco-id');
+  if (blocoAnterior) $('eq-bloco-id').value = blocoAnterior;
+}
+
+// ----- CRUD: Instituições / Unidades -----
+let _instituicoesCache = [];
+
+async function carregarInstituicoes() {
+  const tbody = $('tbody-instituicoes'); if (!tbody) return;
+  const { data: instituicoes } = await db.from('instituicoes').select('*').order('nome', { ascending: true });
+  const { data: blocosTodos }  = await db.from('blocos').select('instituicao_id');
+  _instituicoesCache = instituicoes || [];
+  const countMap = {};
+  (blocosTodos || []).forEach(b => { countMap[b.instituicao_id] = (countMap[b.instituicao_id] || 0) + 1; });
+  tbody.innerHTML = _instituicoesCache.length ? _instituicoesCache.map(i => `<tr>
+      <td><strong>${escapeHTML(i.nome)}</strong></td>
+      <td style="text-align:center;"><span class="tag-badge">${countMap[i.id] || 0}</span></td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarInstituicao('${i.id}')">✏️ Editar</button>
+        <button class="btn-excluir" onclick="excluirInstituicao('${i.id}')">✕</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="3" class="td-loading">Sem registros.</td></tr>';
+}
+
+function editarInstituicao(id) {
+  const i = _instituicoesCache.find(x => x.id === id); if (!i) return;
+  $('inst-id-edicao').value = i.id;
+  $('inst-nome').value = i.nome || '';
+  $('btn-salvar-instituicao').textContent = '💾 Atualizar Instituição';
+  $('btn-cancelar-instituicao').style.display = 'inline-flex';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormInstituicao() {
+  $('inst-id-edicao').value = '';
+  $('inst-nome').value = '';
+  $('btn-salvar-instituicao').textContent = '💾 Salvar Instituição';
+  $('btn-cancelar-instituicao').style.display = 'none';
+}
+
+async function excluirInstituicao(id) {
+  if (!confirm('Remover esta Instituição/Unidade? Só será possível se não houver Blocos ou Ativos vinculados a ela.')) return;
+  const { error } = await db.from('instituicoes').delete().eq('id', id);
+  if (error) { alert('Não foi possível remover: ' + error.message); return; }
+  carregarInstituicoes();
+  popularSelectInstituicoes('bloco-instituicao');
+  popularSelectInstituicoes('filtro-bloco-instituicao', true);
+}
+
+if ($('btn-salvar-instituicao')) {
+  $('btn-salvar-instituicao').addEventListener('click', async () => {
+    const nome = $('inst-nome')?.value.trim();
+    if (!nome) { msgForm('msg-instituicao', 'Informe o nome da Instituição/Unidade.', 'red'); return; }
+    msgForm('msg-instituicao', 'Salvando...', 'blue');
+    const idEd = $('inst-id-edicao')?.value;
+    const { error } = idEd
+      ? await db.from('instituicoes').update({ nome }).eq('id', idEd)
+      : await db.from('instituicoes').insert([{ nome }]);
+    if (error) { msgForm('msg-instituicao', 'Erro: ' + error.message, 'red'); return; }
+    msgForm('msg-instituicao', idEd ? '✓ Instituição atualizada!' : '✓ Instituição salva!', 'green');
+    resetarFormInstituicao();
+    carregarInstituicoes();
+    popularSelectInstituicoes('bloco-instituicao');
+    popularSelectInstituicoes('filtro-bloco-instituicao', true);
+  });
+}
+
+// ----- CRUD: Blocos / Edificações -----
+let _blocosCache = [];
+
+async function carregarBlocos() {
+  const tbody = $('tbody-blocos'); if (!tbody) return;
+  const filtroInst = $('filtro-bloco-instituicao')?.value || '';
+  let query = db.from('blocos').select('*, instituicoes(nome)').order('nome', { ascending: true });
+  if (filtroInst) query = query.eq('instituicao_id', filtroInst);
+  const { data: blocos } = await query;
+  const { data: eqs } = await db.from('equipamentos').select('bloco_id');
+  _blocosCache = blocos || [];
+  const countMap = {};
+  (eqs || []).forEach(e => { if (e.bloco_id) countMap[e.bloco_id] = (countMap[e.bloco_id] || 0) + 1; });
+  tbody.innerHTML = _blocosCache.length ? _blocosCache.map(b => `<tr>
+      <td><strong>${escapeHTML(b.nome)}</strong></td>
+      <td>${escapeHTML(b.instituicoes?.nome)}</td>
+      <td style="text-align:center;"><span class="tag-badge">${countMap[b.id] || 0}</span></td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarBloco('${b.id}')">✏️ Editar</button>
+        <button class="btn-excluir" onclick="excluirBloco('${b.id}')">✕</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="4" class="td-loading">Sem registros.</td></tr>';
+}
+
+function editarBloco(id) {
+  const b = _blocosCache.find(x => x.id === id); if (!b) return;
+  $('bloco-id-edicao').value = b.id;
+  $('bloco-instituicao').value = b.instituicao_id || '';
+  $('bloco-nome').value = b.nome || '';
+  $('btn-salvar-bloco').textContent = '💾 Atualizar Bloco';
+  $('btn-cancelar-bloco').style.display = 'inline-flex';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormBloco() {
+  $('bloco-id-edicao').value = '';
+  $('bloco-instituicao').value = '';
+  $('bloco-nome').value = '';
+  $('btn-salvar-bloco').textContent = '💾 Salvar Bloco';
+  $('btn-cancelar-bloco').style.display = 'none';
+}
+
+async function excluirBloco(id) {
+  if (!confirm('Remover este Bloco/Edificação? Só será possível se não houver Ativos vinculados a ele.')) return;
+  const { error } = await db.from('blocos').delete().eq('id', id);
+  if (error) { alert('Não foi possível remover: ' + error.message); return; }
+  carregarBlocos();
+}
+
+if ($('btn-salvar-bloco')) {
+  $('btn-salvar-bloco').addEventListener('click', async () => {
+    const instituicao_id = $('bloco-instituicao')?.value;
+    const nome = $('bloco-nome')?.value.trim();
+    if (!instituicao_id || !nome) { msgForm('msg-bloco', 'Selecione a Instituição e informe o nome do Bloco.', 'red'); return; }
+    msgForm('msg-bloco', 'Salvando...', 'blue');
+    const idEd = $('bloco-id-edicao')?.value;
+    const { error } = idEd
+      ? await db.from('blocos').update({ instituicao_id, nome }).eq('id', idEd)
+      : await db.from('blocos').insert([{ instituicao_id, nome }]);
+    if (error) { msgForm('msg-bloco', 'Erro: ' + error.message, 'red'); return; }
+    msgForm('msg-bloco', idEd ? '✓ Bloco atualizado!' : '✓ Bloco salvo!', 'green');
+    resetarFormBloco();
+    carregarBlocos();
   });
 }
 
@@ -754,26 +1197,14 @@ if ($('btn-salvar-ficha')) {
       assinatura_fiscal_url = await uploadAssinatura(blob, 'fiscal', `fiscal_${Date.now()}`);
     }
 
-    const foto_antes_url  = await uploadFoto($('pmoc-foto-antes')?.files[0],  'pmoc/antes',  'msg-ficha');
-    const foto_depois_url = await uploadFoto($('pmoc-foto-depois')?.files[0], 'pmoc/depois', 'msg-ficha');
+    const fAntes  = await uploadFotos($('pmoc-foto-antes')?.files,  'pmoc', 'msg-ficha');
+    const fDepois = await uploadFotos($('pmoc-foto-depois')?.files, 'pmoc', 'msg-ficha');
+    const fotos_urls = [
+      ...fAntes.map(url  => ({ url, tipo: 'antes'  })),
+      ...fDepois.map(url => ({ url, tipo: 'depois' })),
+    ];
     const { data: colab }     = await db.from('colaboradores').select('nome, assinatura_url, assinatura_digital').eq('id', tecnico_id).single();
     const { data: { user } }  = await db.auth.getUser();
-
-    // ── Responsável Técnico (RT) — opcional ──
-    const rtId = $('pmoc-rt')?.value || '';
-    let rt_nome = null, rt_registro = null, assinatura_rt_url = null;
-    if (rtId) {
-      const { data: rt } = await db.from('colaboradores')
-        .select('nome, assinatura_url, assinatura_digital, registro_classe')
-        .eq('id', rtId).single();
-      if (rt) {
-        rt_nome           = rt.nome;
-        rt_registro       = rt.registro_classe || null;
-        assinatura_rt_url = lerAssinaturaURL(rt, 'assinatura_url', 'assinatura_digital') || null;
-      }
-    }
-    meta_pmoc.rt_nome     = rt_nome;
-    meta_pmoc.rt_registro = rt_registro;
 
     const payload = {
       equipamento_id,
@@ -783,12 +1214,8 @@ if ($('btn-salvar-ficha')) {
       user_id:              user?.id,
       assinatura_tecnico_url: lerAssinaturaURL(colab,'assinatura_url','assinatura_digital') || null,
       assinatura_fiscal_url:  assinatura_fiscal_url || null,
-      rt_nome:              rt_nome,
-      rt_registro:          rt_registro,
-      assinatura_rt_url:    assinatura_rt_url,
     };
-    if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
-    if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
+    if (fotos_urls.length) payload.fotos_urls = fotos_urls;
 
     const idEdicao = $('pmoc-id-edicao')?.value;
     const { error } = idEdicao
@@ -853,6 +1280,439 @@ function renderHistoricoFichas(data) {
 // ===================== IMPRESSÃO PMOC & OS =====================
 function _assinaturaImg(url, style) {
   return url ? `<img src="${url}" style="${style}" alt="Assinatura">` : `<div style="height:55px;border-bottom:1px dashed #94a3b8;margin-bottom:4px;"></div>`;
+}
+
+// ===================== CHECKLISTS PMOC — definições completas por categoria/periodicidade =====================
+// Espelha exatamente os itens cadastrados no formulário (pmoc.html), para reconstruir o laudo
+// agrupado por periodicidade (Mensal/Trimestral/Semestral/Anual), igual ao modelo de referência.
+const CHECKLIST_PMOC_DEFS = {
+  AC: {
+    mensal: [
+      ['bio_01', '[BIO-01] Bandeja de Condensados — Limpeza e Sanitizante'],
+      ['bio_02', '[BIO-02] Rede de Drenagem — Desobstrução e Teste de Escoamento'],
+      ['fil_01', '[FIL-01] Filtros de Ar (G4/F7/F9) — Higienização ou Substituição'],
+      ['mec_01', '[MEC-01] Conjunto Ventilação — Ruídos, Coxins e Fixadores'],
+    ],
+    trimestral: [
+      ['amb_01', '[AMB-01] Ambiente Climatizado — Verificação de Sujidade, Odores Desagradáveis e Fontes de Ruído'],
+      ['amb_02', '[AMB-02] Verificação de Infiltrações e Armazenagem Inadequada de Produtos Químicos no Ambiente'],
+      ['amb_03', '[AMB-03] Verificação de Fontes de Radiação e Demais Riscos à Qualidade do Ar Interior'],
+      ['amb_04', '[AMB-04] Avaliação Geral das Condições de Limpeza e Conservação do Ambiente Climatizado'],
+      ['bio_03', '[BIO-03] Serpentinas — Limpeza Química com Produto Específico por Pressão'],
+      ['ele_01', '[ELE-01] Medição de Corrente/Tensão dos Compressores e Motores'],
+      ['ele_02', '[ELE-02] Reaperto Geral dos Bornes de Comando e Potência'],
+      ['fil_02', '[FIL-02] Diferencial de Pressão de Filtros — Medição com Manômetro'],
+      ['mec_02', '[MEC-02] Lubrificação de Rolamentos e Buchas do Motoventilador'],
+    ],
+    semestral: [
+      ['bio_04', '[BIO-04] Coleta de Amostra de Água para Análise Microbiológica'],
+      ['dut_01', '[DUT-01] Dutos e Caixa de Plenum — Verificação de Sujeira (Interna/Externa), Danos e Corrosão'],
+      ['dut_02', '[DUT-02] Verificação da Vedação das Portas de Inspeção e das Conexões dos Dutos'],
+      ['dut_03', '[DUT-03] Verificação e Eliminação de Danos no Isolamento Térmico dos Dutos'],
+      ['dut_04', '[DUT-04] Bocas de Ar (Insuflamento/Retorno) — Verificação de Sujeira, Fixação e Medição de Vazão'],
+      ['dut_05', '[DUT-05] Registros de Ar (Dampers) e Tomada de Ar Externo — Funcionamento, Bloqueio e Balanceamento'],
+      ['ele_03', '[ELE-03] Medição de Isolamento Elétrico (Megôhmetro) dos Motores'],
+      ['ele_04', '[ELE-04] Teste dos Dispositivos de Proteção (Pressostatos e Termostatos)'],
+      ['ins_01', '[INS-01] Inspeção Estrutural — Suportes, Fixações e Isolamento Térmico das Linhas'],
+      ['mec_03', '[MEC-03] Inspeção e Substituição de Correias e Polias (se aplicável)'],
+      ['ref_01', '[REF-01] Verificação de Carga de Gás Refrigerante (Pressão de Alta/Baixa)'],
+      ['ref_02', '[REF-02] Verificação de Vazamentos no Circuito Frigorífico (Detector de Gás)'],
+    ],
+    anual: [
+      ['bio_05', '[BIO-05] Higienização Completa e Laudos Microbiológicos do Sistema de Ar'],
+      ['ele_05', '[ELE-05] Revisão de Capacitores e Contatores com Desgaste Visível'],
+      ['ele_06', '[ELE-06] Termografia Elétrica do Painel de Comando e Cabos de Alimentação'],
+      ['ins_02', '[INS-02] Revisão Geral do PMOC — Atualização de Documentação e ART'],
+      ['ins_03', '[INS-03] Análise de Desempenho — Delta T Evaporador, COP e Eficiência do Sistema'],
+      ['mec_04', '[MEC-04] Substituição de Rolamentos, Buchas e Selos Mecânicos Desgastados'],
+      ['mec_05', '[MEC-05] Limpeza e Inspeção do Compressor — Verificação de Óleo e Visor'],
+      ['ref_03', '[REF-03] Substituição de Gás Refrigerante (se necessário) e Registro ART/Boletim'],
+    ],
+  },
+  BEB: {
+    mensal: [
+      ['beb_01', '[BEB-01] Limpeza Externa — Gabinete, Torneiras e Bica (produto neutro)'],
+      ['beb_02', '[BEB-02] Verificação do Funcionamento do Sistema de Refrigeração (temperatura adequada)'],
+      ['beb_03', '[BEB-03] Inspeção Visual de Vazamentos nas Conexões e Tubulações'],
+      ['beb_04', '[BEB-04] Verificação e Higienização da Bandeja Coletora'],
+    ],
+    trimestral: [
+      ['beb_05', '[BEB-05] Higienização Interna Completa com Solução Sanitizante (hipoclorito)'],
+      ['beb_06', '[BEB-06] Limpeza e Verificação do Reservatório Interno de Água'],
+      ['beb_07', '[BEB-07] Verificação de Carga de Gás / Funcionamento do Compressor'],
+      ['beb_08', '[BEB-08] Verificação de Validade e Condição do Elemento Filtrante'],
+    ],
+    semestral: [
+      ['beb_09', '[BEB-09] Substituição do Elemento Filtrante (carvão ativado / sedimentos)'],
+      ['beb_10', '[BEB-10] Análise Microbiológica da Água (coleta para laudo laboratorial)'],
+      ['beb_11', '[BEB-11] Verificação e Regulagem da Temperatura de Saída da Água'],
+      ['beb_12', '[BEB-12] Aplicação de Lacre e Registro de Sanitização com Número de Protocolo'],
+    ],
+    anual: [
+      ['beb_13', '[BEB-13] Revisão Completa do Sistema de Refrigeração (compressor, termostato, serpentina)'],
+      ['beb_14', '[BEB-14] Substituição de Vedações, O-rings e Torneiras com Desgaste Aparente'],
+      ['beb_15', '[BEB-15] Laudo Sanitário Anual — Documentação e Registro em Livro de Controle ANVISA'],
+    ],
+  },
+  CLIM: {
+    mensal: [
+      ['clm_01', '[CLM-01] Limpeza do Reservatório de Água — Remoção de Lodo e Calcário'],
+      ['clm_02', '[CLM-02] Limpeza e Inspeção do Painel Evaporativo (sem danificar as células)'],
+      ['clm_03', '[CLM-03] Verificação do Nível e Funcionamento da Boia de Controle de Água'],
+      ['clm_04', '[CLM-04] Verificação da Bomba d\'Água — Funcionamento e Fluxo de Distribuição'],
+      ['clm_05', '[CLM-05] Inspeção do Ventilador Axial — Ruídos, Vibração e Fixação da Hélice'],
+    ],
+    trimestral: [
+      ['clm_06', '[CLM-06] Limpeza Química do Reservatório — Descalcificação com Produto Específico'],
+      ['clm_07', '[CLM-07] Verificação e Limpeza dos Distribuidores de Água (chuveiros/aspersores)'],
+      ['clm_08', '[CLM-08] Medição de Corrente do Motor do Ventilador e da Bomba (amperagem)'],
+      ['clm_09', '[CLM-09] Lubrificação de Rolamentos do Motor e da Bomba'],
+    ],
+    semestral: [
+      ['clm_10', '[CLM-10] Inspeção do Estado do Painel Evaporativo — Avaliação para Substituição'],
+      ['clm_11', '[CLM-11] Análise Microbiológica da Água do Reservatório (Controle de Legionela)'],
+      ['clm_12', '[CLM-12] Verificação do Sistema Elétrico — Quadro, Contactores e Proteções'],
+      ['clm_13', '[CLM-13] Tratamento Biocida da Água — Aplicação de Produto Antiincrustante'],
+    ],
+    anual: [
+      ['clm_14', '[CLM-14] Substituição do Painel Evaporativo (celulose ou polipropileno)'],
+      ['clm_15', '[CLM-15] Revisão Geral da Bomba — Impelidor, Eixo e Vedação Mecânica'],
+      ['clm_16', '[CLM-16] Laudo e Documentação Técnica Anual — Relatório de Controle de Qualidade da Água'],
+    ],
+  },
+  VEN: {
+    mensal: [
+      ['ven_01', '[VEN-01] Limpeza das Pás / Hélice e Grelha de Proteção (remoção de poeira acumulada)'],
+      ['ven_02', '[VEN-02] Verificação de Ruídos Anormais, Vibração Excessiva e Folgas Mecânicas'],
+      ['ven_03', '[VEN-03] Verificação de Fixação — Parafusos, Bucins e Suportes'],
+    ],
+    trimestral: [
+      ['ven_04', '[VEN-04] Lubrificação dos Rolamentos / Buchas com Graxa Adequada'],
+      ['ven_05', '[VEN-05] Medição de Corrente do Motor (amperagem nominal x real)'],
+      ['ven_06', '[VEN-06] Verificação e Reaperto das Conexões Elétricas no Quadro de Comando'],
+    ],
+    semestral: [
+      ['ven_07', '[VEN-07] Medição de Isolamento Elétrico (Megôhmetro) do Motor'],
+      ['ven_08', '[VEN-08] Análise de Vibração com Acelerômetro — Verificação de Desbalanceamento'],
+    ],
+    anual: [
+      ['ven_09', '[VEN-09] Substituição de Rolamentos e Buchas com Desgaste Aparente'],
+      ['ven_10', '[VEN-10] Balanceamento Dinâmico das Pás / Hélice (se aplicável)'],
+    ],
+  },
+  OUT: {
+    mensal: [
+      ['ger_01', '[GER-01] Inspeção Visual Geral do Equipamento — Estado de Conservação e Integridade'],
+      ['ger_02', '[GER-02] Limpeza Geral — Remoção de Poeira, Oxidação e Sujidades'],
+      ['ger_03', '[GER-03] Verificação de Fixação — Suportes, Parafusos e Estrutura'],
+      ['ger_04', '[GER-04] Verificação Elétrica — Conexões, Chave Geral e Proteções'],
+      ['ger_05', '[GER-05] Teste de Funcionamento e Verificação de Parâmetros Operacionais'],
+    ],
+    trimestral: [], semestral: [], anual: [],
+  },
+};
+const CHECKLIST_PERIODICIDADE_INFO = [
+  { key: 'mensal',     freqLetra: 'M', titulo: '🔧 Rotinas Mensais'     },
+  { key: 'trimestral', freqLetra: 'T', titulo: '📅 Rotinas Trimestrais' },
+  { key: 'semestral',  freqLetra: 'S', titulo: '📆 Rotinas Semestrais'  },
+  { key: 'anual',      freqLetra: 'A', titulo: '📋 Rotinas Anuais'      },
+];
+const CHECKLIST_STATUS_LABEL = {
+  C:  '<span class="ok">✓ Conforme</span>',
+  NC: '<span class="nok">✗ Não Conforme</span>',
+  NA: '<span class="na">N/A</span>',
+};
+
+// Monta as tabelas do checklist agrupadas por periodicidade, de forma cumulativa conforme a
+// frequência do PMOC (Mensal ⊂ Trimestral ⊂ Semestral ⊂ Anual) — mesma regra usada no formulário.
+function montarSecoesChecklistPMOC(categoria, frequenciaPalavra, checklist) {
+  const freqMapInverso = { Mensal: 'M', Trimestral: 'T', Semestral: 'S', Anual: 'A' };
+  const freqLetra = freqMapInverso[frequenciaPalavra] || 'M';
+  const ativas    = FREQ_HIERARQUIA[freqLetra] || ['M'];
+  const defs      = CHECKLIST_PMOC_DEFS[categoria] || CHECKLIST_PMOC_DEFS.OUT;
+
+  return CHECKLIST_PERIODICIDADE_INFO
+    .filter(p => ativas.includes(p.freqLetra) && (defs[p.key] || []).length)
+    .map(p => {
+      const linhas = defs[p.key].map(([codigo, label]) => {
+        const status = checklist[codigo];
+        return `<tr><td>${escapeHTML(label)}</td><td style="text-align:center;width:110px;">${CHECKLIST_STATUS_LABEL[status] || CHECKLIST_STATUS_LABEL.NA}</td></tr>`;
+      }).join('');
+      return `
+        <div style="font-size:10px;font-weight:700;color:#1a56db;margin:12px 0 4px;break-after:avoid;page-break-after:avoid;">${p.titulo}</div>
+        <table class="laudo-checklist-table">
+          <thead><tr><th>Item Verificado</th><th style="text-align:center;width:110px;">Status</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>`;
+    }).join('');
+}
+
+// Monta o checklist unificado com 12 colunas de mês.
+// Cada grupo de periodicidade só ativa as colunas dos meses em que é executado.
+// Colunas inativas ficam com fundo cinza (não se aplica naquele mês).
+// Resultado: uma única tabela compacta por equipamento, ideal para impressão A4 paisagem.
+// Checklist compacto para impressão em branco — máxima compacidade, mínimo de folhas.
+// Estrutura por periodicidade: uma tabela com colunas = meses ativos daquela periodicidade.
+// Cada célula de mês: C/NC/NA + data + tec (ultra-compacto).
+// Rodapé de cada bloco: linha de visto do técnico e do fiscal por visita.
+function montarChecklistEmBrancoHTML(categoria) {
+  const defs = CHECKLIST_PMOC_DEFS[categoria] || CHECKLIST_PMOC_DEFS.OUT;
+
+  const CFG = {
+    mensal:     { meses:[0,1,2,3,4,5,6,7,8,9,10,11], bg:'#1e3a5f', badge:'M', label:'Mensal — 12 visitas/ano'                       },
+    trimestral: { meses:[0,3,6,9],                    bg:'#5b21b6', badge:'T', label:'Trimestral — 4 visitas/ano (Jan·Abr·Jul·Out)'  },
+    semestral:  { meses:[0,6],                        bg:'#0e7490', badge:'S', label:'Semestral — 2 visitas/ano (Jan·Jul)'            },
+    anual:      { meses:[0],                          bg:'#065f46', badge:'A', label:'Anual — 1 visita/ano (Janeiro)'                 },
+  };
+
+  // Célula de mês: C/NC/NA em 3 checkboxes microscópicos + linha data + linha tec
+  function _celMes(nomeMes) {
+    return `<th style="width:52px;min-width:44px;text-align:center;padding:2px 1px;
+                       border-left:1px solid rgba(255,255,255,.2);font-size:8px;font-weight:600;
+                       color:#fff;white-space:nowrap;">${nomeMes}</th>`;
+  }
+  function _celDado() {
+    return `<td style="width:52px;border:1px solid #dde3ea;padding:1px 2px;vertical-align:top;text-align:center;">
+      <div style="font-size:7px;color:#374151;white-space:nowrap;line-height:1.5;">☐C ☐NC ☐NA</div>
+      <div style="font-size:6.5px;color:#9ca3af;border-top:1px dotted #d1d5db;margin-top:1px;padding-top:1px;text-align:left;">Data:___________</div>
+      <div style="font-size:6.5px;color:#9ca3af;border-top:1px dotted #d1d5db;margin-top:1px;padding-top:1px;text-align:left;">Tec.:____________</div>
+    </td>`;
+  }
+  // Rodapé: visto técnico + fiscal por coluna de mês
+  function _rodape(n) {
+    const cels = Array.from({length: n}, () =>
+      `<td style="border:1px solid #dde3ea;padding:1px 2px;vertical-align:top;text-align:center;width:52px;">
+        <div style="font-size:6.5px;color:#9ca3af;text-align:left;">V.Tec:___________</div>
+        <div style="font-size:6.5px;color:#9ca3af;border-top:1px dotted #d1d5db;margin-top:1px;padding-top:1px;text-align:left;">V.Fis:____________</div>
+      </td>`
+    ).join('');
+    return `<tr>
+      <td style="border:1px solid #dde3ea;padding:2px 6px;font-size:7px;font-weight:700;
+                 color:#374151;background:#f9fafb;white-space:nowrap;">Visto / Assinatura</td>
+      ${cels}
+    </tr>`;
+  }
+
+  return CHECKLIST_PERIODICIDADE_INFO
+    .filter(p => (defs[p.key] || []).length)
+    .map(p => {
+      const cfg   = CFG[p.key];
+      const itens = defs[p.key];
+      const nMes  = cfg.meses.length;
+
+      const thMeses = cfg.meses.map(m => _celMes(MESES_ABREV[m])).join('');
+      const linhas  = itens.map(([, label]) =>
+        `<tr>
+          <td style="font-size:8px;padding:2px 6px;border:1px solid #dde3ea;line-height:1.25;">${escapeHTML(label)}</td>
+          ${Array.from({length: nMes}, _celDado).join('')}
+        </tr>`
+      ).join('');
+
+      return `<div style="margin-top:6px;break-inside:avoid;page-break-inside:avoid;">
+        <div style="background:${cfg.bg};color:#fff;padding:3px 7px;font-size:8px;font-weight:700;
+                    display:flex;align-items:center;gap:6px;">
+          <span style="background:rgba(255,255,255,.22);padding:0 5px;border-radius:2px;font-weight:800;">${cfg.badge}</span>
+          ${cfg.label}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:8px;table-layout:fixed;">
+          <thead>
+            <tr style="background:${cfg.bg}dd;">
+              <th style="text-align:left;padding:2px 6px;font-size:8px;font-weight:700;color:#fff;
+                         border:1px solid rgba(255,255,255,.2);">Item Verificado</th>
+              ${thMeses}
+            </tr>
+          </thead>
+          <tbody>
+            ${linhas}
+            ${_rodape(nMes)}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('');
+}
+
+// ===================== LAUDO PMOC ANUAL AGRUPADO =====================
+// Gera um documento de planejamento anual por ativo, com:
+//  • Capa de identificação do ativo
+//  • Programação mensal (grade 12 meses) com campo de assinatura/data por visita
+//  • Tabelas de itens agrupadas por periodicidade (Mensal / Trimestral / Semestral / Anual)
+//    com colunas de execução para cada visita prevista no ano
+// Mantém a função legada montarLaudoEmBrancoHTML por compatibilidade interna.
+
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+// Retorna quais meses (índices 0-11) uma periodicidade deve ser executada.
+// Convenção: mês 0 = Janeiro. Adota o primeiro mês como âncora.
+function _mesesDaPeriodidade(key) {
+  switch (key) {
+    case 'mensal':     return [0,1,2,3,4,5,6,7,8,9,10,11];
+    case 'trimestral': return [0,3,6,9];
+    case 'semestral':  return [0,6];
+    case 'anual':      return [0];
+    default:           return [];
+  }
+}
+
+// Cabeçalho de visitas (colunas de meses ativos para uma periodicidade).
+function _cabecalhoVisitas(meses) {
+  return meses.map(m =>
+    `<th style="text-align:center;min-width:38px;font-size:9px;padding:4px 2px;">${MESES_ABREV[m]}</th>`
+  ).join('');
+}
+
+// Célula de execução: campo para data + iniciais do técnico.
+function _celulaExecucao() {
+  return `<td style="text-align:center;border-left:1px solid #e2e8f0;padding:3px 2px;min-width:38px;">
+    <div style="font-size:7px;color:#a0aec0;border-bottom:1px dotted #cbd5e0;margin-bottom:2px;">Data</div>
+    <div style="font-size:7px;color:#a0aec0;margin-top:2px;">Tec.</div>
+  </td>`;
+}
+
+// Tabela de checklist de uma periodicidade com colunas de execução mensais.
+function _tabelaChecklistAnual(titulo, itens, meses, corTitulo) {
+  if (!itens || !itens.length) return '';
+  const thVisitas  = _cabecalhoVisitas(meses);
+  const numColunas = meses.length;
+  const linhas = itens.map(([codigo, label]) => {
+    const cels = Array.from({ length: numColunas }, () => _celulaExecucao()).join('');
+    return `<tr>
+      <td style="font-size:10px;padding:4px 6px;line-height:1.3;">${escapeHTML(label)}</td>
+      ${cels}
+    </tr>`;
+  }).join('');
+
+  return `
+  <div style="margin-top:14px;break-inside:avoid;page-break-inside:avoid;">
+    <div style="font-size:10px;font-weight:700;color:${corTitulo};background:${corTitulo}18;
+                padding:5px 8px;border-left:3px solid ${corTitulo};margin-bottom:0;
+                break-after:avoid;page-break-after:avoid;">
+      ${titulo} &nbsp;·&nbsp; ${numColunas} visita${numColunas > 1 ? 's' : ''}/ano
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="text-align:left;padding:4px 6px;font-size:9px;font-weight:700;color:#4a5568;border-bottom:2px solid #e2e8f0;">Item Verificado</th>
+          ${thVisitas}
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>
+    </table>
+  </div>`;
+}
+
+// Grade de visitas mensais (12 meses) com campos de data, técnico e assinatura.
+function _gradeVisitasMensais() {
+  const celulas = MESES_ABREV.map(m => `
+    <td style="border:1px solid #e2e8f0;padding:6px 4px;vertical-align:top;min-width:60px;">
+      <div style="font-size:9px;font-weight:700;color:#1a56db;text-align:center;margin-bottom:4px;">${m}</div>
+      <div style="font-size:8px;color:#a0aec0;border-bottom:1px dotted #cbd5e0;padding-bottom:10px;margin-bottom:4px;">Data:</div>
+      <div style="font-size:8px;color:#a0aec0;border-bottom:1px dotted #cbd5e0;padding-bottom:10px;margin-bottom:4px;">Técnico:</div>
+      <div style="font-size:8px;color:#a0aec0;padding-bottom:14px;">Assin.:</div>
+    </td>`).join('');
+  return `
+  <table style="width:100%;border-collapse:collapse;margin-top:6px;table-layout:fixed;">
+    <tbody><tr>${celulas}</tr></tbody>
+  </table>`;
+}
+
+// Monta o laudo PMOC anual agrupado de um único ativo.
+// Estrutura: capa de ID → dados da inspeção em branco → checklist Status+Observação (formato XLSX).
+function montarLaudoAnualAgrupadoHTML(eq, ultimoDaLista) {
+  const categoria = eq.categoria || 'OUT';
+  const classeQ   = ultimoDaLista ? '' : ' laudo-pagebreak';
+  const anoAtual  = new Date().getFullYear();
+  const checklistHTML = montarChecklistEmBrancoHTML(categoria);
+
+  // Checkboxes de frequência para o cabeçalho (igual ao XLSX)
+  const freqChecks = `
+    <div style="font-size:9px;color:#fff;text-align:right;line-height:1.8;">
+      Frequência:&nbsp;
+      <label style="margin-right:8px;">☐ Mensal</label>
+      <label style="margin-right:8px;">☐ Trimestral</label>
+      <label style="margin-right:8px;">☐ Semestral</label>
+      <label>☐ Anual</label>
+    </div>`;
+
+  return `
+  <div class="laudo-wrapper${classeQ}">
+
+    <!-- CABEÇALHO compacto -->
+    <div style="background:#1e3a5f;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="${LOGO_ETIQUETA}" alt="Logo" style="height:26px;width:auto;display:block;filter:brightness(0) invert(1);">
+        <div>
+          <div style="font-size:11px;font-weight:700;line-height:1.2;">Plano de Manutenção, Operação e Controle (PMOC)</div>
+          <div style="font-size:8.5px;opacity:.8;margin-top:1px;">Laudo para Preenchimento em Campo — ${anoAtual} &nbsp;·&nbsp; TAG: <strong>${escapeHTML(eq.tag)}</strong></div>
+        </div>
+      </div>
+      <div style="font-size:8px;opacity:.9;white-space:nowrap;">
+        ☐ Mensal &nbsp;☐ Trimestral &nbsp;☐ Semestral &nbsp;☐ Anual
+      </div>
+    </div>
+
+    <!-- IDENTIFICAÇÃO DO ATIVO — compacto em 2 linhas -->
+    <div style="border:1px solid #e2e8f0;border-top:3px solid #1e3a5f;padding:5px 10px;background:#fafbfc;">
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:3px 14px;">
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">TAG</div><div style="font-size:10px;font-weight:700;color:#1e3a5f;">${escapeHTML(eq.tag)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Equipamento</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.produto || categoria)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Marca</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.marca)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Nº Série</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.nr_serie)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Patrimônio</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.patrimonio)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Potência</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.potencia || '—')}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Bloco</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.bloco)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Setor</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.setor)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Sala/Local</div><div style="font-size:9.5px;font-weight:600;">${escapeHTML(eq.sala)}</div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Técnico</div><div style="font-size:9px;border-bottom:1px solid #cbd5e0;min-height:16px;"></div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Data da Inspeção</div><div style="font-size:9px;border-bottom:1px solid #cbd5e0;min-height:16px;"></div></div>
+        <div><div style="font-size:7px;color:#718096;text-transform:uppercase;letter-spacing:.05em;">Fiscal/Validador</div><div style="font-size:9px;border-bottom:1px solid #cbd5e0;min-height:16px;"></div></div>
+      </div>
+    </div>
+
+    <!-- CHECKLIST compacto -->
+    <div style="border:1px solid #e2e8f0;border-top:none;padding:4px 10px 6px;">
+      <div style="font-size:7.5px;font-weight:700;color:#1e3a5f;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px;padding-bottom:2px;border-bottom:1px solid #e2e8f0;">Checklist de Manutenção · Marque C / NC / NA · Registre Data e Técnico</div>
+      ${checklistHTML}
+    </div>
+
+    <!-- OBSERVAÇÕES + ASSINATURAS compactos em bloco único -->
+    <div style="border:1px solid #e2e8f0;border-top:none;padding:4px 10px;">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div style="flex:2;">
+          <div style="font-size:7px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Observações Técnicas</div>
+          <div style="border:1px solid #e2e8f0;height:32px;border-radius:2px;"></div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="height:30px;border-bottom:1px solid #2d3748;"></div>
+          <div style="font-size:7.5px;color:#4a5568;margin-top:2px;">Técnico Executor</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="height:30px;border-bottom:1px solid #2d3748;"></div>
+          <div style="font-size:7.5px;color:#4a5568;margin-top:2px;">Fiscal / Validador</div>
+        </div>
+        <div style="flex:1.4;text-align:center;">
+          <div style="height:30px;border-bottom:1px solid #2d3748;"></div>
+          <div style="font-size:7.5px;color:#4a5568;margin-top:2px;">Resp. Técnico — CREA / ART nº ________</div>
+        </div>
+      </div>
+    </div>
+
+  </div>`;
+}
+
+// Mantém a versão legada (laudo por visita individual) para compatibilidade interna.
+function montarLaudoEmBrancoHTML(eq, ultimoDaLista) {
+  return montarLaudoAnualAgrupadoHTML(eq, ultimoDaLista);
+}
+
+// Emite, em um único documento de impressão, o laudo PMOC anual agrupado de cada ativo
+// cadastrado (respeita os filtros aplicados na tela de Gerenciamento de Ativos).
+// Cada ativo ocupa seu próprio bloco; a grade de 12 meses e os checklists por periodicidade
+// ficam consolidados em uma única página/documento por ativo.
+function emitirLaudosEmBrancoPMOC() {
+  const items = obterEquipamentosFiltrados();
+  if (!items.length) { alert('Nenhum ativo encontrado para gerar laudos em branco com os filtros atuais.'); return; }
+  const html = items.map((eq, i) => montarLaudoAnualAgrupadoHTML(eq, i === items.length - 1)).join('');
+  imprimir('area-laudos-em-branco', html);
 }
 
 function emitirRelatorioPMOC(b64) {
@@ -1116,7 +1976,7 @@ function emitirRelatorioOS(os) {
   const html = `
   <div class="laudo-wrapper">
     <div class="laudo-header">
-      <div><h1>🛠️ Ordem de Serviço — CONCREDUR</h1><p>Registro Técnico de Manutenção</p></div>
+      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Ordem de Serviço</h1><p>Registro Técnico de Manutenção</p></div></div>
       <div class="laudo-header-meta">
         <strong>Código: ${codigoOS}</strong><br>
         Abertura: ${fmtDate(os.created_at)}<br>
@@ -1149,21 +2009,8 @@ function emitirRelatorioOS(os) {
       <div class="laudo-section-title">Diagnóstico Técnico / Ações Executadas</div>
       <p style="font-size:12px;line-height:1.7;min-height:60px;">${escapeHTML(os.laudo_tecnico || 'Não informado.')}</p>
     </div>
-    ${(os.foto_antes_url || os.foto_depois_url) ? `
-    <div class="laudo-section laudo-section-nobreak">
-      <div class="laudo-section-title">Evidência Fotográfica — Antes / Depois</div>
-      <div class="laudo-grid">
-        <div style="text-align:center;">
-          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
-          ${os.foto_antes_url ? `<img src="${os.foto_antes_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
-        </div>
-        <div style="text-align:center;">
-          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
-          ${os.foto_depois_url ? `<img src="${os.foto_depois_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
-        </div>
-      </div>
-    </div>` : (os.foto_url ? `<div class="laudo-section laudo-section-nobreak"><div class="laudo-section-title">Evidência Fotográfica</div><img src="${os.foto_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;"></div>` : '')}
-    <div class="laudo-section laudo-section-nobreak">
+    ${galeriaFotosHTML(os)}
+    <div class="laudo-section">
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
         <div style="flex:1;">
           <div class="laudo-assinatura-box" style="min-width:200px;text-align:center;">
@@ -1179,96 +2026,16 @@ function emitirRelatorioOS(os) {
         </div>
       </div>
       <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#a0aec0;">
-        Sistema Concredur · ${new Date().toLocaleString('pt-BR')} · Verificação: ${urlValidacao}
+        Sistema de Gestão Univag · ${new Date().toLocaleString('pt-BR')} · Verificação: ${urlValidacao}
       </div>
     </div>
   </div>`;
   imprimir('area-os-impressao', html);
 }
 
-function emitirRelatorioOSG(os) {
-  const col = os.colaboradores || {};
-  const urlValidacao = gerarUrlValidacao(os.id, 'osg');
-  const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
-  const codigoOSG    = os.numero_os || `OSG-${os.id.toString().slice(0,5).toUpperCase()}`;
-
-  const areas = Array.isArray(os.areas_tecnicas)
-    ? os.areas_tecnicas.join(', ')
-    : (os.areas_tecnicas || os.area || '—');
-
-  const assinaturaTecnicoHTML = col?.nome
-    ? _assinaturaImg(lerAssinaturaURL(col,'assinatura_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;')
-    : _assinaturaImg(null, '');
-
-  const html = `
-  <div class="laudo-wrapper">
-    <div class="laudo-header">
-      <div><h1>🏢 Ordem de Serviço Facilities — CONCREDUR</h1><p>Registro de Solicitação Corporativa</p></div>
-      <div class="laudo-header-meta">
-        <strong>Código: ${escapeHTML(codigoOSG)}</strong><br>
-        Abertura: ${fmtDate(os.created_at)}<br>
-        Emissão: ${new Date().toLocaleDateString('pt-BR')}
-      </div>
-    </div>
-    <div class="laudo-section">
-      <div class="laudo-section-title">Dados da Chamada</div>
-      <div class="laudo-grid">
-        <div class="laudo-field"><label>Serviço Requisitado</label><span>${escapeHTML(os.servico_requisitado)}</span></div>
-        <div class="laudo-field"><label>Setor / Destino</label><span>${escapeHTML(os.setor)}</span></div>
-        <div class="laudo-field"><label>Tipo de Intervenção</label><span>${escapeHTML(os.tipo_manutencao || os.tipo_os || '—')}</span></div>
-        <div class="laudo-field"><label>Especialidades Envolvidas</label><span>${escapeHTML(areas)}</span></div>
-        <div class="laudo-field"><label>Equipamento</label><span>${escapeHTML(os.equipamento || '—')}</span></div>
-        <div class="laudo-field"><label>Status</label><span>${escapeHTML(os.status_os)}</span></div>
-        ${col?.nome ? `<div class="laudo-field"><label>Técnico Atribuído</label><span>${escapeHTML(col.nome)}</span></div>` : ''}
-      </div>
-    </div>
-    ${os.falha_relatada ? `
-    <div class="laudo-section">
-      <div class="laudo-section-title">Falha Relatada / Descrição do Serviço</div>
-      <p style="font-size:12px;line-height:1.7;min-height:60px;">${escapeHTML(os.falha_relatada)}</p>
-    </div>` : ''}
-    ${(os.foto_antes_url || os.foto_depois_url) ? `
-    <div class="laudo-section laudo-section-nobreak">
-      <div class="laudo-section-title">Evidência Fotográfica — Antes / Depois</div>
-      <div class="laudo-grid">
-        <div style="text-align:center;">
-          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
-          ${os.foto_antes_url ? `<img src="${os.foto_antes_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
-        </div>
-        <div style="text-align:center;">
-          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
-          ${os.foto_depois_url ? `<img src="${os.foto_depois_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
-        </div>
-      </div>
-    </div>` : ''}
-    <div class="laudo-section laudo-section-nobreak">
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
-        <div style="flex:1;">
-          <div class="laudo-assinatura-box" style="min-width:200px;text-align:center;">
-            ${assinaturaTecnicoHTML}
-            <div class="laudo-assinatura-linha">${escapeHTML(col?.nome || 'Responsável pela Execução')}<br>Técnico Executor</div>
-          </div>
-        </div>
-        <div style="text-align:center;flex-shrink:0;">
-          ${qrCodeHTML}
-          <div style="font-size:9px;color:#718096;margin-top:5px;font-weight:600;">AUTENTICIDADE DO DOCUMENTO</div>
-          <div style="font-size:8px;color:#a0aec0;margin-top:2px;">${escapeHTML(codigoOSG)}</div>
-          <div style="font-size:8px;color:#a0aec0;">Aponte a câmera para verificar</div>
-        </div>
-      </div>
-      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#a0aec0;">
-        Sistema Concredur · ${new Date().toLocaleString('pt-BR')} · Verificação: ${urlValidacao}
-      </div>
-    </div>
-  </div>`;
-  imprimir('area-osg-impressao', html);
-}
-
 // ===================== ORDENS DE SERVIÇO =====================
 if ($('btn-salvar-os')) {
   $('btn-salvar-os').addEventListener('click', async () => {
-    const foto_antes_url  = await uploadFoto($('os-foto-antes')?.files[0],  'os/antes',  'msg-os');
-    const foto_depois_url = await uploadFoto($('os-foto-depois')?.files[0], 'os/depois', 'msg-os');
     const payload = {
       equipamento_id:   $('os-equipamento').value,
       colaborador_id:   $('os-tecnico').value,
@@ -1277,19 +2044,29 @@ if ($('btn-salvar-os')) {
       descricao_defeito: $('os-defeito').value.trim(),
       laudo_tecnico:    $('os-laudo').value.trim(),
     };
-    if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
-    if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
+    const fAntes  = await uploadFotos($('os-foto-antes')?.files,  'os', 'msg-os');
+    const fDepois = await uploadFotos($('os-foto-depois')?.files, 'os', 'msg-os');
+    const fotos_urls = [
+      ...fAntes.map(url  => ({ url, tipo: 'antes'  })),
+      ...fDepois.map(url => ({ url, tipo: 'depois' })),
+    ];
+    if (fotos_urls.length) payload.fotos_urls = fotos_urls;
+
     const idEd = $('os-id-edicao').value;
     const { error } = idEd
       ? await db.from('ordens_servico').update(payload).eq('id', idEd)
       : await db.from('ordens_servico').insert([payload]);
-    if (!error) {
-      if ($('os-foto-antes'))  $('os-foto-antes').value  = '';
-      if ($('os-foto-depois')) $('os-foto-depois').value = '';
-      resetarFormOS(); carregarOrdensServico(); carregarCentralUnificadaOS();
-    }
+    if (error) { msgForm('msg-os', 'Erro: ' + error.message, 'red'); return; }
+    msgForm('msg-os', idEd ? '✓ OS atualizada!' : '✓ OS registrada!', 'green');
+    resetarFormOS(); carregarOrdensServico(); carregarCentralUnificadaOS();
   });
 }
+
+// Ativa o preview das imagens selecionadas nos formulários PMOC e OS.
+montarPreviewFotos('pmoc-foto-antes',  'pmoc-foto-antes-preview');
+montarPreviewFotos('pmoc-foto-depois', 'pmoc-foto-depois-preview');
+montarPreviewFotos('os-foto-antes',    'os-foto-antes-preview');
+montarPreviewFotos('os-foto-depois',   'os-foto-depois-preview');
 
 async function carregarOrdensServico() {
   const tbody = $('tbody-os'); if (!tbody) return;
@@ -1342,16 +2119,12 @@ function _editarOSFromB64(b64) {
 // ===================== FACILITIES =====================
 if ($('btn-salvar-osg')) {
   $('btn-salvar-osg').addEventListener('click', async () => {
-    const foto_antes_url  = await uploadFoto($('osg-foto-antes')?.files[0],  'osg/antes',  'msg-osg');
-    const foto_depois_url = await uploadFoto($('osg-foto-depois')?.files[0], 'osg/depois', 'msg-osg');
     const payload = {
       setor:               $('osg-setor').value,
       servico_requisitado: $('osg-requisitado').value,
       falha_relatada:      $('osg-falha').value,
       status_os:           $('osg-status').value,
     };
-    if (foto_antes_url)  payload.foto_antes_url  = foto_antes_url;
-    if (foto_depois_url) payload.foto_depois_url = foto_depois_url;
     const { error } = await db.from('ordens_servico_geral').insert([payload]);
     if (!error) { resetarFormOSG(); carregarOSGeral(); carregarCentralUnificadaOS(); }
   });
@@ -1504,7 +2277,11 @@ function alternarSubAbasRH(m) {
   if ($('sub-rh-colab'))    $('sub-rh-colab').style.display    = m === 'colab'    ? 'block' : 'none';
   if ($('sub-rh-cargo'))    $('sub-rh-cargo').style.display    = m === 'cargo'    ? 'block' : 'none';
 }
-function resetarFormOS()  { ['os-defeito','os-laudo','os-id-edicao'].forEach(id => { if ($(id)) $(id).value = ''; }); }
+function resetarFormOS()  {
+  ['os-defeito','os-laudo','os-id-edicao'].forEach(id => { if ($(id)) $(id).value = ''; });
+  ['os-foto-antes','os-foto-depois'].forEach(id => { if ($(id)) $(id).value = ''; });
+  ['os-foto-antes-preview','os-foto-depois-preview'].forEach(id => { if ($(id)) $(id).innerHTML = ''; });
+}
 function resetarFormOSG() {
   ['osg-setor','osg-requisitado','osg-falha'].forEach(id => { if ($(id)) $(id).value = ''; });
   if ($('osg-foto-antes'))  $('osg-foto-antes').value  = '';
@@ -1714,9 +2491,22 @@ function _abrirJanelaEtiqueta(lista) {
 function imprimir(areaId, html) {
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) { alert('Permita pop-ups para imprimir os laudos.'); return; }
-  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Concredur — Impressão</title>
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Univag — Impressão</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}@page{margin:14mm;size:A4 portrait}html,body{font-family:'Inter',Arial,sans-serif;font-size:12px;color:#1a202c;background:#fff}.laudo-wrapper{width:100%}.laudo-header{background:#1a56db;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:6px 6px 0 0}.laudo-header h1{font-size:18px;font-weight:700}.laudo-header p{font-size:11px;margin-top:4px;opacity:.85}.laudo-header-meta{text-align:right;font-size:11px}.laudo-section{border:1px solid #e2e8f0;border-top:none;padding:12px 16px}.laudo-section-nobreak{break-inside:avoid;page-break-inside:avoid}.laudo-section:last-child{border-radius:0 0 6px 6px}.laudo-chk-bloco{break-inside:avoid;page-break-inside:avoid}.laudo-section-title{font-size:10px;font-weight:700;color:#1a56db;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}.laudo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px}.laudo-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 16px}.laudo-field{margin-bottom:4px}.laudo-field label{font-size:9px;color:#718096;text-transform:uppercase;letter-spacing:.06em;display:block}.laudo-field span{font-size:12px;font-weight:600;color:#1a202c}.laudo-checklist-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}.laudo-checklist-table th{background:#1a56db;color:#fff;padding:5px 8px;text-align:left;font-size:10px}.laudo-checklist-table td{padding:4px 8px;border-bottom:1px solid #e2e8f0}.laudo-checklist-table tr:nth-child(even) td{background:#f8fafc}.ok{color:#059669;font-weight:700}.nok{color:#dc2626;font-weight:700}.na{color:#a0aec0}.laudo-assinatura-box{text-align:center;min-width:180px}.laudo-assinatura-linha{border-top:1px solid #1a202c;margin-top:8px;padding-top:4px;font-size:10px;color:#4a5568}img{max-width:100%;height:auto;display:block}.tag-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:#e2e8f0;color:#2d3748}.tag-badge.success{background:#d1fae5;color:#065f46}.tag-badge.warning{background:#fef3c7;color:#92400e}.tag-badge.danger{background:#fee2e2;color:#991b1b}.tag-badge.andamento{background:#dbeafe;color:#1e40af}</style></head>
+  <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}@page{margin:6mm 8mm;size:A4 landscape}html,body{font-family:'Inter',Arial,sans-serif;font-size:12px;color:#1a202c;background:#fff}.laudo-wrapper{width:100%}.laudo-header{background:#1a56db;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:6px 6px 0 0}.laudo-header h1{font-size:18px;font-weight:700}.laudo-header p{font-size:11px;margin-top:4px;opacity:.85}.laudo-header-meta{text-align:right;font-size:11px}.laudo-section{border:1px solid #e2e8f0;border-top:none;padding:12px 16px;break-inside:avoid;page-break-inside:avoid}.laudo-section:last-child{border-radius:0 0 6px 6px}.laudo-section-title{font-size:10px;font-weight:700;color:#1a56db;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e2e8f0;break-after:avoid;page-break-after:avoid}.laudo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px}.laudo-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 16px}.laudo-field{margin-bottom:4px}.laudo-field label{font-size:9px;color:#718096;text-transform:uppercase;letter-spacing:.06em;display:block}.laudo-field span{font-size:12px;font-weight:600;color:#1a202c}.laudo-checklist-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px;break-inside:avoid;page-break-inside:avoid}.laudo-checklist-table th{background:#1a56db;color:#fff;padding:5px 8px;text-align:left;font-size:10px}.laudo-checklist-table td{padding:4px 8px;border-bottom:1px solid #e2e8f0}.laudo-checklist-table tr{break-inside:avoid;page-break-inside:avoid}.laudo-checklist-table tr:nth-child(even) td{background:#f8fafc}.ok{color:#059669;font-weight:700}.nok{color:#dc2626;font-weight:700}.na{color:#a0aec0}.laudo-assinatura-box{text-align:center;min-width:180px;break-inside:avoid;page-break-inside:avoid}.laudo-assinatura-linha{border-top:1px solid #1a202c;margin-top:8px;padding-top:4px;font-size:10px;color:#4a5568}img{max-width:100%;height:auto;display:block}.tag-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:#e2e8f0;color:#2d3748}.tag-badge.success{background:#d1fae5;color:#065f46}.tag-badge.warning{background:#fef3c7;color:#92400e}.tag-badge.danger{background:#fee2e2;color:#991b1b}.tag-badge.andamento{background:#dbeafe;color:#1e40af}.laudo-field-em-branco{font-size:9px;color:#a0aec0;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px dotted #cbd5e0;padding-bottom:20px;}.laudo-pagebreak{break-after:page;page-break-after:always;}.laudo-checkbox-status{white-space:nowrap;font-size:11px;color:#4a5568;}.laudo-section-checklist{break-inside:auto !important;page-break-inside:auto !important;padding:6px 10px !important;}.exec-label{font-size:6.5px;color:#b0b8c4;display:block;line-height:1.4;border-bottom:1px dotted #cbd5e0;padding-bottom:8px;margin-bottom:1px;}
+.laudo-section{padding:6px 10px !important;}
+.laudo-grid-3{gap:3px 12px !important;}
+.laudo-field{margin-bottom:2px !important;}
+.laudo-field label{font-size:7.5px !important;}
+.laudo-field span{font-size:10px !important;}
+.laudo-section-title{font-size:8.5px !important;margin-bottom:4px !important;padding-bottom:2px !important;}
+p{margin:0 0 2px !important;font-size:8px !important;}
+table td,table th{font-size:8px;}
+table.chk-anual{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9px;}
+table.chk-anual th,table.chk-anual td{border:1px solid #e2e8f0;overflow:hidden;}
+table.chk-anual th:first-child,table.chk-anual td:first-child{width:auto;text-align:left;}
+table.chk-anual th:not(:first-child),table.chk-anual td:not(:first-child){width:36px;min-width:28px;text-align:center;}
+</style></head>
   <body>${html}<script>window.addEventListener('load',function(){setTimeout(function(){window.print();window.addEventListener('afterprint',function(){window.close();});},400);});<\/script></body></html>`);
   win.document.close();
 }
@@ -1964,6 +2754,222 @@ async function renderizarGraficosDashboard() {
   }
 }
 
+// ===================== DASHBOARD — KPIs EXTRAS (Filtros a Vencer / PMOC Vencidos) =====================
+async function carregarKPIsExtras() {
+  const elFiltros = $('dash-txt-filtros-vencer');
+  const elPmoc    = $('dash-txt-pmoc-vencidos');
+  if (!elFiltros && !elPmoc) return;
+
+  const hj    = new Date(); hj.setHours(0,0,0,0);
+  const em30  = new Date(hj); em30.setDate(em30.getDate() + 30);
+  const hjStr = hj.toISOString().split('T')[0];
+  const e30Str = em30.toISOString().split('T')[0];
+
+  const [{ data: bebs }, { data: pmocs }] = await Promise.all([
+    db.from('equipamentos').select('validade').eq('categoria','BEB').not('validade','is',null).lte('validade', e30Str),
+    db.from('fichas_pmoc').select('proxima_manutencao').not('proxima_manutencao','is',null).lt('proxima_manutencao', hjStr),
+  ]);
+
+  if (elFiltros) elFiltros.textContent = (bebs||[]).length;
+  if (elPmoc)    elPmoc.textContent    = (pmocs||[]).length;
+}
+
+// ===================== DASHBOARD — INVENTÁRIO DE GÁS REFRIGERANTE =====================
+async function carregarInventarioGas() {
+  const el    = $('dash-inv-gas');
+  const elTot = $('dash-gas-total');
+  if (!el) return;
+
+  const { data: eqs } = await db.from('equipamentos').select('extras_tecnico').eq('categoria','AC');
+  const mapa = {};
+  let totalKg = 0;
+
+  (eqs||[]).forEach(e => {
+    const extras = (typeof e.extras_tecnico === 'string')
+      ? (() => { try { return JSON.parse(e.extras_tecnico); } catch(x) { return {}; } })()
+      : (e.extras_tecnico || {});
+    const tipo = extras['gas'] || null;
+    const qtd  = parseFloat((extras['gas-qtd'] || '0').toString().replace(',','.')) || 0;
+    if (tipo) {
+      mapa[tipo] = (mapa[tipo] || { qtd: 0, count: 0 });
+      mapa[tipo].qtd   += qtd;
+      mapa[tipo].count += 1;
+    }
+    totalKg += qtd;
+  });
+
+  const cores = ['#1e3a5f','#4169e1','#0ea5e9','#7c3aed','#059669','#f59e0b'];
+  const tipos = Object.entries(mapa).sort((a,b) => b[1].qtd - a[1].qtd);
+
+  if (!tipos.length) {
+    el.innerHTML = '<span style="color:#a0aec0;">Nenhum equipamento com gás cadastrado.</span>';
+    if (elTot) elTot.textContent = '— kg';
+    return;
+  }
+
+  el.innerHTML = tipos.map(([tipo, v], i) => {
+    const cor = cores[i % cores.length];
+    const pct = totalKg > 0 ? Math.round((v.qtd / totalKg) * 100) : 0;
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:600;color:#2d3748;">${tipo}</span>
+          <span style="font-size:12px;color:#718096;">${v.qtd.toFixed(2)} kg · ${v.count} equip.</span>
+        </div>
+        <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;">
+          <div style="width:${pct}%;background:${cor};height:100%;border-radius:4px;transition:width .4s;"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (elTot) elTot.textContent = totalKg > 0 ? `${totalKg.toFixed(2)} kg` : '— kg';
+}
+
+// ===================== DASHBOARD — DISTRIBUIÇÃO POR CATEGORIA =====================
+async function carregarDistribuicaoCategoria() {
+  const el       = $('dash-dist-cat');
+  const elCrit   = $('dash-cat-criticos');
+  if (!el) return;
+
+  const { data: eqs } = await db.from('equipamentos').select('categoria,criticidade');
+  const mapa  = {};
+  let criticos = 0;
+
+  (eqs||[]).forEach(e => {
+    const cat = e.categoria || 'OUT';
+    mapa[cat] = (mapa[cat] || 0) + 1;
+    if (e.criticidade === 'Alta') criticos++;
+  });
+
+  const LABEL = { AC:'❄️ Ar Condicionado', BEB:'💧 Bebedouro', CLIM:'🌀 Climatizador', VEN:'💨 Ventilador/Exaustor', OUT:'🔧 Outros' };
+  const total = (eqs||[]).length;
+  const ordem = ['AC','BEB','CLIM','VEN','OUT'];
+  const cores  = { AC:'#4169e1', BEB:'#0ea5e9', CLIM:'#7c3aed', VEN:'#059669', OUT:'#a0aec0' };
+
+  if (!total) {
+    el.innerHTML = '<span style="color:#a0aec0;">Nenhum ativo cadastrado.</span>';
+    return;
+  }
+
+  el.innerHTML = ordem.filter(c => mapa[c]).map(cat => {
+    const n   = mapa[cat] || 0;
+    const pct = Math.round((n / total) * 100);
+    const cor = cores[cat] || '#a0aec0';
+    return `
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:600;color:#2d3748;">${LABEL[cat] || cat}</span>
+          <span style="font-size:12px;color:#718096;">${n} · ${pct}%</span>
+        </div>
+        <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;">
+          <div style="width:${pct}%;background:${cor};height:100%;border-radius:4px;"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (elCrit) elCrit.textContent = `${criticos} ativo${criticos !== 1 ? 's' : ''}`;
+}
+
+// ===================== DASHBOARD — CONFORMIDADE DE FILTROS (Bebedouros) =====================
+async function carregarConformidadeFiltros() {
+  const el = $('dash-conf-filtros');
+  if (!el) return;
+
+  const hj = new Date(); hj.setHours(0,0,0,0);
+  const { data: bebs } = await db.from('equipamentos').select('tag,validade,bloco').eq('categoria','BEB');
+
+  if (!bebs || !bebs.length) {
+    el.innerHTML = '<span style="color:#a0aec0;">Nenhum bebedouro cadastrado.</span>';
+    return;
+  }
+
+  let ok = 0, vencer = 0, vencido = 0, semData = 0;
+  bebs.forEach(b => {
+    if (!b.validade) { semData++; return; }
+    const dt   = new Date(b.validade + 'T00:00:00');
+    const diff = Math.ceil((dt - hj) / (1000*60*60*24));
+    if (diff < 0)      vencido++;
+    else if (diff <= 30) vencer++;
+    else                 ok++;
+  });
+
+  const total = bebs.length;
+  const pctOk = Math.round((ok / total) * 100);
+
+  el.innerHTML = `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:700;color:#059669;">✅ No prazo</span>
+        <span style="font-size:13px;font-weight:700;color:#059669;">${ok}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:600;color:#f59e0b;">⚠️ Vence em 30 dias</span>
+        <span style="font-size:13px;font-weight:700;color:#f59e0b;">${vencer}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:600;color:#ef4444;">🚨 Vencido</span>
+        <span style="font-size:13px;font-weight:700;color:#ef4444;">${vencido}</span>
+      </div>
+      ${semData ? `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:12px;color:#a0aec0;">Sem data cadastrada</span><span style="font-size:12px;color:#a0aec0;">${semData}</span></div>` : ''}
+    </div>
+    <div style="background:#e2e8f0;border-radius:6px;height:10px;overflow:hidden;margin-top:8px;">
+      <div style="width:${pctOk}%;background:#10b981;height:100%;border-radius:6px;transition:width .4s;"></div>
+    </div>
+    <p style="font-size:11px;color:#718096;margin:6px 0 0;text-align:right;">${pctOk}% em conformidade (${total} bebedouros)</p>`;
+}
+
+// ===================== DASHBOARD — COBERTURA PMOC POR CATEGORIA =====================
+async function carregarCoberturaPMOC() {
+  const el = $('dash-cob-pmoc');
+  if (!el) return;
+
+  const [{ data: eqs }, { data: fichas }] = await Promise.all([
+    db.from('equipamentos').select('id,categoria'),
+    db.from('fichas_pmoc').select('equipamento_id'),
+  ]);
+
+  if (!eqs || !eqs.length) {
+    el.innerHTML = '<span style="color:#a0aec0;">Nenhum ativo cadastrado.</span>';
+    return;
+  }
+
+  const comFicha = new Set((fichas||[]).map(f => String(f.equipamento_id)));
+  const LABEL = { AC:'❄️ AC', BEB:'💧 BEB', CLIM:'🌀 CLM', VEN:'💨 VEN', OUT:'🔧 OUT' };
+  const cores  = { AC:'#4169e1', BEB:'#0ea5e9', CLIM:'#7c3aed', VEN:'#059669', OUT:'#a0aec0' };
+  const mapa   = {};
+
+  eqs.forEach(e => {
+    const cat = e.categoria || 'OUT';
+    if (!mapa[cat]) mapa[cat] = { total: 0, com: 0 };
+    mapa[cat].total++;
+    if (comFicha.has(String(e.id))) mapa[cat].com++;
+  });
+
+  const totalGeral = eqs.length;
+  const comGeral   = eqs.filter(e => comFicha.has(String(e.id))).length;
+  const pctGeral   = Math.round((comGeral / totalGeral) * 100);
+
+  el.innerHTML = `
+    <div style="text-align:center;margin-bottom:14px;">
+      <span style="font-size:28px;font-weight:800;color:#1e3a5f;">${pctGeral}%</span>
+      <p style="font-size:11px;color:#718096;margin:2px 0 0;">cobertura geral (${comGeral}/${totalGeral})</p>
+    </div>
+    ${Object.entries(mapa).sort((a,b) => b[1].total - a[1].total).map(([cat, v]) => {
+      const pct = Math.round((v.com / v.total) * 100);
+      const cor = cores[cat] || '#a0aec0';
+      return `
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+            <span style="font-size:11px;font-weight:600;color:#4a5568;">${LABEL[cat]||cat}</span>
+            <span style="font-size:11px;color:#718096;">${v.com}/${v.total} · ${pct}%</span>
+          </div>
+          <div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;">
+            <div style="width:${pct}%;background:${cor};height:100%;border-radius:4px;"></div>
+          </div>
+        </div>`;
+    }).join('')}`;
+}
+
 async function carregarAgendaManutencoes() {
   const tbody = $('tbody-agenda-pmoc'); if (!tbody) return;
   const { data } = await db.from('fichas_pmoc')
@@ -2085,15 +3091,14 @@ function resetarFormPMOC() {
   if ($('pmoc-id-edicao')) $('pmoc-id-edicao').value = '';
   if ($('pmoc-obs'))       $('pmoc-obs').value       = '';
   if ($('pmoc-data'))      $('pmoc-data').value       = '';
-  if ($('pmoc-foto-antes'))  $('pmoc-foto-antes').value  = '';
-  if ($('pmoc-foto-depois')) $('pmoc-foto-depois').value = '';
-  if ($('pmoc-rt'))          $('pmoc-rt').value          = '';
   const titulo = $('titulo-formulario-pmoc') || document.querySelector('#sub-pmoc-form h3');
   if (titulo) titulo.textContent = '📋 Novo Laudo PMOC';
   const btnSalvar = $('btn-salvar-ficha');
   if (btnSalvar) { btnSalvar.textContent = '✓ Registrar Ficha PMOC'; btnSalvar.style.background = ''; }
   const btnCancelar = $('btn-cancelar-edicao-pmoc');
   if (btnCancelar) btnCancelar.style.display = 'none';
+  ['pmoc-foto-antes','pmoc-foto-depois'].forEach(id => { if ($(id)) $(id).value = ''; });
+  ['pmoc-foto-antes-preview','pmoc-foto-depois-preview'].forEach(id => { if ($(id)) $(id).innerHTML = ''; });
 }
 
 async function excluirFichaPMOC(id) {
@@ -2172,15 +3177,136 @@ if ($('btn-cancelar-edicao-osg')) {
   });
 }
 
+// ===================== BRANDING — Logo Univag no lugar de "Concredur" =====================
+// Roda em toda página que tenha a sidebar padrão; troca o emoji/título "🏗️ Concredur" pela
+// logo institucional (mesma imagem usada em laudos, OS e etiquetas), sem precisar editar
+// o HTML de cada página individualmente.
+document.addEventListener('DOMContentLoaded', () => {
+  const logoEl = document.querySelector('.sidebar-logo');
+  if (logoEl) {
+    logoEl.outerHTML = `<img src="${LOGO_ETIQUETA}" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;">`;
+  }
+  const nomeEl = document.querySelector('.sidebar-header h3');
+  if (nomeEl) nomeEl.remove();
+});
+
+
 // =====================================================================
-//  MÓDULO DE COMPRAS — Solicitações de Compra/Serviço (SC/SS)
-//  Tabelas: compras_solicitacoes, compras_solicitacoes_itens
+//  MÓDULOS SUPRIMENTOS + CATÁLOGO — portados do branch de homologação
 // =====================================================================
 
-let _scCache    = [];
-let _scItemSeq  = 0;
+// ── portado de homologação: _badgeAprovacaoCOT ──
+function _badgeAprovacaoCOT(status) {
+  const map = { 'Aguardando': 'tag-badge warning', 'Aprovado': 'tag-badge success', 'Rejeitado': 'tag-badge danger', 'Dispensado': 'tag-badge' };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status)}</span>`;
+}
 
-// ── Autocomplete: busca no catálogo enquanto o usuário digita ────────
+// ── portado de homologação: _badgeEnvioOC ──
+function _badgeEnvioOC(status) {
+  return status === 'Enviada'
+    ? '<span class="tag-badge success">📤 Enviada</span>'
+    : '<span class="tag-badge">Não Enviada</span>';
+}
+
+// ── portado de homologação: _badgePrioridadeSC ──
+function _badgePrioridadeSC(p) {
+  const map = { 'Normal': 'tag-badge', 'Alta': 'tag-badge warning', 'Urgente': 'tag-badge danger' };
+  return `<span class="${map[p] || 'tag-badge'}">${escapeHTML(p)}</span>`;
+}
+
+// ── portado de homologação: _badgeStatusCOT ──
+function _badgeStatusCOT(status) {
+  const map = {
+    'Aberta': 'tag-badge', 'Em Análise': 'tag-badge andamento', 'Aguard. Aprovação': 'tag-badge warning',
+    'Aprovada': 'tag-badge success', 'Rejeitada': 'tag-badge danger', 'OC Emitida': 'tag-badge semestral',
+  };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status || '—')}</span>`;
+}
+
+// ── portado de homologação: _badgeStatusOC ──
+function _badgeStatusOC(status) {
+  const map = {
+    'Rascunho': 'tag-badge', 'Enviada': 'tag-badge andamento', 'Confirmada': 'tag-badge semestral',
+    'Parcial': 'tag-badge warning', 'Recebida': 'tag-badge success', 'Cancelada': 'tag-badge danger',
+  };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status || '—')}</span>`;
+}
+
+// ── portado de homologação: _badgeStatusSC ──
+function _badgeStatusSC(status) {
+  const map = {
+    'Rascunho':   'tag-badge',
+    'Pendente':   'tag-badge warning',
+    'Em Cotação': 'tag-badge andamento',
+    'Aprovada':   'tag-badge success',
+    'Rejeitada':  'tag-badge danger',
+    'Concluída':  'tag-badge semestral',
+  };
+  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status)}</span>`;
+}
+
+// ── portado de homologação: _badgeTipoPD ──
+function _badgeTipoPD(tipo) {
+  return tipo === 'SS' ? '<span class="tag-badge andamento">🧰 SS</span>' : '<span class="tag-badge">📦 SC</span>';
+}
+
+// ── portado de homologação: _bindAutocompleteCatalogo ──
+function _bindAutocompleteCatalogo(inp, tr, prefixo) {
+  // Prefixo determina as classes dos hidden inputs
+  const clsCatId  = prefixo === 'pd' ? '.pd-item-cat-id'  : '.sc-item-cat-id';
+  const clsUnidId = prefixo === 'pd' ? '.pd-item-unid-id' : '.sc-item-unid-id';
+  const clsSigla  = prefixo === 'pd' ? '.pd-item-sigla'   : '.sc-item-sigla';
+
+  let _debounce = null;
+
+  inp.addEventListener('input', () => {
+    // Ao digitar, remove vínculo anterior
+    const catEl  = tr.querySelector(clsCatId);
+    const unidEl = tr.querySelector(clsUnidId);
+    const siglaEl = tr.querySelector(clsSigla);
+    if (catEl)  catEl.value  = '';
+    if (unidEl) unidEl.value = '';
+    if (siglaEl) siglaEl.value = '';
+    inp.style.borderColor = '';
+    inp.style.background  = '';
+    tr.querySelectorAll('small.cat-aviso').forEach(s => s.remove());
+
+    clearTimeout(_debounce);
+    const termo = inp.value.trim();
+    if (termo.length < 1) {
+      _fecharDropdownsCatalogo();
+      return;
+    }
+    _debounce = setTimeout(async () => {
+      const resultados = await _buscarCatalogo(termo);
+      if (!resultados.length) {
+        // Mostra mensagem de "nenhum resultado" no dropdown
+        _mostrarDropdownCatalogo(inp, [{ _vazio: true }], () => {});
+        return;
+      }
+      _mostrarDropdownCatalogo(inp, resultados, (item) => {
+        inp.value = item.descricao;
+        if (catEl)  catEl.value  = item.id;
+        if (unidEl) unidEl.value = item.unidade_id;
+        if (siglaEl) siglaEl.value = item.sigla;
+        inp.style.borderColor = '#48bb78';
+        inp.style.background  = '#f0fff4';
+        tr.querySelectorAll('small.cat-aviso').forEach(s => s.remove());
+      });
+    }, 280);
+  });
+
+  inp.addEventListener('focus', () => {
+    const termo = inp.value.trim();
+    if (termo.length >= 1) inp.dispatchEvent(new Event('input'));
+  });
+
+  inp.addEventListener('blur', () => {
+    setTimeout(_fecharDropdownsCatalogo, 150);
+  });
+}
+
+// ── portado de homologação: _buscarCatalogo ──
 async function _buscarCatalogo(termo) {
   if (!termo || termo.length < 1) return [];
   const { data } = await db.from('compras_catalogo_itens')
@@ -2192,7 +3318,12 @@ async function _buscarCatalogo(termo) {
   return data || [];
 }
 
-// ── Mostra dropdown de resultados abaixo do input ───────────────────
+// ── portado de homologação: _fecharDropdownsCatalogo ──
+function _fecharDropdownsCatalogo() {
+  document.querySelectorAll('[id^="cat-dd-"]').forEach(d => { d.style.display = 'none'; });
+}
+
+// ── portado de homologação: _mostrarDropdownCatalogo ──
 function _mostrarDropdownCatalogo(inputEl, resultados, onSelect) {
   // Reutiliza ou cria o container do dropdown — ancorado no <td> pai
   const tdPai = inputEl.closest('td') || inputEl.parentElement;
@@ -2255,69 +3386,109 @@ function _mostrarDropdownCatalogo(inputEl, resultados, onSelect) {
   });
 }
 
-function _fecharDropdownsCatalogo() {
-  document.querySelectorAll('[id^="cat-dd-"]').forEach(d => { d.style.display = 'none'; });
-}
-document.addEventListener('click', _fecharDropdownsCatalogo);
-
-// ── Função central de bind do autocomplete (usada por SC e PD) ───────
-// prefixo: 'sc' para Solicitações, 'pd' para Pré-Demandas
-function _bindAutocompleteCatalogo(inp, tr, prefixo) {
-  // Prefixo determina as classes dos hidden inputs
-  const clsCatId  = prefixo === 'pd' ? '.pd-item-cat-id'  : '.sc-item-cat-id';
-  const clsUnidId = prefixo === 'pd' ? '.pd-item-unid-id' : '.sc-item-unid-id';
-  const clsSigla  = prefixo === 'pd' ? '.pd-item-sigla'   : '.sc-item-sigla';
-
-  let _debounce = null;
-
-  inp.addEventListener('input', () => {
-    // Ao digitar, remove vínculo anterior
-    const catEl  = tr.querySelector(clsCatId);
-    const unidEl = tr.querySelector(clsUnidId);
-    const siglaEl = tr.querySelector(clsSigla);
-    if (catEl)  catEl.value  = '';
-    if (unidEl) unidEl.value = '';
-    if (siglaEl) siglaEl.value = '';
-    inp.style.borderColor = '';
-    inp.style.background  = '';
-    tr.querySelectorAll('small.cat-aviso').forEach(s => s.remove());
-
-    clearTimeout(_debounce);
-    const termo = inp.value.trim();
-    if (termo.length < 1) {
-      _fecharDropdownsCatalogo();
-      return;
-    }
-    _debounce = setTimeout(async () => {
-      const resultados = await _buscarCatalogo(termo);
-      if (!resultados.length) {
-        // Mostra mensagem de "nenhum resultado" no dropdown
-        _mostrarDropdownCatalogo(inp, [{ _vazio: true }], () => {});
-        return;
-      }
-      _mostrarDropdownCatalogo(inp, resultados, (item) => {
-        inp.value = item.descricao;
-        if (catEl)  catEl.value  = item.id;
-        if (unidEl) unidEl.value = item.unidade_id;
-        if (siglaEl) siglaEl.value = item.sigla;
-        inp.style.borderColor = '#48bb78';
-        inp.style.background  = '#f0fff4';
-        tr.querySelectorAll('small.cat-aviso').forEach(s => s.remove());
-      });
-    }, 280);
-  });
-
-  inp.addEventListener('focus', () => {
-    const termo = inp.value.trim();
-    if (termo.length >= 1) inp.dispatchEvent(new Event('input'));
-  });
-
-  inp.addEventListener('blur', () => {
-    setTimeout(_fecharDropdownsCatalogo, 150);
-  });
+// ── portado de homologação: _renderStatsCOT ──
+function _renderStatsCOT() {
+  $('cot-stat-total').textContent = _cotCache.length;
+  $('cot-stat-analise').textContent = _cotCache.filter(c => c.status === 'Em Análise' || c.status === 'Aberta').length;
+  $('cot-stat-aguardando').textContent = _cotCache.filter(c => c.status === 'Aguard. Aprovação').length;
+  $('cot-stat-aprovadas').textContent = _cotCache.filter(c => c.status === 'Aprovada').length;
 }
 
-// ── Linhas dinâmicas de itens no formulário (com catálogo obrigatório) ──
+// ── portado de homologação: _renderStatsCatalogo ──
+function _renderStatsCatalogo() {
+  if ($('cat-stat-total'))    $('cat-stat-total').textContent    = _catCache.filter(i => i.ativo).length;
+  if ($('cat-stat-material')) $('cat-stat-material').textContent = _catCache.filter(i => i.grupo === 'Material' && i.ativo).length;
+  if ($('cat-stat-servico'))  $('cat-stat-servico').textContent  = _catCache.filter(i => i.grupo === 'Serviço' && i.ativo).length;
+  if ($('cat-stat-inativos')) $('cat-stat-inativos').textContent = _catCache.filter(i => !i.ativo).length;
+}
+
+// ── portado de homologação: _renderStatsOC ──
+function _renderStatsOC() {
+  $('oc-stat-total').textContent     = _ocCache.length;
+  $('oc-stat-rascunho').textContent  = _ocCache.filter(o => o.status_oc === 'Rascunho').length;
+  $('oc-stat-enviadas').textContent  = _ocCache.filter(o => o.status_envio === 'Enviada').length;
+  $('oc-stat-recebidas').textContent = _ocCache.filter(o => o.status_oc === 'Recebida').length;
+}
+
+// ── portado de homologação: _renderStatsSC ──
+function _renderStatsSC() {
+  $('sc-stat-total').textContent      = _scCache.length;
+  $('sc-stat-pendentes').textContent  = _scCache.filter(s => s.status === 'Pendente').length;
+  $('sc-stat-cotacao').textContent    = _scCache.filter(s => s.status === 'Em Cotação').length;
+  $('sc-stat-aprovadas').textContent  = _scCache.filter(s => s.status === 'Aprovada').length;
+}
+
+// ── portado de homologação: _validarItensSC ──
+function _validarItensSC(itens, msgId) {
+  const linhas = [...document.querySelectorAll('#sc-itens-tbody tr')];
+  const semCat = linhas.filter(tr => !tr.querySelector('.sc-item-cat-id')?.value);
+  if (semCat.length) {
+    semCat.forEach(tr => {
+      const inp = tr.querySelector('.sc-item-desc');
+      if (inp) { inp.style.borderColor = '#e53e3e'; inp.style.background = '#fff5f5'; }
+    });
+    msgForm(msgId, '⛔ Todos os itens devem ser selecionados do catálogo. Campos marcados em vermelho precisam de seleção.', 'red');
+    return false;
+  }
+  if (!itens.length) {
+    msgForm(msgId, '⚠️ Adicione ao menos um item do catálogo.', 'red');
+    return false;
+  }
+  return true;
+}
+
+// ── portado de homologação: abrirPreDemandaOS ──
+function abrirPreDemandaOS(origemTipo, origemId, origemNumero, setorSugerido = '') {
+  $('pd-origem-tipo').value = origemTipo;
+  $('pd-origem-id').value = origemId;
+  $('pd-origem-numero-val').value = origemNumero;
+  $('pd-origem-numero').textContent = origemNumero;
+  $('pd-tipo').value = 'SC';
+  $('pd-setor').value = (setorSugerido || '').trim();
+  $('pd-prioridade').value = 'Normal';
+  $('pd-descricao').value = '';
+  $('pd-itens-tbody').innerHTML = '';
+  $('msg-pd').textContent = '';
+  adicionarItemPD();
+  $('overlay-pre-demanda').style.display = 'flex';
+}
+
+// ── portado de homologação: adicionarFornecedorCOT ──
+function adicionarFornecedorCOT(prefill = {}
+
+// ── portado de homologação: adicionarItemPD ──
+function adicionarItemPD(desc = '', qtd = 1, unidade = '', catalogoId = '') {
+  const tbody = $('pd-itens-tbody');
+  if (!tbody) return;
+  const rid   = 'pd-item-' + (++_pdItemSeq);
+  const inpId = 'pd-desc-' + _pdItemSeq;
+  const tr    = document.createElement('tr');
+  tr.id = rid;
+  const catIdVal    = catalogoId || '';
+  const descDisplay = desc || '';
+  tr.innerHTML = `
+    <td style="position:relative;min-width:220px;">
+      <input type="hidden" class="pd-item-cat-id" value="${escapeHTML(catIdVal)}">
+      <input type="hidden" class="pd-item-unid-id" value="">
+      <input type="text" id="${inpId}" name="pd-busca-${_pdItemSeq}" class="form-input-style pd-item-desc" value="${escapeHTML(descDisplay)}"
+             placeholder="Digite para buscar no catálogo..."
+             autocomplete="new-password" data-form-type="other" role="combobox" aria-autocomplete="list" aria-expanded="false"
+             style="${catIdVal ? 'border-color:#48bb78;background:#f0fff4;' : ''}">
+    </td>
+    <td><input type="number" class="form-input-style pd-item-qtd" value="${Number(qtd) || 1}" min="0.001" step="any" style="width:80px;"></td>
+    <td><input type="text" class="pd-item-sigla" value="${escapeHTML(unidade)}" readonly
+               style="width:65px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:13px;"></td>
+    <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
+  tbody.appendChild(tr);
+
+  requestAnimationFrame(() => {
+    const inp = tr.querySelector('.pd-item-desc');
+    if (!inp) return;
+    _bindAutocompleteCatalogo(inp, tr, 'pd');
+  });
+}
+
+// ── portado de homologação: adicionarItemSC ──
 function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', catalogoDesc = '') {
   const tbody = $('sc-itens-tbody');
   if (!tbody) return;
@@ -2355,6 +3526,398 @@ function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', cata
   });
 }
 
+// ── portado de homologação: alternarAbaCatalogo ──
+function alternarAbaCatalogo(aba) {
+  ['itens','unidades'].forEach(a => {
+    const el = $('aba-catalogo-' + a);
+    if (el) el.style.display = a === aba ? '' : 'none';
+  });
+}
+
+// ── portado de homologação: aprovarPreDemanda ──
+async function aprovarPreDemanda(id) {
+  const p = _pdCache.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Aprovar esta pré-demanda e gerar uma ${p.tipo_solicitacao} a partir da ${p.origem_numero}?`)) return;
+
+  const numero = await gerarNumeroSolicitacao(p.tipo_solicitacao);
+
+  const { data: nova, error } = await db.from('compras_solicitacoes').insert({
+    numero,
+    tipo: p.tipo_solicitacao,
+    descricao: p.descricao,
+    setor: p.setor,
+    prioridade: p.prioridade,
+    status: 'Pendente',
+    justificativa: `Gerada automaticamente a partir da pré-demanda da ${p.origem_numero}.`,
+    data_necessaria: hoje(),
+    solicitante_id: p.solicitante_id,
+  }).select('id').single();
+
+  if (error) { alert('Erro ao gerar solicitação: ' + error.message); return; }
+
+  const itensPayload = (p.itens || []).map(i => ({ ...i, solicitacao_id: nova.id }));
+  if (itensPayload.length) await db.from('compras_solicitacoes_itens').insert(itensPayload);
+
+  const { data: { user } } = await db.auth.getUser();
+  await db.from('compras_pre_demandas').update({
+    status: 'Aprovada',
+    solicitacao_id: nova.id,
+    decidido_por: user?.email || null,
+    data_decisao: new Date().toISOString(),
+  }).eq('id', id);
+
+  await carregarPreDemandas();
+  await carregarSolicitacoesCompra();
+}
+
+// ── portado de homologação: atualizarCampoFornecedorCOT ──
+function atualizarCampoFornecedorCOT(idx, campo, valor) {
+  _cotFornecedoresForm[idx][campo] = valor;
+  atualizarResumoVencedorCOT();
+}
+
+// ── portado de homologação: atualizarCodigoCatalogo ──
+async function atualizarCodigoCatalogo() {
+  const grupo   = $('cat-grupo')?.value || 'Material';
+  const prefixo = _CAT_PREFIXO[grupo] || 'OUT';
+  if ($('cat-id-edicao')?.value) return; // em edição não altera código
+  const { data } = await db.from('compras_catalogo_itens')
+    .select('codigo')
+    .like('codigo', prefixo + '-%')
+    .order('codigo', { ascending: false })
+    .limit(1);
+  const ultimo = data?.[0]?.codigo || '';
+  const seq    = parseInt(ultimo.split('-').pop(), 10) || 0;
+  if ($('cat-codigo')) $('cat-codigo').value = `${prefixo}-${String(seq + 1).padStart(4, '0')}`;
+}
+
+// ── portado de homologação: atualizarNivelAlcadaCOT ──
+function atualizarNivelAlcadaCOT() {
+  const sel = $('cot-vencedor');
+  const idx = parseInt(sel.value, 10);
+  const forn = _cotFornecedoresForm[idx];
+  const total = forn ? calcularTotalFornecedorCOT(forn) : 0;
+  const nivel = nivelAlcadaCOT(total);
+  if ($('cot-nivel-alcada')) $('cot-nivel-alcada').textContent = `${fmtMoney(total)} → ${labelAlcadaCOT(nivel)}`;
+}
+
+// ── portado de homologação: atualizarPrecoFornecedorCOT ──
+function atualizarPrecoFornecedorCOT(idx, itemId, valor) {
+  _cotFornecedoresForm[idx].precos[itemId] = valor;
+  renderFornecedoresCOT();
+}
+
+// ── portado de homologação: atualizarResumoVencedorCOT ──
+function atualizarResumoVencedorCOT() {
+  const sel = $('cot-vencedor');
+  if (!sel) return;
+  const valorAtual = sel.value;
+
+  if (!_cotFornecedoresForm.length) {
+    sel.innerHTML = '<option value="">—</option>';
+    if ($('cot-nivel-alcada')) $('cot-nivel-alcada').textContent = '—';
+    return;
+  }
+
+  let menorIdx = 0, menorTotal = Infinity;
+  _cotFornecedoresForm.forEach((f, idx) => {
+    const total = calcularTotalFornecedorCOT(f);
+    if (total > 0 && total < menorTotal) { menorTotal = total; menorIdx = idx; }
+  });
+
+  sel.innerHTML = _cotFornecedoresForm.map((f, idx) => {
+    const total = calcularTotalFornecedorCOT(f);
+    const nome = f.nome || `Fornecedor ${idx + 1}`;
+    return `<option value="${idx}">${escapeHTML(nome)} — ${fmtMoney(total)}</option>`;
+  }).join('');
+
+  if (valorAtual !== '' && _cotFornecedoresForm[valorAtual] !== undefined) sel.value = valorAtual;
+  else sel.value = isFinite(menorTotal) ? menorIdx : 0;
+
+  atualizarNivelAlcadaCOT();
+}
+
+// ── portado de homologação: calcularTotalFornecedorCOT ──
+function calcularTotalFornecedorCOT(forn) {
+  return _cotItensRef.reduce((acc, item) => {
+    const v = parseFloat(forn.precos[item.id]);
+    return acc + (isNaN(v) ? 0 : v * item.quantidade);
+  }, 0);
+}
+
+// ── portado de homologação: carregarCatalogo ──
+async function carregarCatalogo() {
+  const tbody = $('tbody-catalogo');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_catalogo_itens')
+    .select('*, compras_unidades_medida(sigla, descricao)')
+    .order('codigo');
+
+  if (error) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="td-loading">Erro: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _catCache = data || [];
+  _renderStatsCatalogo();
+  filtrarCatalogo();
+}
+
+// ── portado de homologação: carregarCotacoes ──
+async function carregarCotacoes() {
+  const tbody = $('tbody-cotacoes');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_cotacoes')
+    .select('*, compras_solicitacoes(numero, descricao)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _cotCache = data || [];
+
+  const vencedorIds = _cotCache.map(c => c.vencedor_fornecedor_id).filter(Boolean);
+  let fornecedoresMap = {}, precosPorForn = {};
+  if (vencedorIds.length) {
+    const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id, nome').in('id', vencedorIds);
+    (fornecedores || []).forEach(f => fornecedoresMap[f.id] = f.nome);
+    const { data: precos } = await db.from('compras_cotacoes_precos').select('fornecedor_id, solicitacao_item_id, valor_unitario').in('fornecedor_id', vencedorIds);
+    (precos || []).forEach(p => { (precosPorForn[p.fornecedor_id] = precosPorForn[p.fornecedor_id] || []).push(p); });
+  }
+
+  const itemIds = [...new Set(Object.values(precosPorForn).flat().map(p => p.solicitacao_item_id))];
+  let qtdMap = {};
+  if (itemIds.length) {
+    const { data: itens } = await db.from('compras_solicitacoes_itens').select('id, quantidade').in('id', itemIds);
+    (itens || []).forEach(i => qtdMap[i.id] = i.quantidade);
+  }
+
+  _renderStatsCOT();
+
+  tbody.innerHTML = _cotCache.length ? _cotCache.map(c => {
+    const precos = precosPorForn[c.vencedor_fornecedor_id] || [];
+    const total = precos.reduce((acc, p) => acc + (p.valor_unitario || 0) * (qtdMap[p.solicitacao_item_id] || 0), 0);
+    const nomeVencedor = fornecedoresMap[c.vencedor_fornecedor_id] || '—';
+    return `
+      <tr>
+        <td><strong>${escapeHTML(c.numero)}</strong></td>
+        <td style="font-size:12px;color:var(--gray-500);">${escapeHTML(c.compras_solicitacoes?.numero || '—')}<br>${escapeHTML(c.compras_solicitacoes?.descricao || '')}</td>
+        <td>${fmtDate(c.prazo_retorno)}</td>
+        <td>${escapeHTML(nomeVencedor)}</td>
+        <td style="font-weight:700;">${total ? fmtMoney(total) : '—'}</td>
+        <td style="text-align:center;">${c.nivel_alcada_requerido || '—'}</td>
+        <td>${_badgeStatusCOT(c.status)}</td>
+        <td style="display:flex;gap:4px;">
+          <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarCotacao('${c.id}')">✏️ Editar</button>
+          <button class="btn-excluir" onclick="excluirCotacao('${c.id}','${escapeHTML(c.numero)}')">✕</button>
+        </td>
+      </tr>`;
+  }).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma cotação encontrada.</td></tr>';
+}
+
+// ── portado de homologação: carregarOrdensCompra ──
+async function carregarOrdensCompra() {
+  const tbody = $('tbody-ordens-compra');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_ordens')
+    .select('*, compras_cotacoes(numero, vencedor_fornecedor_id, compras_solicitacoes(numero, descricao))')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _ocCache = data || [];
+
+  // Carrega nomes dos fornecedores vencedores e totais
+  const fornIds = [...new Set(_ocCache.map(o => o.compras_cotacoes?.vencedor_fornecedor_id).filter(Boolean))];
+  let fornecedoresMap = {}, precosPorForn = {};
+  if (fornIds.length) {
+    const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id, nome').in('id', fornIds);
+    (fornecedores || []).forEach(f => fornecedoresMap[f.id] = f.nome);
+    const { data: precos } = await db.from('compras_cotacoes_precos').select('fornecedor_id, solicitacao_item_id, valor_unitario').in('fornecedor_id', fornIds);
+    (precos || []).forEach(p => { (precosPorForn[p.fornecedor_id] = precosPorForn[p.fornecedor_id] || []).push(p); });
+  }
+  const itemIds = [...new Set(Object.values(precosPorForn).flat().map(p => p.solicitacao_item_id))];
+  let qtdMap = {};
+  if (itemIds.length) {
+    const { data: itens } = await db.from('compras_solicitacoes_itens').select('id, quantidade').in('id', itemIds);
+    (itens || []).forEach(i => qtdMap[i.id] = i.quantidade);
+  }
+
+  _ocCache.forEach(o => {
+    const fornId = o.compras_cotacoes?.vencedor_fornecedor_id;
+    const precos = precosPorForn[fornId] || [];
+    o._fornecedorNome = fornecedoresMap[fornId] || '—';
+    o._total = precos.reduce((acc, p) => acc + (p.valor_unitario || 0) * (qtdMap[p.solicitacao_item_id] || 0), 0);
+  });
+
+  _renderStatsOC();
+  filtrarOrdensCompra();
+}
+
+// ── portado de homologação: carregarPreDemandas ──
+async function carregarPreDemandas() {
+  const tbody = $('tbody-pre-demandas');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db.from('compras_pre_demandas')
+    .select('*, profiles(nome)')
+    .eq('status', 'Pendente')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _pdCache = data || [];
+  if ($('pd-badge-count')) $('pd-badge-count').textContent = _pdCache.length;
+
+  tbody.innerHTML = _pdCache.length ? _pdCache.map(p => `
+    <tr>
+      <td><strong>${escapeHTML(p.origem_numero)}</strong><br><span style="font-size:10px;color:var(--gray-400);">${escapeHTML(p.origem_tipo)}</span></td>
+      <td>${_badgeTipoPD(p.tipo_solicitacao)}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHTML(p.descricao)}">${escapeHTML(p.descricao)}</td>
+      <td>${escapeHTML(p.setor)}</td>
+      <td>${_badgePrioridadeSC(p.prioridade)}</td>
+      <td style="font-size:11px;">${(p.itens||[]).map(i => `${i.quantidade}x ${escapeHTML(i.descricao)}`).join('<br>')}</td>
+      <td style="color:var(--gray-500);font-size:12px;">${escapeHTML(p.profiles?.nome || '—')}<br>${fmtDate(p.created_at?.split('T')[0])}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-primary" style="padding:3px 10px;font-size:11px;background:#10b981;" onclick="aprovarPreDemanda('${p.id}')">✓ Aprovar</button>
+        <button class="btn-excluir" onclick="rejeitarPreDemanda('${p.id}')">✕ Rejeitar</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma pré-demanda pendente.</td></tr>';
+}
+
+// ── portado de homologação: carregarSelectCotacoesOC ──
+async function carregarSelectCotacoesOC() {
+  const sel = $('oc-cotacao'); if (!sel) return;
+  const idCotAtual = sel.dataset.cotacaoAtual || '';
+
+  const { data } = await db.from('compras_cotacoes')
+    .select('id, numero, status, compras_solicitacoes(numero, descricao)')
+    .order('created_at', { ascending: false });
+
+  sel.innerHTML = '<option value="">-- Selecione a Cotação --</option>';
+  (data || []).forEach(c => {
+    if (!['Aprovada', 'OC Emitida'].includes(c.status) && c.id !== idCotAtual) return;
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = `${c.numero} — ${c.compras_solicitacoes?.numero || ''} ${c.compras_solicitacoes?.descricao || ''}`;
+    sel.appendChild(opt);
+  });
+  if (idCotAtual) sel.value = idCotAtual;
+}
+
+// ── portado de homologação: carregarSelectSolicitacoesCOT ──
+async function carregarSelectSolicitacoesCOT() {
+  const sel = $('cot-solicitacao'); if (!sel) return;
+  const idSolAtual = sel.dataset.solicitacaoAtual || '';
+
+  const { data } = await db.from('compras_solicitacoes')
+    .select('id, numero, descricao, status')
+    .order('created_at', { ascending: false });
+
+  sel.innerHTML = '<option value="">-- Selecione a Solicitação --</option>';
+  (data || []).forEach(s => {
+    if (!['Pendente', 'Em Cotação'].includes(s.status) && s.id !== idSolAtual) return;
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.numero} — ${s.descricao}`;
+    sel.appendChild(opt);
+  });
+  if (idSolAtual) sel.value = idSolAtual;
+}
+
+// ── portado de homologação: carregarSolicitacoesCompra ──
+async function carregarSolicitacoesCompra() {
+  const tbody = $('tbody-solicitacoes-compra');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Carregando...</td></tr>';
+
+  const { data, error } = await db
+    .from('compras_solicitacoes')
+    .select('*, compras_solicitacoes_itens(*), profiles(nome, email)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="9" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _scCache = data || [];
+  _renderStatsSC();
+  filtrarSolicitacoesCompra();
+}
+
+// ── portado de homologação: carregarUnidadesMedida ──
+async function carregarUnidadesMedida() {
+  const tbody = $('tbody-unidades-medida');
+
+  const { data, error } = await db.from('compras_unidades_medida')
+    .select('*')
+    .order('sigla');
+
+  if (error) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="td-loading">Erro: ${escapeHTML(error.message)}</td></tr>`;
+    return;
+  }
+
+  _umCache = data || [];
+
+  // Popula selects de unidades em todos os formulários que os usam
+  ['cat-unidade'].map($).filter(Boolean).forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">-- Unidade --</option>';
+    _umCache.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value       = u.id;
+      opt.textContent = `${u.sigla} — ${u.descricao}`;
+      sel.appendChild(opt);
+    });
+    if (atual) sel.value = atual;
+  });
+
+  // Renderiza tabela
+  if (!tbody) return;
+  tbody.innerHTML = _umCache.length ? _umCache.map(u => `
+    <tr>
+      <td><strong>${escapeHTML(u.sigla)}</strong></td>
+      <td>${escapeHTML(u.descricao)}</td>
+      <td>${u.ativo ? '<span class="tag-badge success">Ativo</span>' : '<span class="tag-badge danger">Inativo</span>'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarUnidadeMedida(${u.id})">✏️ Editar</button>
+        <button class="btn-excluir" onclick="toggleAtivoUM(${u.id},${u.ativo})">
+          ${u.ativo ? '⛔ Desativar' : '✅ Ativar'}
+        </button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="4" class="td-loading">Nenhuma unidade cadastrada.</td></tr>';
+}
+
+// ── portado de homologação: coletarItensPD ──
+function coletarItensPD() {
+  const linhas = [...document.querySelectorAll('#pd-itens-tbody tr')];
+  return linhas.map(tr => ({
+    catalogo_id: tr.querySelector('.pd-item-cat-id')?.value  || null,
+    unidade_id:  tr.querySelector('.pd-item-unid-id')?.value || null,
+    descricao:   tr.querySelector('.pd-item-desc')?.value.trim() || '',
+    quantidade:  parseFloat(tr.querySelector('.pd-item-qtd')?.value) || 1,
+    unidade:     tr.querySelector('.pd-item-sigla')?.value.trim() || '',
+  })).filter(i => i.descricao && i.catalogo_id);
+}
+
+// ── portado de homologação: coletarItensSC ──
 function coletarItensSC() {
   const linhas = [...document.querySelectorAll('#sc-itens-tbody tr')];
   return linhas.map(tr => ({
@@ -2366,114 +3929,102 @@ function coletarItensSC() {
   })).filter(i => i.descricao && i.catalogo_id);
 }
 
-// ── Valida que todos os itens têm vínculo com o catálogo ─────────────
-function _validarItensSC(itens, msgId) {
-  const linhas = [...document.querySelectorAll('#sc-itens-tbody tr')];
-  const semCat = linhas.filter(tr => !tr.querySelector('.sc-item-cat-id')?.value);
-  if (semCat.length) {
-    semCat.forEach(tr => {
-      const inp = tr.querySelector('.sc-item-desc');
-      if (inp) { inp.style.borderColor = '#e53e3e'; inp.style.background = '#fff5f5'; }
-    });
-    msgForm(msgId, '⛔ Todos os itens devem ser selecionados do catálogo. Campos marcados em vermelho precisam de seleção.', 'red');
-    return false;
-  }
-  if (!itens.length) {
-    msgForm(msgId, '⚠️ Adicione ao menos um item do catálogo.', 'red');
-    return false;
-  }
-  return true;
-}
+// ── portado de homologação: editarCotacao ──
+async function editarCotacao(id) {
+  const c = _cotCache.find(x => x.id === id);
+  if (!c) return;
 
-// ── Geração do número sequencial (SC-AAAA-NNN / SS-AAAA-NNN) ────────
-async function gerarNumeroSolicitacao(tipo) {
-  const ano = new Date().getFullYear();
-  const prefixo = `${tipo}-${ano}-`;
-  const { data } = await db
-    .from('compras_solicitacoes')
-    .select('numero')
-    .like('numero', prefixo + '%');
-  let max = 0;
-  (data || []).forEach(r => {
-    const seq = parseInt(String(r.numero).split('-').pop(), 10);
-    if (!isNaN(seq) && seq > max) max = seq;
+  $('cot-id-edicao').value = c.id;
+  $('cot-prazo').value = c.prazo_retorno || '';
+  $('cot-pagamento').value = c.condicao_pagamento || '';
+  $('cot-frete').value = c.frete || '';
+  $('cot-observacoes').value = c.observacoes || '';
+  $('cot-status').value = c.status || 'Aberta';
+
+  $('cot-solicitacao').dataset.solicitacaoAtual = c.solicitacao_id || '';
+  await carregarSelectSolicitacoesCOT();
+  $('cot-solicitacao').value = c.solicitacao_id || '';
+  await onSelecionarSolicitacaoCOT(true);
+
+  const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('*').eq('cotacao_id', id);
+  const idsForn = (fornecedores || []).map(f => f.id);
+  const { data: precos } = idsForn.length
+    ? await db.from('compras_cotacoes_precos').select('*').in('fornecedor_id', idsForn)
+    : { data: [] };
+
+  _cotFornecedoresForm = (fornecedores || []).map(f => {
+    const precosObj = {};
+    (precos || []).filter(p => p.fornecedor_id === f.id).forEach(p => { precosObj[p.solicitacao_item_id] = p.valor_unitario; });
+    return {
+      id: f.id, nome: f.nome || '', cnpj: f.cnpj || '', email: f.email || '',
+      contato_nome: f.contato_nome || '', link_site: f.link_site || '', precos: precosObj,
+    };
   });
-  return prefixo + String(max + 1).padStart(3, '0');
+  if (!_cotFornecedoresForm.length) adicionarFornecedorCOT();
+  renderFornecedoresCOT();
+
+  const idxVencedor = _cotFornecedoresForm.findIndex(f => f.id === c.vencedor_fornecedor_id);
+  if (idxVencedor >= 0) $('cot-vencedor').value = idxVencedor;
+  atualizarNivelAlcadaCOT();
+
+  await renderAprovacoesCOT(id);
+
+  $('cot-form-titulo').textContent = `✏️ Editando ${c.numero}`;
+  $('btn-salvar-cot').textContent = '💾 Salvar Alterações';
+  $('btn-salvar-cot').style.background = '#d97706';
+  $('btn-cancelar-cot').style.display = 'inline-block';
+  document.getElementById('cot-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ── Salvar (criar ou atualizar) ──────────────────────────────────────
-async function salvarSolicitacaoCompra() {
-  const idEdicao   = $('sc-id-edicao').value;
-  const tipo       = $('sc-tipo').value;
-  const setor      = $('sc-setor').value.trim();
-  const descricao  = $('sc-descricao').value.trim();
-  const prioridade = $('sc-prioridade').value;
-  const status     = $('sc-status').value;
-  const data       = $('sc-data').value || hoje();
-  const justifica  = $('sc-justificativa').value.trim();
-  const itens      = coletarItensSC();
+// ── portado de homologação: editarItemCatalogo ──
+function editarItemCatalogo(id) {
+  const i = _catCache.find(x => x.id === id);
+  if (!i) return;
+  if ($('cat-id-edicao'))      $('cat-id-edicao').value      = i.id;
+  if ($('cat-codigo'))         $('cat-codigo').value         = i.codigo;
+  if ($('cat-descricao'))      $('cat-descricao').value      = i.descricao;
+  if ($('cat-grupo'))          $('cat-grupo').value          = i.grupo;
+  if ($('cat-unidade'))        $('cat-unidade').value        = i.unidade_id;
+  if ($('cat-especificacao'))  $('cat-especificacao').value  = i.especificacao || '';
+  if ($('cat-ativo'))          $('cat-ativo').value          = String(i.ativo);
+  if ($('cat-form-titulo'))    $('cat-form-titulo').textContent = `✏️ Editando — ${i.codigo}`;
+  if ($('btn-cancelar-cat'))   $('btn-cancelar-cat').style.display = 'inline-block';
+  $('cat-descricao')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 
-  if (!setor || !descricao) {
-    msgForm('msg-sc', '⚠️ Preencha Setor e Descrição.', 'red');
-    return;
+// ── portado de homologação: editarOrdemCompra ──
+async function editarOrdemCompra(id) {
+  let o = _ocCache.find(x => x.id === id);
+  if (!o) {
+    const { data } = await db.from('compras_ordens').select('*, compras_cotacoes(numero, status, compras_solicitacoes(numero, descricao))').eq('id', id).single();
+    o = data;
   }
-  if (!_validarItensSC(itens, 'msg-sc')) return;
+  if (!o) return;
 
-  msgForm('msg-sc', '⏳ Salvando...', 'blue');
+  $('oc-id-edicao').value = o.id;
+  $('oc-local-entrega').value = o.local_entrega || '';
+  $('oc-centro-custo').value = o.centro_custo || '';
+  $('oc-referencia').value = o.referencia_interna || '';
+  $('oc-instrucoes').value = o.instrucoes_entrega || '';
+  $('oc-garantia').value = o.garantia_exigida || '';
+  $('oc-status').value = o.status_oc || 'Rascunho';
+  $('oc-status-envio').value = o.status_envio || 'Não Enviada';
 
-  const { data: { user } } = await db.auth.getUser();
+  $('oc-cotacao').dataset.cotacaoAtual = o.cotacao_id || '';
+  await carregarSelectCotacoesOC();
+  $('oc-cotacao').value = o.cotacao_id || '';
+  await onSelecionarCotacaoOC();
 
-  const payload = {
-    tipo,
-    descricao,
-    setor,
-    prioridade,
-    status,
-    justificativa: justifica || null,
-    data_necessaria: data,
-    solicitante_id: user?.id || null,
-  };
+  await renderRecebimentoOC(o.id);
 
-  let solicitacaoId = idEdicao;
-
-  if (idEdicao) {
-    const { error } = await db.from('compras_solicitacoes').update(payload).eq('id', idEdicao);
-    if (error) { msgForm('msg-sc', '❌ Erro ao atualizar: ' + error.message, 'red'); return; }
-    // Remove itens antigos e recria (forma mais simples e segura)
-    await db.from('compras_solicitacoes_itens').delete().eq('solicitacao_id', idEdicao);
-  } else {
-    payload.numero = await gerarNumeroSolicitacao(tipo);
-    const { data: nova, error } = await db.from('compras_solicitacoes').insert(payload).select('id').single();
-    if (error) { msgForm('msg-sc', '❌ Erro ao registrar: ' + error.message, 'red'); return; }
-    solicitacaoId = nova.id;
-  }
-
-  const itensPayload = itens.map(i => ({ ...i, solicitacao_id: solicitacaoId }));
-  const { error: errItens } = await db.from('compras_solicitacoes_itens').insert(itensPayload);
-  if (errItens) { msgForm('msg-sc', '⚠️ Solicitação salva, mas houve erro nos itens: ' + errItens.message, 'red'); }
-  else { msgForm('msg-sc', idEdicao ? '✅ Solicitação atualizada com sucesso!' : '✅ Solicitação registrada com sucesso!', 'green'); }
-
-  resetarFormSC();
-  await carregarSolicitacoesCompra();
+  $('oc-form-titulo').textContent = `✏️ Editando ${o.numero}`;
+  $('btn-salvar-oc').textContent = '💾 Salvar Alterações';
+  $('btn-salvar-oc').style.background = '#d97706';
+  $('btn-cancelar-oc').style.display = 'inline-block';
+  document.getElementById('oc-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function resetarFormSC() {
-  $('sc-id-edicao').value = '';
-  $('sc-tipo').value = 'SC';
-  $('sc-setor').value = '';
-  $('sc-descricao').value = '';
-  $('sc-justificativa').value = '';
-  $('sc-prioridade').value = 'Normal';
-  $('sc-status').value = 'Rascunho';
-  $('sc-data').value = hoje();
-  $('sc-itens-tbody').innerHTML = '';
-  adicionarItemSC();
-  $('sc-form-titulo').textContent = '📝 Nova Solicitação de Compra / Serviço';
-  $('btn-salvar-sc').textContent = '💾 Registrar Solicitação';
-  $('btn-salvar-sc').style.background = '';
-  $('btn-cancelar-sc').style.display = 'none';
-}
-
+// ── portado de homologação: editarSolicitacaoCompra ──
 function editarSolicitacaoCompra(id) {
   const s = _scCache.find(x => x.id === id);
   if (!s) return;
@@ -2499,6 +4050,118 @@ function editarSolicitacaoCompra(id) {
   document.getElementById('sc-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ── portado de homologação: editarUnidadeMedida ──
+function editarUnidadeMedida(id) {
+  const u = _umCache.find(x => x.id === id);
+  if (!u) return;
+  if ($('um-id-edicao'))  $('um-id-edicao').value  = u.id;
+  if ($('um-sigla'))      $('um-sigla').value       = u.sigla;
+  if ($('um-descricao'))  $('um-descricao').value   = u.descricao;
+  if ($('um-form-titulo')) $('um-form-titulo').textContent = '✏️ Editando Unidade — ' + u.sigla;
+  if ($('btn-cancelar-um')) $('btn-cancelar-um').style.display = 'inline-block';
+  $('um-sigla')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ── portado de homologação: emitirRelatorioOSG ──
+function emitirRelatorioOSG(os) {
+  const col = os.colaboradores || {};
+  const urlValidacao = gerarUrlValidacao(os.id, 'osg');
+  const qrCodeHTML   = gerarQrCodeSVG(urlValidacao, 100);
+  const codigoOSG    = os.numero_os || `OSG-${os.id.toString().slice(0,5).toUpperCase()}`;
+
+  const areas = Array.isArray(os.areas_tecnicas)
+    ? os.areas_tecnicas.join(', ')
+    : (os.areas_tecnicas || os.area || '—');
+
+  const assinaturaTecnicoHTML = col?.nome
+    ? _assinaturaImg(lerAssinaturaURL(col,'assinatura_url','assinatura_digital'),'max-width:200px;max-height:65px;display:block;margin:0 auto 4px;')
+    : _assinaturaImg(null, '');
+
+  const html = `
+  <div class="laudo-wrapper">
+    <div class="laudo-header">
+      <div><h1>🏢 Ordem de Serviço Facilities — CONCREDUR</h1><p>Registro de Solicitação Corporativa</p></div>
+      <div class="laudo-header-meta">
+        <strong>Código: ${escapeHTML(codigoOSG)}</strong><br>
+        Abertura: ${fmtDate(os.created_at)}<br>
+        Emissão: ${new Date().toLocaleDateString('pt-BR')}
+      </div>
+    </div>
+    <div class="laudo-section">
+      <div class="laudo-section-title">Dados da Chamada</div>
+      <div class="laudo-grid">
+        <div class="laudo-field"><label>Serviço Requisitado</label><span>${escapeHTML(os.servico_requisitado)}</span></div>
+        <div class="laudo-field"><label>Setor / Destino</label><span>${escapeHTML(os.setor)}</span></div>
+        <div class="laudo-field"><label>Tipo de Intervenção</label><span>${escapeHTML(os.tipo_manutencao || os.tipo_os || '—')}</span></div>
+        <div class="laudo-field"><label>Especialidades Envolvidas</label><span>${escapeHTML(areas)}</span></div>
+        <div class="laudo-field"><label>Equipamento</label><span>${escapeHTML(os.equipamento || '—')}</span></div>
+        <div class="laudo-field"><label>Status</label><span>${escapeHTML(os.status_os)}</span></div>
+        ${col?.nome ? `<div class="laudo-field"><label>Técnico Atribuído</label><span>${escapeHTML(col.nome)}</span></div>` : ''}
+      </div>
+    </div>
+    ${os.falha_relatada ? `
+    <div class="laudo-section">
+      <div class="laudo-section-title">Falha Relatada / Descrição do Serviço</div>
+      <p style="font-size:12px;line-height:1.7;min-height:60px;">${escapeHTML(os.falha_relatada)}</p>
+    </div>` : ''}
+    ${(os.foto_antes_url || os.foto_depois_url) ? `
+    <div class="laudo-section laudo-section-nobreak">
+      <div class="laudo-section-title">Evidência Fotográfica — Antes / Depois</div>
+      <div class="laudo-grid">
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
+          ${os.foto_antes_url ? `<img src="${os.foto_antes_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+        <div style="text-align:center;">
+          <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
+          ${os.foto_depois_url ? `<img src="${os.foto_depois_url}" style="max-width:100%;max-height:200px;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
+        </div>
+      </div>
+    </div>` : ''}
+    <div class="laudo-section laudo-section-nobreak">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;">
+        <div style="flex:1;">
+          <div class="laudo-assinatura-box" style="min-width:200px;text-align:center;">
+            ${assinaturaTecnicoHTML}
+            <div class="laudo-assinatura-linha">${escapeHTML(col?.nome || 'Responsável pela Execução')}<br>Técnico Executor</div>
+          </div>
+        </div>
+        <div style="text-align:center;flex-shrink:0;">
+          ${qrCodeHTML}
+          <div style="font-size:9px;color:#718096;margin-top:5px;font-weight:600;">AUTENTICIDADE DO DOCUMENTO</div>
+          <div style="font-size:8px;color:#a0aec0;margin-top:2px;">${escapeHTML(codigoOSG)}</div>
+          <div style="font-size:8px;color:#a0aec0;">Aponte a câmera para verificar</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#a0aec0;">
+        Sistema Concredur · ${new Date().toLocaleString('pt-BR')} · Verificação: ${urlValidacao}
+      </div>
+    </div>
+  </div>`;
+  imprimir('area-osg-impressao', html);
+}
+
+// ── portado de homologação: excluirCotacao ──
+async function excluirCotacao(id, numero) {
+  if (!confirm(`Excluir a cotação ${numero}? Esta ação não pode ser desfeita.`)) return;
+  const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id').eq('cotacao_id', id);
+  const idsForn = (fornecedores || []).map(f => f.id);
+  if (idsForn.length) await db.from('compras_cotacoes_precos').delete().in('fornecedor_id', idsForn);
+  await db.from('compras_cotacoes_fornecedores').delete().eq('cotacao_id', id);
+  await db.from('compras_cotacoes_aprovacoes').delete().eq('cotacao_id', id);
+  await db.from('compras_cotacoes').delete().eq('id', id);
+  await carregarCotacoes();
+}
+
+// ── portado de homologação: excluirOrdemCompra ──
+async function excluirOrdemCompra(id, numero) {
+  if (!confirm(`Excluir a OC ${numero}? Esta ação não pode ser desfeita.`)) return;
+  await db.from('compras_ordens_recebimentos').delete().eq('ordem_id', id);
+  await db.from('compras_ordens').delete().eq('id', id);
+  await carregarOrdensCompra();
+}
+
+// ── portado de homologação: excluirSolicitacaoCompra ──
 async function excluirSolicitacaoCompra(id, numero) {
   if (!confirm(`Excluir a solicitação ${numero}? Esta ação não pode ser desfeita.`)) return;
   await db.from('compras_solicitacoes_itens').delete().eq('solicitacao_id', id);
@@ -2506,52 +4169,80 @@ async function excluirSolicitacaoCompra(id, numero) {
   await carregarSolicitacoesCompra();
 }
 
-// ── Badges ────────────────────────────────────────────────────────────
-function _badgeStatusSC(status) {
-  const map = {
-    'Rascunho':   'tag-badge',
-    'Pendente':   'tag-badge warning',
-    'Em Cotação': 'tag-badge andamento',
-    'Aprovada':   'tag-badge success',
-    'Rejeitada':  'tag-badge danger',
-    'Concluída':  'tag-badge semestral',
-  };
-  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status)}</span>`;
+// ── portado de homologação: fecharModalPreDemanda ──
+function fecharModalPreDemanda() {
+  $('overlay-pre-demanda').style.display = 'none';
 }
 
-function _badgePrioridadeSC(p) {
-  const map = { 'Normal': 'tag-badge', 'Alta': 'tag-badge warning', 'Urgente': 'tag-badge danger' };
-  return `<span class="${map[p] || 'tag-badge'}">${escapeHTML(p)}</span>`;
-}
-
-// ── Carregamento e renderização ──────────────────────────────────────
-async function carregarSolicitacoesCompra() {
-  const tbody = $('tbody-solicitacoes-compra');
+// ── portado de homologação: filtrarCatalogo ──
+function filtrarCatalogo() {
+  const tbody = $('tbody-catalogo');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Carregando...</td></tr>';
+  const termo  = ($('cat-filtro-texto')?.value || '').toLowerCase().trim();
+  const grupo  = $('cat-filtro-grupo')?.value  || '';
+  const ativo  = $('cat-filtro-ativo')?.value  || '';
 
-  const { data, error } = await db
-    .from('compras_solicitacoes')
-    .select('*, compras_solicitacoes_itens(*), profiles(nome, email)')
-    .order('created_at', { ascending: false });
+  let dados = [..._catCache];
+  if (grupo) dados = dados.filter(i => i.grupo === grupo);
+  if (ativo) dados = dados.filter(i => String(i.ativo) === ativo);
+  if (termo) dados = dados.filter(i =>
+    i.codigo.toLowerCase().includes(termo) ||
+    i.descricao.toLowerCase().includes(termo) ||
+    (i.especificacao || '').toLowerCase().includes(termo)
+  );
 
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan="9" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
-    return;
+  tbody.innerHTML = dados.length ? dados.map(i => `
+    <tr style="${!i.ativo ? 'opacity:.55;' : ''}">
+      <td><strong style="font-family:monospace;">${escapeHTML(i.codigo)}</strong></td>
+      <td>${escapeHTML(i.descricao)}</td>
+      <td><span class="tag-badge">${_CAT_GRUPO_ICON[i.grupo] || ''} ${escapeHTML(i.grupo)}</span></td>
+      <td><strong>${escapeHTML(i.compras_unidades_medida?.sigla || '—')}</strong>
+          <small style="color:#a0aec0;"> ${escapeHTML(i.compras_unidades_medida?.descricao || '')}</small></td>
+      <td style="font-size:11px;color:#718096;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+          title="${escapeHTML(i.especificacao || '')}">${escapeHTML(i.especificacao || '—')}</td>
+      <td>${i.ativo ? '<span class="tag-badge success">Ativo</span>' : '<span class="tag-badge danger">Inativo</span>'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarItemCatalogo('${i.id}')">✏️</button>
+        <button class="btn-excluir" onclick="toggleAtivoCatalogo('${i.id}',${i.ativo})">
+          ${i.ativo ? '⛔' : '✅'}
+        </button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="7" class="td-loading">Nenhum item encontrado.</td></tr>';
+}
+
+// ── portado de homologação: filtrarOrdensCompra ──
+function filtrarOrdensCompra() {
+  const tbody = $('tbody-ordens-compra');
+  if (!tbody) return;
+
+  const termo  = ($('oc-filtro-texto')?.value || '').toLowerCase().trim();
+  const status = $('oc-filtro-status')?.value || '';
+  const envio  = $('oc-filtro-envio')?.value || '';
+
+  let dados = [..._ocCache];
+  if (status) dados = dados.filter(o => o.status_oc === status);
+  if (envio)  dados = dados.filter(o => o.status_envio === envio);
+  if (termo) {
+    dados = dados.filter(o => `${o.numero} ${o.compras_cotacoes?.numero || ''} ${o._fornecedorNome}`.toLowerCase().includes(termo));
   }
 
-  _scCache = data || [];
-  _renderStatsSC();
-  filtrarSolicitacoesCompra();
+  tbody.innerHTML = dados.length ? dados.map(o => `
+    <tr>
+      <td><strong>${escapeHTML(o.numero)}</strong></td>
+      <td style="font-size:12px;color:var(--gray-500);">${escapeHTML(o.compras_cotacoes?.numero || '—')}<br>${escapeHTML(o.compras_cotacoes?.compras_solicitacoes?.descricao || '')}</td>
+      <td>${escapeHTML(o._fornecedorNome)}</td>
+      <td style="font-weight:700;">${o._total ? fmtMoney(o._total) : '—'}</td>
+      <td>${_badgeEnvioOC(o.status_envio)}</td>
+      <td>${_badgeStatusOC(o.status_oc)}</td>
+      <td>${o.created_at ? fmtDate(o.created_at.split('T')[0]) : '—'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarOrdemCompra('${o.id}')">✏️ Editar</button>
+        <button class="btn-excluir" onclick="excluirOrdemCompra('${o.id}','${escapeHTML(o.numero)}')">✕</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma ordem de compra encontrada.</td></tr>';
 }
 
-function _renderStatsSC() {
-  $('sc-stat-total').textContent      = _scCache.length;
-  $('sc-stat-pendentes').textContent  = _scCache.filter(s => s.status === 'Pendente').length;
-  $('sc-stat-cotacao').textContent    = _scCache.filter(s => s.status === 'Em Cotação').length;
-  $('sc-stat-aprovadas').textContent  = _scCache.filter(s => s.status === 'Aprovada').length;
-}
-
+// ── portado de homologação: filtrarSolicitacoesCompra ──
 function filtrarSolicitacoesCompra() {
   const tbody = $('tbody-solicitacoes-compra');
   if (!tbody) return;
@@ -2587,45 +4278,24 @@ function filtrarSolicitacoesCompra() {
     </tr>`).join('') : '<tr><td colspan="9" class="td-loading">Nenhuma solicitação encontrada.</td></tr>';
 }
 
-if ($('btn-salvar-sc')) {
-  $('btn-salvar-sc').addEventListener('click', salvarSolicitacaoCompra);
-}
-
-// =====================================================================
-//  MÓDULO DE COMPRAS — Cotações (COT)
-//  Tabelas: compras_cotacoes, compras_cotacoes_fornecedores,
-//           compras_cotacoes_precos, compras_cotacoes_aprovacoes
-// =====================================================================
-
-const COMPRAS_ALCADA_N1 = 5000;
-const COMPRAS_ALCADA_N2 = 25000;
-
+// ── portado de homologação: fmtMoney ──
 function fmtMoney(v) {
   if (v === null || v === undefined || isNaN(v)) return '—';
   return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 }
 
-function nivelAlcadaCOT(total) {
-  if (total === null || total === undefined || isNaN(total) || total <= 0) return 1;
-  if (total <= COMPRAS_ALCADA_N1) return 1;
-  if (total <= COMPRAS_ALCADA_N2) return 2;
-  return 3;
+// ── portado de homologação: garantirAprovacoesCOT ──
+async function garantirAprovacoesCOT(cotacaoId, nivel) {
+  const { data: existentes } = await db.from('compras_cotacoes_aprovacoes').select('nivel').eq('cotacao_id', cotacaoId);
+  const niveisExistentes = new Set((existentes || []).map(a => a.nivel));
+  const novas = [];
+  for (let n = 1; n <= nivel; n++) {
+    if (!niveisExistentes.has(n)) novas.push({ cotacao_id: cotacaoId, nivel: n, aprovador_nome: '—', status: 'Aguardando' });
+  }
+  if (novas.length) await db.from('compras_cotacoes_aprovacoes').insert(novas);
 }
 
-function labelAlcadaCOT(nivel) {
-  return {
-    1: `Nível 1 (até ${fmtMoney(COMPRAS_ALCADA_N1)})`,
-    2: `Nível 2 (até ${fmtMoney(COMPRAS_ALCADA_N2)})`,
-    3: `Nível 3 (acima de ${fmtMoney(COMPRAS_ALCADA_N2)})`,
-  }[nivel] || '—';
-}
-
-let _cotCache = [];
-let _cotItensRef = [];
-let _cotFornecedoresForm = [];
-let _cotAprovacoesAtuais = [];
-
-// ── Geração de número COT-AAAA-NNN ──────────────────────────────────
+// ── portado de homologação: gerarNumeroCotacao ──
 async function gerarNumeroCotacao() {
   const ano = new Date().getFullYear();
   const prefixo = `COT-${ano}-`;
@@ -2638,27 +4308,115 @@ async function gerarNumeroCotacao() {
   return prefixo + String(max + 1).padStart(3, '0');
 }
 
-// ── Select de solicitações de origem ────────────────────────────────
-async function carregarSelectSolicitacoesCOT() {
-  const sel = $('cot-solicitacao'); if (!sel) return;
-  const idSolAtual = sel.dataset.solicitacaoAtual || '';
-
-  const { data } = await db.from('compras_solicitacoes')
-    .select('id, numero, descricao, status')
-    .order('created_at', { ascending: false });
-
-  sel.innerHTML = '<option value="">-- Selecione a Solicitação --</option>';
-  (data || []).forEach(s => {
-    if (!['Pendente', 'Em Cotação'].includes(s.status) && s.id !== idSolAtual) return;
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = `${s.numero} — ${s.descricao}`;
-    sel.appendChild(opt);
+// ── portado de homologação: gerarNumeroOC ──
+async function gerarNumeroOC() {
+  const ano = new Date().getFullYear();
+  const prefixo = `OC-${ano}-`;
+  const { data } = await db.from('compras_ordens').select('numero').like('numero', prefixo + '%');
+  let max = 0;
+  (data || []).forEach(r => {
+    const seq = parseInt(String(r.numero).split('-').pop(), 10);
+    if (!isNaN(seq) && seq > max) max = seq;
   });
-  if (idSolAtual) sel.value = idSolAtual;
+  return prefixo + String(max + 1).padStart(3, '0');
 }
 
-// ── Itens de referência da solicitação selecionada ──────────────────
+// ── portado de homologação: gerarNumeroSolicitacao ──
+async function gerarNumeroSolicitacao(tipo) {
+  const ano = new Date().getFullYear();
+  const prefixo = `${tipo}-${ano}-`;
+  const { data } = await db
+    .from('compras_solicitacoes')
+    .select('numero')
+    .like('numero', prefixo + '%');
+  let max = 0;
+  (data || []).forEach(r => {
+    const seq = parseInt(String(r.numero).split('-').pop(), 10);
+    if (!isNaN(seq) && seq > max) max = seq;
+  });
+  return prefixo + String(max + 1).padStart(3, '0');
+}
+
+// ── portado de homologação: labelAlcadaCOT ──
+function labelAlcadaCOT(nivel) {
+  return {
+    1: `Nível 1 (até ${fmtMoney(COMPRAS_ALCADA_N1)})`,
+    2: `Nível 2 (até ${fmtMoney(COMPRAS_ALCADA_N2)})`,
+    3: `Nível 3 (acima de ${fmtMoney(COMPRAS_ALCADA_N2)})`,
+  }[nivel] || '—';
+}
+
+// ── portado de homologação: nivelAlcadaCOT ──
+function nivelAlcadaCOT(total) {
+  if (total === null || total === undefined || isNaN(total) || total <= 0) return 1;
+  if (total <= COMPRAS_ALCADA_N1) return 1;
+  if (total <= COMPRAS_ALCADA_N2) return 2;
+  return 3;
+}
+
+// ── portado de homologação: onSelecionarCotacaoOC ──
+async function onSelecionarCotacaoOC() {
+  const cotId = $('oc-cotacao').value;
+  const refForn = $('oc-fornecedor-referencia');
+  const refItens = $('oc-itens-referencia');
+
+  _ocItensRef = [];
+  _ocFornecedorRef = null;
+  _ocTotalRef = 0;
+
+  if (!cotId) { refForn.innerHTML = ''; refItens.innerHTML = ''; return; }
+
+  const { data: cot } = await db.from('compras_cotacoes').select('vencedor_fornecedor_id').eq('id', cotId).single();
+  if (!cot?.vencedor_fornecedor_id) {
+    refForn.innerHTML = '<p style="font-size:12px;color:var(--danger);margin:8px 0;">⚠️ Esta cotação não possui fornecedor vencedor definido.</p>';
+    refItens.innerHTML = '';
+    return;
+  }
+
+  const { data: forn } = await db.from('compras_cotacoes_fornecedores').select('*').eq('id', cot.vencedor_fornecedor_id).single();
+  _ocFornecedorRef = forn || null;
+
+  const { data: precos } = await db.from('compras_cotacoes_precos')
+    .select('valor_unitario, solicitacao_item_id, compras_solicitacoes_itens(descricao, quantidade, unidade)')
+    .eq('fornecedor_id', cot.vencedor_fornecedor_id);
+
+  _ocItensRef = (precos || []).map(p => ({
+    item_id: p.solicitacao_item_id,
+    descricao: p.compras_solicitacoes_itens?.descricao || '—',
+    quantidade: p.compras_solicitacoes_itens?.quantidade || 0,
+    unidade: p.compras_solicitacoes_itens?.unidade || 'UN',
+    valor_unitario: p.valor_unitario || 0,
+    subtotal: (p.valor_unitario || 0) * (p.compras_solicitacoes_itens?.quantidade || 0),
+  }));
+  _ocTotalRef = _ocItensRef.reduce((acc, i) => acc + i.subtotal, 0);
+
+  refForn.innerHTML = _ocFornecedorRef ? `
+    <div class="card" style="background:var(--gray-50);margin-top:10px;">
+      <h4 style="margin:0 0 8px;">🏷️ Fornecedor Vencedor</h4>
+      <p style="font-size:13px;margin:2px 0;"><strong>${escapeHTML(_ocFornecedorRef.nome)}</strong></p>
+      <p style="font-size:12px;color:var(--gray-500);margin:2px 0;">CNPJ: ${escapeHTML(_ocFornecedorRef.cnpj) !== '—' ? escapeHTML(_ocFornecedorRef.cnpj) : '—'} · E-mail: ${escapeHTML(_ocFornecedorRef.email) !== '—' ? escapeHTML(_ocFornecedorRef.email) : '—'}</p>
+      <p style="font-size:12px;color:var(--gray-500);margin:2px 0;">Contato: ${escapeHTML(_ocFornecedorRef.contato_nome) !== '—' ? escapeHTML(_ocFornecedorRef.contato_nome) : '—'} ${_ocFornecedorRef.link_site ? '· <a href="' + escapeHTML(_ocFornecedorRef.link_site) + '" target="_blank">' + escapeHTML(_ocFornecedorRef.link_site) + '</a>' : ''}</p>
+    </div>` : '';
+
+  refItens.innerHTML = _ocItensRef.length ? `
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <thead><tr><th>Item</th><th>Qtd.</th><th>Unidade</th><th>Valor Unit.</th><th>Subtotal</th></tr></thead>
+        <tbody>${_ocItensRef.map(i => `
+          <tr>
+            <td>${escapeHTML(i.descricao)}</td>
+            <td>${i.quantidade}</td>
+            <td>${escapeHTML(i.unidade)}</td>
+            <td>${fmtMoney(i.valor_unitario)}</td>
+            <td>${fmtMoney(i.subtotal)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;">Total da OC</td><td style="font-weight:700;">${fmtMoney(_ocTotalRef)}</td></tr></tfoot>
+      </table>
+    </div>` : '<p style="font-size:12px;color:var(--gray-400);margin:8px 0;">Nenhum item com preço definido para o fornecedor vencedor.</p>';
+}
+
+// ── portado de homologação: onSelecionarSolicitacaoCOT ──
 async function onSelecionarSolicitacaoCOT(manterFornecedores = false) {
   const solId = $('cot-solicitacao').value;
   const ref = $('cot-itens-referencia');
@@ -2692,44 +4450,113 @@ async function onSelecionarSolicitacaoCOT(manterFornecedores = false) {
   renderFornecedoresCOT();
 }
 
-// ── Fornecedores dinâmicos no formulário ────────────────────────────
-function adicionarFornecedorCOT(prefill = {}) {
-  const precos = {};
-  _cotItensRef.forEach(i => { precos[i.id] = prefill.precos?.[i.id] ?? ''; });
-  _cotFornecedoresForm.push({
-    id: prefill.id || null,
-    nome: prefill.nome || '',
-    cnpj: prefill.cnpj || '',
-    email: prefill.email || '',
-    contato_nome: prefill.contato_nome || '',
-    link_site: prefill.link_site || '',
-    precos,
-  });
-  renderFornecedoresCOT();
+// ── portado de homologação: registrarDecisaoAprovacaoCOT ──
+async function registrarDecisaoAprovacaoCOT(aprovacaoId, decisao) {
+  const nome = prompt('Nome do aprovador:');
+  if (!nome) return;
+
+  await db.from('compras_cotacoes_aprovacoes')
+    .update({ status: decisao, aprovador_nome: nome, data_decisao: hoje() })
+    .eq('id', aprovacaoId);
+
+  const aprov = _cotAprovacoesAtuais.find(a => a.id === aprovacaoId);
+  const cotacaoId = aprov?.cotacao_id;
+
+  const { data: todas } = await db.from('compras_cotacoes_aprovacoes').select('*').eq('cotacao_id', cotacaoId);
+  const todasDecididas = (todas || []).every(a => a.status !== 'Aguardando');
+  const algumaRejeitada = (todas || []).some(a => a.status === 'Rejeitado');
+
+  if (todasDecididas) {
+    const novoStatusCot = algumaRejeitada ? 'Rejeitada' : 'Aprovada';
+    const { data: cot } = await db.from('compras_cotacoes').select('solicitacao_id').eq('id', cotacaoId).single();
+    await db.from('compras_cotacoes').update({ status: novoStatusCot }).eq('id', cotacaoId);
+    if (cot?.solicitacao_id) await db.from('compras_solicitacoes').update({ status: novoStatusCot }).eq('id', cot.solicitacao_id);
+  }
+
+  await carregarCotacoes();
+  await renderAprovacoesCOT(cotacaoId);
+  const cAtual = _cotCache.find(c => c.id === cotacaoId);
+  if (cAtual) $('cot-status').value = cAtual.status;
 }
 
+// ── portado de homologação: registrarRecebimentoOC ──
+async function registrarRecebimentoOC(ordemId, itemId) {
+  const input = $('oc-receber-' + itemId);
+  const qtd = parseInt(input.value, 10);
+  if (!qtd || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
+
+  await db.from('compras_ordens_recebimentos').insert({
+    ordem_id: ordemId,
+    solicitacao_item_id: itemId,
+    quantidade_recebida: qtd,
+    data_recebimento: new Date().toISOString(),
+  });
+
+  // Recalcula status geral da OC
+  const { data: recebimentos } = await db.from('compras_ordens_recebimentos').select('*').eq('ordem_id', ordemId);
+  const recebidoPorItem = {};
+  (recebimentos || []).forEach(r => {
+    recebidoPorItem[r.solicitacao_item_id] = (recebidoPorItem[r.solicitacao_item_id] || 0) + (r.quantidade_recebida || 0);
+  });
+  const totalmenteRecebido = _ocItensRef.every(i => (recebidoPorItem[i.item_id] || 0) >= i.quantidade);
+  const algumRecebido = _ocItensRef.some(i => (recebidoPorItem[i.item_id] || 0) > 0);
+  const novoStatus = totalmenteRecebido ? 'Recebida' : (algumRecebido ? 'Parcial' : 'Rascunho');
+
+  await db.from('compras_ordens').update({ status_oc: novoStatus }).eq('id', ordemId);
+  $('oc-status').value = novoStatus;
+
+  await renderRecebimentoOC(ordemId);
+  await carregarOrdensCompra();
+}
+
+// ── portado de homologação: rejeitarPreDemanda ──
+async function rejeitarPreDemanda(id) {
+  if (!confirm('Rejeitar esta pré-demanda? Nenhuma SC/SS será criada.')) return;
+  const { data: { user } } = await db.auth.getUser();
+  await db.from('compras_pre_demandas').update({
+    status: 'Rejeitada',
+    decidido_por: user?.email || null,
+    data_decisao: new Date().toISOString(),
+  }).eq('id', id);
+  await carregarPreDemandas();
+}
+
+// ── portado de homologação: removerFornecedorCOT ──
 function removerFornecedorCOT(idx) {
   _cotFornecedoresForm.splice(idx, 1);
   renderFornecedoresCOT();
 }
 
-function atualizarCampoFornecedorCOT(idx, campo, valor) {
-  _cotFornecedoresForm[idx][campo] = valor;
-  atualizarResumoVencedorCOT();
+// ── portado de homologação: renderAprovacoesCOT ──
+async function renderAprovacoesCOT(cotacaoId) {
+  const cont = $('cot-aprovacoes-container');
+  const cot = _cotCache.find(c => c.id === cotacaoId);
+  const nivelReq = cot?.nivel_alcada_requerido || 1;
+
+  const { data } = await db.from('compras_cotacoes_aprovacoes').select('*').eq('cotacao_id', cotacaoId).order('nivel');
+  _cotAprovacoesAtuais = data || [];
+
+  if (!_cotAprovacoesAtuais.length) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML = `
+    <div style="margin-top:18px;border-top:1px solid var(--gray-200);padding-top:14px;">
+      <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">✅ Aprovações (Nível de Alçada Requerido: ${nivelReq})</label>
+      ${_cotAprovacoesAtuais.map(a => `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;padding:8px 12px;background:var(--gray-50);border-radius:6px;">
+          <strong style="min-width:70px;">Nível ${a.nivel}</strong>
+          ${_badgeAprovacaoCOT(a.status)}
+          <span style="font-size:12px;color:var(--gray-500);">${escapeHTML(a.aprovador_nome || '—')}${a.data_decisao ? ' · ' + fmtDate(a.data_decisao) : ''}</span>
+          ${a.status === 'Aguardando' ? `
+            <div style="display:flex;gap:6px;margin-left:auto;">
+              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Aprovado')">✓ Aprovar</button>
+              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Rejeitado')">✕ Rejeitar</button>
+              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Dispensado')">— Dispensar</button>
+            </div>` : ''}
+        </div>`).join('')}
+    </div>`;
 }
 
-function atualizarPrecoFornecedorCOT(idx, itemId, valor) {
-  _cotFornecedoresForm[idx].precos[itemId] = valor;
-  renderFornecedoresCOT();
-}
-
-function calcularTotalFornecedorCOT(forn) {
-  return _cotItensRef.reduce((acc, item) => {
-    const v = parseFloat(forn.precos[item.id]);
-    return acc + (isNaN(v) ? 0 : v * item.quantidade);
-  }, 0);
-}
-
+// ── portado de homologação: renderFornecedoresCOT ──
 function renderFornecedoresCOT() {
   const cont = $('cot-fornecedores-container');
   if (!cont) return;
@@ -2785,46 +4612,137 @@ function renderFornecedoresCOT() {
   atualizarResumoVencedorCOT();
 }
 
-// ── Vencedor sugerido e nível de alçada ─────────────────────────────
-function atualizarResumoVencedorCOT() {
-  const sel = $('cot-vencedor');
-  if (!sel) return;
-  const valorAtual = sel.value;
+// ── portado de homologação: renderRecebimentoOC ──
+async function renderRecebimentoOC(ordemId) {
+  const cont = $('oc-recebimento-container');
+  if (!cont) return;
+  if (!_ocItensRef.length) { cont.innerHTML = ''; return; }
 
-  if (!_cotFornecedoresForm.length) {
-    sel.innerHTML = '<option value="">—</option>';
-    if ($('cot-nivel-alcada')) $('cot-nivel-alcada').textContent = '—';
-    return;
-  }
-
-  let menorIdx = 0, menorTotal = Infinity;
-  _cotFornecedoresForm.forEach((f, idx) => {
-    const total = calcularTotalFornecedorCOT(f);
-    if (total > 0 && total < menorTotal) { menorTotal = total; menorIdx = idx; }
+  const { data: recebimentos } = await db.from('compras_ordens_recebimentos').select('*').eq('ordem_id', ordemId);
+  const recebidoPorItem = {};
+  (recebimentos || []).forEach(r => {
+    recebidoPorItem[r.solicitacao_item_id] = (recebidoPorItem[r.solicitacao_item_id] || 0) + (r.quantidade_recebida || 0);
   });
 
-  sel.innerHTML = _cotFornecedoresForm.map((f, idx) => {
-    const total = calcularTotalFornecedorCOT(f);
-    const nome = f.nome || `Fornecedor ${idx + 1}`;
-    return `<option value="${idx}">${escapeHTML(nome)} — ${fmtMoney(total)}</option>`;
-  }).join('');
-
-  if (valorAtual !== '' && _cotFornecedoresForm[valorAtual] !== undefined) sel.value = valorAtual;
-  else sel.value = isFinite(menorTotal) ? menorIdx : 0;
-
-  atualizarNivelAlcadaCOT();
+  cont.innerHTML = `
+    <div style="margin-top:18px;border-top:1px solid var(--gray-200);padding-top:14px;">
+      <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">📥 Recebimento de Itens</label>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Pedido</th><th>Recebido</th><th>Receber agora</th><th></th></tr></thead>
+          <tbody>
+            ${_ocItensRef.map(i => {
+              const recebido = recebidoPorItem[i.item_id] || 0;
+              const restante = Math.max(0, i.quantidade - recebido);
+              return `
+                <tr>
+                  <td>${escapeHTML(i.descricao)}</td>
+                  <td>${i.quantidade} ${escapeHTML(i.unidade)}</td>
+                  <td>${recebido} ${escapeHTML(i.unidade)}</td>
+                  <td><input type="number" min="0" max="${restante}" step="1" id="oc-receber-${i.item_id}" class="form-input-style" style="width:90px;" placeholder="0" ${restante === 0 ? 'disabled' : ''}></td>
+                  <td>${restante === 0
+                    ? '<span class="tag-badge success">✓ Completo</span>'
+                    : `<button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarRecebimentoOC('${ordemId}','${i.item_id}')">Registrar</button>`}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
-function atualizarNivelAlcadaCOT() {
-  const sel = $('cot-vencedor');
-  const idx = parseInt(sel.value, 10);
-  const forn = _cotFornecedoresForm[idx];
-  const total = forn ? calcularTotalFornecedorCOT(forn) : 0;
-  const nivel = nivelAlcadaCOT(total);
-  if ($('cot-nivel-alcada')) $('cot-nivel-alcada').textContent = `${fmtMoney(total)} → ${labelAlcadaCOT(nivel)}`;
+// ── portado de homologação: resetarFormCOT ──
+function resetarFormCOT() {
+  $('cot-id-edicao').value = '';
+  $('cot-solicitacao').dataset.solicitacaoAtual = '';
+  $('cot-solicitacao').value = '';
+  $('cot-prazo').value = '';
+  $('cot-pagamento').value = '';
+  $('cot-frete').value = '';
+  $('cot-observacoes').value = '';
+  $('cot-status').value = 'Aberta';
+  _cotItensRef = [];
+  _cotFornecedoresForm = [];
+  _cotAprovacoesAtuais = [];
+  $('cot-itens-referencia').innerHTML = '';
+  renderFornecedoresCOT();
+  $('cot-aprovacoes-container').innerHTML = '';
+  $('cot-form-titulo').textContent = '📝 Nova Cotação';
+  $('btn-salvar-cot').textContent = '💾 Registrar Cotação';
+  $('btn-salvar-cot').style.background = '';
+  $('btn-cancelar-cot').style.display = 'none';
+  carregarSelectSolicitacoesCOT();
 }
 
-// ── Salvar (criar ou atualizar) ──────────────────────────────────────
+// ── portado de homologação: resetarFormCatalogo ──
+function resetarFormCatalogo() {
+  if ($('cat-id-edicao'))     $('cat-id-edicao').value     = '';
+  if ($('cat-codigo'))        $('cat-codigo').value        = '';
+  if ($('cat-descricao'))     $('cat-descricao').value     = '';
+  if ($('cat-grupo'))         $('cat-grupo').value         = 'Material';
+  if ($('cat-unidade'))       $('cat-unidade').value       = '';
+  if ($('cat-especificacao')) $('cat-especificacao').value = '';
+  if ($('cat-ativo'))         $('cat-ativo').value         = 'true';
+  if ($('cat-form-titulo'))   $('cat-form-titulo').textContent = '📝 Novo Item no Catálogo';
+  if ($('btn-cancelar-cat'))  $('btn-cancelar-cat').style.display = 'none';
+  if ($('msg-cat'))           $('msg-cat').textContent = '';
+  atualizarCodigoCatalogo();
+}
+
+// ── portado de homologação: resetarFormOC ──
+function resetarFormOC() {
+  $('oc-id-edicao').value = '';
+  $('oc-cotacao').dataset.cotacaoAtual = '';
+  $('oc-cotacao').value = '';
+  $('oc-local-entrega').value = '';
+  $('oc-centro-custo').value = '';
+  $('oc-referencia').value = '';
+  $('oc-instrucoes').value = '';
+  $('oc-garantia').value = '';
+  $('oc-status').value = 'Rascunho';
+  $('oc-status-envio').value = 'Não Enviada';
+  $('oc-fornecedor-referencia').innerHTML = '';
+  $('oc-itens-referencia').innerHTML = '';
+  $('oc-recebimento-container').innerHTML = '';
+  _ocItensRef = [];
+  _ocFornecedorRef = null;
+  _ocTotalRef = 0;
+  $('oc-form-titulo').textContent = '📝 Nova Ordem de Compra';
+  $('btn-salvar-oc').textContent = '💾 Registrar Ordem de Compra';
+  $('btn-salvar-oc').style.background = '';
+  $('btn-cancelar-oc').style.display = 'none';
+  carregarSelectCotacoesOC();
+}
+
+// ── portado de homologação: resetarFormSC ──
+function resetarFormSC() {
+  $('sc-id-edicao').value = '';
+  $('sc-tipo').value = 'SC';
+  $('sc-setor').value = '';
+  $('sc-descricao').value = '';
+  $('sc-justificativa').value = '';
+  $('sc-prioridade').value = 'Normal';
+  $('sc-status').value = 'Rascunho';
+  $('sc-data').value = hoje();
+  $('sc-itens-tbody').innerHTML = '';
+  adicionarItemSC();
+  $('sc-form-titulo').textContent = '📝 Nova Solicitação de Compra / Serviço';
+  $('btn-salvar-sc').textContent = '💾 Registrar Solicitação';
+  $('btn-salvar-sc').style.background = '';
+  $('btn-cancelar-sc').style.display = 'none';
+}
+
+// ── portado de homologação: resetarFormUM ──
+function resetarFormUM() {
+  if ($('um-id-edicao'))   $('um-id-edicao').value   = '';
+  if ($('um-sigla'))       $('um-sigla').value        = '';
+  if ($('um-descricao'))   $('um-descricao').value    = '';
+  if ($('um-form-titulo')) $('um-form-titulo').textContent = '📐 Nova Unidade de Medida';
+  if ($('btn-cancelar-um')) $('btn-cancelar-um').style.display = 'none';
+  if ($('msg-um')) $('msg-um').textContent = '';
+}
+
+// ── portado de homologação: salvarCotacao ──
 async function salvarCotacao() {
   const idEdicao = $('cot-id-edicao').value;
   const solicitacaoId = $('cot-solicitacao').value;
@@ -2909,341 +4827,49 @@ async function salvarCotacao() {
   await carregarCotacoes();
 }
 
-// ── Garante linhas de aprovação para os níveis 1..nivel ──────────────
-async function garantirAprovacoesCOT(cotacaoId, nivel) {
-  const { data: existentes } = await db.from('compras_cotacoes_aprovacoes').select('nivel').eq('cotacao_id', cotacaoId);
-  const niveisExistentes = new Set((existentes || []).map(a => a.nivel));
-  const novas = [];
-  for (let n = 1; n <= nivel; n++) {
-    if (!niveisExistentes.has(n)) novas.push({ cotacao_id: cotacaoId, nivel: n, aprovador_nome: '—', status: 'Aguardando' });
-  }
-  if (novas.length) await db.from('compras_cotacoes_aprovacoes').insert(novas);
-}
+// ── portado de homologação: salvarItemCatalogo ──
+async function salvarItemCatalogo() {
+  const id         = $('cat-id-edicao')?.value || '';
+  const codigo     = ($('cat-codigo')?.value     || '').trim();
+  const descricao  = ($('cat-descricao')?.value  || '').trim();
+  const grupo      = $('cat-grupo')?.value       || 'Material';
+  const unidadeId  = $('cat-unidade')?.value     || '';
+  const especif    = ($('cat-especificacao')?.value || '').trim();
+  const ativo      = $('cat-ativo')?.value !== 'false';
 
-// ── Reset / edição ────────────────────────────────────────────────────
-function resetarFormCOT() {
-  $('cot-id-edicao').value = '';
-  $('cot-solicitacao').dataset.solicitacaoAtual = '';
-  $('cot-solicitacao').value = '';
-  $('cot-prazo').value = '';
-  $('cot-pagamento').value = '';
-  $('cot-frete').value = '';
-  $('cot-observacoes').value = '';
-  $('cot-status').value = 'Aberta';
-  _cotItensRef = [];
-  _cotFornecedoresForm = [];
-  _cotAprovacoesAtuais = [];
-  $('cot-itens-referencia').innerHTML = '';
-  renderFornecedoresCOT();
-  $('cot-aprovacoes-container').innerHTML = '';
-  $('cot-form-titulo').textContent = '📝 Nova Cotação';
-  $('btn-salvar-cot').textContent = '💾 Registrar Cotação';
-  $('btn-salvar-cot').style.background = '';
-  $('btn-cancelar-cot').style.display = 'none';
-  carregarSelectSolicitacoesCOT();
-}
+  if (!descricao)  { msgForm('msg-cat', '⚠️ Preencha a Descrição do item.', 'red'); return; }
+  if (!unidadeId)  { msgForm('msg-cat', '⚠️ Selecione a Unidade de Medida.', 'red'); return; }
+  if (!codigo)     { msgForm('msg-cat', '⚠️ Código não gerado. Selecione o Grupo e tente novamente.', 'red'); return; }
 
-async function editarCotacao(id) {
-  const c = _cotCache.find(x => x.id === id);
-  if (!c) return;
+  msgForm('msg-cat', '⏳ Salvando...', 'blue');
 
-  $('cot-id-edicao').value = c.id;
-  $('cot-prazo').value = c.prazo_retorno || '';
-  $('cot-pagamento').value = c.condicao_pagamento || '';
-  $('cot-frete').value = c.frete || '';
-  $('cot-observacoes').value = c.observacoes || '';
-  $('cot-status').value = c.status || 'Aberta';
-
-  $('cot-solicitacao').dataset.solicitacaoAtual = c.solicitacao_id || '';
-  await carregarSelectSolicitacoesCOT();
-  $('cot-solicitacao').value = c.solicitacao_id || '';
-  await onSelecionarSolicitacaoCOT(true);
-
-  const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('*').eq('cotacao_id', id);
-  const idsForn = (fornecedores || []).map(f => f.id);
-  const { data: precos } = idsForn.length
-    ? await db.from('compras_cotacoes_precos').select('*').in('fornecedor_id', idsForn)
-    : { data: [] };
-
-  _cotFornecedoresForm = (fornecedores || []).map(f => {
-    const precosObj = {};
-    (precos || []).filter(p => p.fornecedor_id === f.id).forEach(p => { precosObj[p.solicitacao_item_id] = p.valor_unitario; });
-    return {
-      id: f.id, nome: f.nome || '', cnpj: f.cnpj || '', email: f.email || '',
-      contato_nome: f.contato_nome || '', link_site: f.link_site || '', precos: precosObj,
-    };
-  });
-  if (!_cotFornecedoresForm.length) adicionarFornecedorCOT();
-  renderFornecedoresCOT();
-
-  const idxVencedor = _cotFornecedoresForm.findIndex(f => f.id === c.vencedor_fornecedor_id);
-  if (idxVencedor >= 0) $('cot-vencedor').value = idxVencedor;
-  atualizarNivelAlcadaCOT();
-
-  await renderAprovacoesCOT(id);
-
-  $('cot-form-titulo').textContent = `✏️ Editando ${c.numero}`;
-  $('btn-salvar-cot').textContent = '💾 Salvar Alterações';
-  $('btn-salvar-cot').style.background = '#d97706';
-  $('btn-cancelar-cot').style.display = 'inline-block';
-  document.getElementById('cot-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-async function excluirCotacao(id, numero) {
-  if (!confirm(`Excluir a cotação ${numero}? Esta ação não pode ser desfeita.`)) return;
-  const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id').eq('cotacao_id', id);
-  const idsForn = (fornecedores || []).map(f => f.id);
-  if (idsForn.length) await db.from('compras_cotacoes_precos').delete().in('fornecedor_id', idsForn);
-  await db.from('compras_cotacoes_fornecedores').delete().eq('cotacao_id', id);
-  await db.from('compras_cotacoes_aprovacoes').delete().eq('cotacao_id', id);
-  await db.from('compras_cotacoes').delete().eq('id', id);
-  await carregarCotacoes();
-}
-
-// ── Aprovações ────────────────────────────────────────────────────────
-async function renderAprovacoesCOT(cotacaoId) {
-  const cont = $('cot-aprovacoes-container');
-  const cot = _cotCache.find(c => c.id === cotacaoId);
-  const nivelReq = cot?.nivel_alcada_requerido || 1;
-
-  const { data } = await db.from('compras_cotacoes_aprovacoes').select('*').eq('cotacao_id', cotacaoId).order('nivel');
-  _cotAprovacoesAtuais = data || [];
-
-  if (!_cotAprovacoesAtuais.length) { cont.innerHTML = ''; return; }
-
-  cont.innerHTML = `
-    <div style="margin-top:18px;border-top:1px solid var(--gray-200);padding-top:14px;">
-      <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">✅ Aprovações (Nível de Alçada Requerido: ${nivelReq})</label>
-      ${_cotAprovacoesAtuais.map(a => `
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;padding:8px 12px;background:var(--gray-50);border-radius:6px;">
-          <strong style="min-width:70px;">Nível ${a.nivel}</strong>
-          ${_badgeAprovacaoCOT(a.status)}
-          <span style="font-size:12px;color:var(--gray-500);">${escapeHTML(a.aprovador_nome || '—')}${a.data_decisao ? ' · ' + fmtDate(a.data_decisao) : ''}</span>
-          ${a.status === 'Aguardando' ? `
-            <div style="display:flex;gap:6px;margin-left:auto;">
-              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Aprovado')">✓ Aprovar</button>
-              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Rejeitado')">✕ Rejeitar</button>
-              <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarDecisaoAprovacaoCOT('${a.id}','Dispensado')">— Dispensar</button>
-            </div>` : ''}
-        </div>`).join('')}
-    </div>`;
-}
-
-function _badgeAprovacaoCOT(status) {
-  const map = { 'Aguardando': 'tag-badge warning', 'Aprovado': 'tag-badge success', 'Rejeitado': 'tag-badge danger', 'Dispensado': 'tag-badge' };
-  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status)}</span>`;
-}
-
-async function registrarDecisaoAprovacaoCOT(aprovacaoId, decisao) {
-  const nome = prompt('Nome do aprovador:');
-  if (!nome) return;
-
-  await db.from('compras_cotacoes_aprovacoes')
-    .update({ status: decisao, aprovador_nome: nome, data_decisao: hoje() })
-    .eq('id', aprovacaoId);
-
-  const aprov = _cotAprovacoesAtuais.find(a => a.id === aprovacaoId);
-  const cotacaoId = aprov?.cotacao_id;
-
-  const { data: todas } = await db.from('compras_cotacoes_aprovacoes').select('*').eq('cotacao_id', cotacaoId);
-  const todasDecididas = (todas || []).every(a => a.status !== 'Aguardando');
-  const algumaRejeitada = (todas || []).some(a => a.status === 'Rejeitado');
-
-  if (todasDecididas) {
-    const novoStatusCot = algumaRejeitada ? 'Rejeitada' : 'Aprovada';
-    const { data: cot } = await db.from('compras_cotacoes').select('solicitacao_id').eq('id', cotacaoId).single();
-    await db.from('compras_cotacoes').update({ status: novoStatusCot }).eq('id', cotacaoId);
-    if (cot?.solicitacao_id) await db.from('compras_solicitacoes').update({ status: novoStatusCot }).eq('id', cot.solicitacao_id);
-  }
-
-  await carregarCotacoes();
-  await renderAprovacoesCOT(cotacaoId);
-  const cAtual = _cotCache.find(c => c.id === cotacaoId);
-  if (cAtual) $('cot-status').value = cAtual.status;
-}
-
-// ── Listagem ──────────────────────────────────────────────────────────
-function _badgeStatusCOT(status) {
-  const map = {
-    'Aberta': 'tag-badge', 'Em Análise': 'tag-badge andamento', 'Aguard. Aprovação': 'tag-badge warning',
-    'Aprovada': 'tag-badge success', 'Rejeitada': 'tag-badge danger', 'OC Emitida': 'tag-badge semestral',
+  const payload = {
+    codigo,
+    descricao,
+    grupo,
+    unidade_id:    parseInt(unidadeId, 10),
+    especificacao: especif || null,
+    ativo,
   };
-  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status || '—')}</span>`;
-}
 
-async function carregarCotacoes() {
-  const tbody = $('tbody-cotacoes');
-  if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
-
-  const { data, error } = await db.from('compras_cotacoes')
-    .select('*, compras_solicitacoes(numero, descricao)')
-    .order('created_at', { ascending: false });
+  const { error } = id
+    ? await db.from('compras_catalogo_itens').update(payload).eq('id', id)
+    : await db.from('compras_catalogo_itens').insert(payload);
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+    const msg = error.message.includes('uq_catalogo_descricao')
+      ? '❌ Já existe um item com esta descrição no catálogo.'
+      : '❌ Erro ao salvar: ' + error.message;
+    msgForm('msg-cat', msg, 'red');
     return;
   }
 
-  _cotCache = data || [];
-
-  const vencedorIds = _cotCache.map(c => c.vencedor_fornecedor_id).filter(Boolean);
-  let fornecedoresMap = {}, precosPorForn = {};
-  if (vencedorIds.length) {
-    const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id, nome').in('id', vencedorIds);
-    (fornecedores || []).forEach(f => fornecedoresMap[f.id] = f.nome);
-    const { data: precos } = await db.from('compras_cotacoes_precos').select('fornecedor_id, solicitacao_item_id, valor_unitario').in('fornecedor_id', vencedorIds);
-    (precos || []).forEach(p => { (precosPorForn[p.fornecedor_id] = precosPorForn[p.fornecedor_id] || []).push(p); });
-  }
-
-  const itemIds = [...new Set(Object.values(precosPorForn).flat().map(p => p.solicitacao_item_id))];
-  let qtdMap = {};
-  if (itemIds.length) {
-    const { data: itens } = await db.from('compras_solicitacoes_itens').select('id, quantidade').in('id', itemIds);
-    (itens || []).forEach(i => qtdMap[i.id] = i.quantidade);
-  }
-
-  _renderStatsCOT();
-
-  tbody.innerHTML = _cotCache.length ? _cotCache.map(c => {
-    const precos = precosPorForn[c.vencedor_fornecedor_id] || [];
-    const total = precos.reduce((acc, p) => acc + (p.valor_unitario || 0) * (qtdMap[p.solicitacao_item_id] || 0), 0);
-    const nomeVencedor = fornecedoresMap[c.vencedor_fornecedor_id] || '—';
-    return `
-      <tr>
-        <td><strong>${escapeHTML(c.numero)}</strong></td>
-        <td style="font-size:12px;color:var(--gray-500);">${escapeHTML(c.compras_solicitacoes?.numero || '—')}<br>${escapeHTML(c.compras_solicitacoes?.descricao || '')}</td>
-        <td>${fmtDate(c.prazo_retorno)}</td>
-        <td>${escapeHTML(nomeVencedor)}</td>
-        <td style="font-weight:700;">${total ? fmtMoney(total) : '—'}</td>
-        <td style="text-align:center;">${c.nivel_alcada_requerido || '—'}</td>
-        <td>${_badgeStatusCOT(c.status)}</td>
-        <td style="display:flex;gap:4px;">
-          <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarCotacao('${c.id}')">✏️ Editar</button>
-          <button class="btn-excluir" onclick="excluirCotacao('${c.id}','${escapeHTML(c.numero)}')">✕</button>
-        </td>
-      </tr>`;
-  }).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma cotação encontrada.</td></tr>';
+  msgForm('msg-cat', id ? '✅ Item atualizado com sucesso!' : '✅ Item cadastrado no catálogo!', 'green');
+  resetarFormCatalogo();
+  await carregarCatalogo();
 }
 
-function _renderStatsCOT() {
-  $('cot-stat-total').textContent = _cotCache.length;
-  $('cot-stat-analise').textContent = _cotCache.filter(c => c.status === 'Em Análise' || c.status === 'Aberta').length;
-  $('cot-stat-aguardando').textContent = _cotCache.filter(c => c.status === 'Aguard. Aprovação').length;
-  $('cot-stat-aprovadas').textContent = _cotCache.filter(c => c.status === 'Aprovada').length;
-}
-
-if ($('btn-salvar-cot')) {
-  $('btn-salvar-cot').addEventListener('click', salvarCotacao);
-}
-
-// =====================================================================
-//  MÓDULO DE COMPRAS — Ordens de Compra (OC)
-//  Tabelas: compras_ordens, compras_ordens_recebimentos
-//  Itens/fornecedor da OC são herdados da cotação vencedora (somente leitura)
-// =====================================================================
-
-let _ocCache = [];
-let _ocItensRef = [];      // [{item_id, descricao, quantidade, unidade, valor_unitario, subtotal}]
-let _ocFornecedorRef = null; // {nome, cnpj, email, contato_nome, link_site}
-let _ocTotalRef = 0;
-
-// ── Geração de número OC-AAAA-NNN ───────────────────────────────────
-async function gerarNumeroOC() {
-  const ano = new Date().getFullYear();
-  const prefixo = `OC-${ano}-`;
-  const { data } = await db.from('compras_ordens').select('numero').like('numero', prefixo + '%');
-  let max = 0;
-  (data || []).forEach(r => {
-    const seq = parseInt(String(r.numero).split('-').pop(), 10);
-    if (!isNaN(seq) && seq > max) max = seq;
-  });
-  return prefixo + String(max + 1).padStart(3, '0');
-}
-
-// ── Select de cotações de origem (Aprovadas) ────────────────────────
-async function carregarSelectCotacoesOC() {
-  const sel = $('oc-cotacao'); if (!sel) return;
-  const idCotAtual = sel.dataset.cotacaoAtual || '';
-
-  const { data } = await db.from('compras_cotacoes')
-    .select('id, numero, status, compras_solicitacoes(numero, descricao)')
-    .order('created_at', { ascending: false });
-
-  sel.innerHTML = '<option value="">-- Selecione a Cotação --</option>';
-  (data || []).forEach(c => {
-    if (!['Aprovada', 'OC Emitida'].includes(c.status) && c.id !== idCotAtual) return;
-    const opt = document.createElement('option');
-    opt.value = c.id;
-    opt.textContent = `${c.numero} — ${c.compras_solicitacoes?.numero || ''} ${c.compras_solicitacoes?.descricao || ''}`;
-    sel.appendChild(opt);
-  });
-  if (idCotAtual) sel.value = idCotAtual;
-}
-
-// ── Ao selecionar a cotação, carrega fornecedor vencedor + itens/preços ──
-async function onSelecionarCotacaoOC() {
-  const cotId = $('oc-cotacao').value;
-  const refForn = $('oc-fornecedor-referencia');
-  const refItens = $('oc-itens-referencia');
-
-  _ocItensRef = [];
-  _ocFornecedorRef = null;
-  _ocTotalRef = 0;
-
-  if (!cotId) { refForn.innerHTML = ''; refItens.innerHTML = ''; return; }
-
-  const { data: cot } = await db.from('compras_cotacoes').select('vencedor_fornecedor_id').eq('id', cotId).single();
-  if (!cot?.vencedor_fornecedor_id) {
-    refForn.innerHTML = '<p style="font-size:12px;color:var(--danger);margin:8px 0;">⚠️ Esta cotação não possui fornecedor vencedor definido.</p>';
-    refItens.innerHTML = '';
-    return;
-  }
-
-  const { data: forn } = await db.from('compras_cotacoes_fornecedores').select('*').eq('id', cot.vencedor_fornecedor_id).single();
-  _ocFornecedorRef = forn || null;
-
-  const { data: precos } = await db.from('compras_cotacoes_precos')
-    .select('valor_unitario, solicitacao_item_id, compras_solicitacoes_itens(descricao, quantidade, unidade)')
-    .eq('fornecedor_id', cot.vencedor_fornecedor_id);
-
-  _ocItensRef = (precos || []).map(p => ({
-    item_id: p.solicitacao_item_id,
-    descricao: p.compras_solicitacoes_itens?.descricao || '—',
-    quantidade: p.compras_solicitacoes_itens?.quantidade || 0,
-    unidade: p.compras_solicitacoes_itens?.unidade || 'UN',
-    valor_unitario: p.valor_unitario || 0,
-    subtotal: (p.valor_unitario || 0) * (p.compras_solicitacoes_itens?.quantidade || 0),
-  }));
-  _ocTotalRef = _ocItensRef.reduce((acc, i) => acc + i.subtotal, 0);
-
-  refForn.innerHTML = _ocFornecedorRef ? `
-    <div class="card" style="background:var(--gray-50);margin-top:10px;">
-      <h4 style="margin:0 0 8px;">🏷️ Fornecedor Vencedor</h4>
-      <p style="font-size:13px;margin:2px 0;"><strong>${escapeHTML(_ocFornecedorRef.nome)}</strong></p>
-      <p style="font-size:12px;color:var(--gray-500);margin:2px 0;">CNPJ: ${escapeHTML(_ocFornecedorRef.cnpj) !== '—' ? escapeHTML(_ocFornecedorRef.cnpj) : '—'} · E-mail: ${escapeHTML(_ocFornecedorRef.email) !== '—' ? escapeHTML(_ocFornecedorRef.email) : '—'}</p>
-      <p style="font-size:12px;color:var(--gray-500);margin:2px 0;">Contato: ${escapeHTML(_ocFornecedorRef.contato_nome) !== '—' ? escapeHTML(_ocFornecedorRef.contato_nome) : '—'} ${_ocFornecedorRef.link_site ? '· <a href="' + escapeHTML(_ocFornecedorRef.link_site) + '" target="_blank">' + escapeHTML(_ocFornecedorRef.link_site) + '</a>' : ''}</p>
-    </div>` : '';
-
-  refItens.innerHTML = _ocItensRef.length ? `
-    <div class="table-wrap" style="margin-top:10px;">
-      <table>
-        <thead><tr><th>Item</th><th>Qtd.</th><th>Unidade</th><th>Valor Unit.</th><th>Subtotal</th></tr></thead>
-        <tbody>${_ocItensRef.map(i => `
-          <tr>
-            <td>${escapeHTML(i.descricao)}</td>
-            <td>${i.quantidade}</td>
-            <td>${escapeHTML(i.unidade)}</td>
-            <td>${fmtMoney(i.valor_unitario)}</td>
-            <td>${fmtMoney(i.subtotal)}</td>
-          </tr>`).join('')}
-        </tbody>
-        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;">Total da OC</td><td style="font-weight:700;">${fmtMoney(_ocTotalRef)}</td></tr></tfoot>
-      </table>
-    </div>` : '<p style="font-size:12px;color:var(--gray-400);margin:8px 0;">Nenhum item com preço definido para o fornecedor vencedor.</p>';
-}
-
-// ── Salvar (criar ou atualizar) ──────────────────────────────────────
+// ── portado de homologação: salvarOrdemCompra ──
 async function salvarOrdemCompra() {
   const idEdicao = $('oc-id-edicao').value;
   const cotacaoId = $('oc-cotacao').value;
@@ -3297,306 +4923,7 @@ async function salvarOrdemCompra() {
   await carregarOrdensCompra();
 }
 
-// ── Reset / edição ────────────────────────────────────────────────────
-function resetarFormOC() {
-  $('oc-id-edicao').value = '';
-  $('oc-cotacao').dataset.cotacaoAtual = '';
-  $('oc-cotacao').value = '';
-  $('oc-local-entrega').value = '';
-  $('oc-centro-custo').value = '';
-  $('oc-referencia').value = '';
-  $('oc-instrucoes').value = '';
-  $('oc-garantia').value = '';
-  $('oc-status').value = 'Rascunho';
-  $('oc-status-envio').value = 'Não Enviada';
-  $('oc-fornecedor-referencia').innerHTML = '';
-  $('oc-itens-referencia').innerHTML = '';
-  $('oc-recebimento-container').innerHTML = '';
-  _ocItensRef = [];
-  _ocFornecedorRef = null;
-  _ocTotalRef = 0;
-  $('oc-form-titulo').textContent = '📝 Nova Ordem de Compra';
-  $('btn-salvar-oc').textContent = '💾 Registrar Ordem de Compra';
-  $('btn-salvar-oc').style.background = '';
-  $('btn-cancelar-oc').style.display = 'none';
-  carregarSelectCotacoesOC();
-}
-
-async function editarOrdemCompra(id) {
-  let o = _ocCache.find(x => x.id === id);
-  if (!o) {
-    const { data } = await db.from('compras_ordens').select('*, compras_cotacoes(numero, status, compras_solicitacoes(numero, descricao))').eq('id', id).single();
-    o = data;
-  }
-  if (!o) return;
-
-  $('oc-id-edicao').value = o.id;
-  $('oc-local-entrega').value = o.local_entrega || '';
-  $('oc-centro-custo').value = o.centro_custo || '';
-  $('oc-referencia').value = o.referencia_interna || '';
-  $('oc-instrucoes').value = o.instrucoes_entrega || '';
-  $('oc-garantia').value = o.garantia_exigida || '';
-  $('oc-status').value = o.status_oc || 'Rascunho';
-  $('oc-status-envio').value = o.status_envio || 'Não Enviada';
-
-  $('oc-cotacao').dataset.cotacaoAtual = o.cotacao_id || '';
-  await carregarSelectCotacoesOC();
-  $('oc-cotacao').value = o.cotacao_id || '';
-  await onSelecionarCotacaoOC();
-
-  await renderRecebimentoOC(o.id);
-
-  $('oc-form-titulo').textContent = `✏️ Editando ${o.numero}`;
-  $('btn-salvar-oc').textContent = '💾 Salvar Alterações';
-  $('btn-salvar-oc').style.background = '#d97706';
-  $('btn-cancelar-oc').style.display = 'inline-block';
-  document.getElementById('oc-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-async function excluirOrdemCompra(id, numero) {
-  if (!confirm(`Excluir a OC ${numero}? Esta ação não pode ser desfeita.`)) return;
-  await db.from('compras_ordens_recebimentos').delete().eq('ordem_id', id);
-  await db.from('compras_ordens').delete().eq('id', id);
-  await carregarOrdensCompra();
-}
-
-// ── Recebimento de itens ──────────────────────────────────────────────
-async function renderRecebimentoOC(ordemId) {
-  const cont = $('oc-recebimento-container');
-  if (!cont) return;
-  if (!_ocItensRef.length) { cont.innerHTML = ''; return; }
-
-  const { data: recebimentos } = await db.from('compras_ordens_recebimentos').select('*').eq('ordem_id', ordemId);
-  const recebidoPorItem = {};
-  (recebimentos || []).forEach(r => {
-    recebidoPorItem[r.solicitacao_item_id] = (recebidoPorItem[r.solicitacao_item_id] || 0) + (r.quantidade_recebida || 0);
-  });
-
-  cont.innerHTML = `
-    <div style="margin-top:18px;border-top:1px solid var(--gray-200);padding-top:14px;">
-      <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">📥 Recebimento de Itens</label>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Item</th><th>Pedido</th><th>Recebido</th><th>Receber agora</th><th></th></tr></thead>
-          <tbody>
-            ${_ocItensRef.map(i => {
-              const recebido = recebidoPorItem[i.item_id] || 0;
-              const restante = Math.max(0, i.quantidade - recebido);
-              return `
-                <tr>
-                  <td>${escapeHTML(i.descricao)}</td>
-                  <td>${i.quantidade} ${escapeHTML(i.unidade)}</td>
-                  <td>${recebido} ${escapeHTML(i.unidade)}</td>
-                  <td><input type="number" min="0" max="${restante}" step="1" id="oc-receber-${i.item_id}" class="form-input-style" style="width:90px;" placeholder="0" ${restante === 0 ? 'disabled' : ''}></td>
-                  <td>${restante === 0
-                    ? '<span class="tag-badge success">✓ Completo</span>'
-                    : `<button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="registrarRecebimentoOC('${ordemId}','${i.item_id}')">Registrar</button>`}</td>
-                </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-}
-
-async function registrarRecebimentoOC(ordemId, itemId) {
-  const input = $('oc-receber-' + itemId);
-  const qtd = parseInt(input.value, 10);
-  if (!qtd || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
-
-  await db.from('compras_ordens_recebimentos').insert({
-    ordem_id: ordemId,
-    solicitacao_item_id: itemId,
-    quantidade_recebida: qtd,
-    data_recebimento: new Date().toISOString(),
-  });
-
-  // Recalcula status geral da OC
-  const { data: recebimentos } = await db.from('compras_ordens_recebimentos').select('*').eq('ordem_id', ordemId);
-  const recebidoPorItem = {};
-  (recebimentos || []).forEach(r => {
-    recebidoPorItem[r.solicitacao_item_id] = (recebidoPorItem[r.solicitacao_item_id] || 0) + (r.quantidade_recebida || 0);
-  });
-  const totalmenteRecebido = _ocItensRef.every(i => (recebidoPorItem[i.item_id] || 0) >= i.quantidade);
-  const algumRecebido = _ocItensRef.some(i => (recebidoPorItem[i.item_id] || 0) > 0);
-  const novoStatus = totalmenteRecebido ? 'Recebida' : (algumRecebido ? 'Parcial' : 'Rascunho');
-
-  await db.from('compras_ordens').update({ status_oc: novoStatus }).eq('id', ordemId);
-  $('oc-status').value = novoStatus;
-
-  await renderRecebimentoOC(ordemId);
-  await carregarOrdensCompra();
-}
-
-// ── Badges ────────────────────────────────────────────────────────────
-function _badgeStatusOC(status) {
-  const map = {
-    'Rascunho': 'tag-badge', 'Enviada': 'tag-badge andamento', 'Confirmada': 'tag-badge semestral',
-    'Parcial': 'tag-badge warning', 'Recebida': 'tag-badge success', 'Cancelada': 'tag-badge danger',
-  };
-  return `<span class="${map[status] || 'tag-badge'}">${escapeHTML(status || '—')}</span>`;
-}
-
-function _badgeEnvioOC(status) {
-  return status === 'Enviada'
-    ? '<span class="tag-badge success">📤 Enviada</span>'
-    : '<span class="tag-badge">Não Enviada</span>';
-}
-
-// ── Listagem ──────────────────────────────────────────────────────────
-async function carregarOrdensCompra() {
-  const tbody = $('tbody-ordens-compra');
-  if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
-
-  const { data, error } = await db.from('compras_ordens')
-    .select('*, compras_cotacoes(numero, vencedor_fornecedor_id, compras_solicitacoes(numero, descricao))')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
-    return;
-  }
-
-  _ocCache = data || [];
-
-  // Carrega nomes dos fornecedores vencedores e totais
-  const fornIds = [...new Set(_ocCache.map(o => o.compras_cotacoes?.vencedor_fornecedor_id).filter(Boolean))];
-  let fornecedoresMap = {}, precosPorForn = {};
-  if (fornIds.length) {
-    const { data: fornecedores } = await db.from('compras_cotacoes_fornecedores').select('id, nome').in('id', fornIds);
-    (fornecedores || []).forEach(f => fornecedoresMap[f.id] = f.nome);
-    const { data: precos } = await db.from('compras_cotacoes_precos').select('fornecedor_id, solicitacao_item_id, valor_unitario').in('fornecedor_id', fornIds);
-    (precos || []).forEach(p => { (precosPorForn[p.fornecedor_id] = precosPorForn[p.fornecedor_id] || []).push(p); });
-  }
-  const itemIds = [...new Set(Object.values(precosPorForn).flat().map(p => p.solicitacao_item_id))];
-  let qtdMap = {};
-  if (itemIds.length) {
-    const { data: itens } = await db.from('compras_solicitacoes_itens').select('id, quantidade').in('id', itemIds);
-    (itens || []).forEach(i => qtdMap[i.id] = i.quantidade);
-  }
-
-  _ocCache.forEach(o => {
-    const fornId = o.compras_cotacoes?.vencedor_fornecedor_id;
-    const precos = precosPorForn[fornId] || [];
-    o._fornecedorNome = fornecedoresMap[fornId] || '—';
-    o._total = precos.reduce((acc, p) => acc + (p.valor_unitario || 0) * (qtdMap[p.solicitacao_item_id] || 0), 0);
-  });
-
-  _renderStatsOC();
-  filtrarOrdensCompra();
-}
-
-function _renderStatsOC() {
-  $('oc-stat-total').textContent     = _ocCache.length;
-  $('oc-stat-rascunho').textContent  = _ocCache.filter(o => o.status_oc === 'Rascunho').length;
-  $('oc-stat-enviadas').textContent  = _ocCache.filter(o => o.status_envio === 'Enviada').length;
-  $('oc-stat-recebidas').textContent = _ocCache.filter(o => o.status_oc === 'Recebida').length;
-}
-
-function filtrarOrdensCompra() {
-  const tbody = $('tbody-ordens-compra');
-  if (!tbody) return;
-
-  const termo  = ($('oc-filtro-texto')?.value || '').toLowerCase().trim();
-  const status = $('oc-filtro-status')?.value || '';
-  const envio  = $('oc-filtro-envio')?.value || '';
-
-  let dados = [..._ocCache];
-  if (status) dados = dados.filter(o => o.status_oc === status);
-  if (envio)  dados = dados.filter(o => o.status_envio === envio);
-  if (termo) {
-    dados = dados.filter(o => `${o.numero} ${o.compras_cotacoes?.numero || ''} ${o._fornecedorNome}`.toLowerCase().includes(termo));
-  }
-
-  tbody.innerHTML = dados.length ? dados.map(o => `
-    <tr>
-      <td><strong>${escapeHTML(o.numero)}</strong></td>
-      <td style="font-size:12px;color:var(--gray-500);">${escapeHTML(o.compras_cotacoes?.numero || '—')}<br>${escapeHTML(o.compras_cotacoes?.compras_solicitacoes?.descricao || '')}</td>
-      <td>${escapeHTML(o._fornecedorNome)}</td>
-      <td style="font-weight:700;">${o._total ? fmtMoney(o._total) : '—'}</td>
-      <td>${_badgeEnvioOC(o.status_envio)}</td>
-      <td>${_badgeStatusOC(o.status_oc)}</td>
-      <td>${o.created_at ? fmtDate(o.created_at.split('T')[0]) : '—'}</td>
-      <td style="display:flex;gap:4px;">
-        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarOrdemCompra('${o.id}')">✏️ Editar</button>
-        <button class="btn-excluir" onclick="excluirOrdemCompra('${o.id}','${escapeHTML(o.numero)}')">✕</button>
-      </td>
-    </tr>`).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma ordem de compra encontrada.</td></tr>';
-}
-
-if ($('btn-salvar-oc')) {
-  $('btn-salvar-oc').addEventListener('click', salvarOrdemCompra);
-}
-
-// =====================================================================
-//  INTEGRAÇÃO OS → SC/SS (Pré-Demandas de Compras)
-//  Tabela: compras_pre_demandas
-// =====================================================================
-
-let _pdItemSeq = 0;
-
-function abrirPreDemandaOS(origemTipo, origemId, origemNumero, setorSugerido = '') {
-  $('pd-origem-tipo').value = origemTipo;
-  $('pd-origem-id').value = origemId;
-  $('pd-origem-numero-val').value = origemNumero;
-  $('pd-origem-numero').textContent = origemNumero;
-  $('pd-tipo').value = 'SC';
-  $('pd-setor').value = (setorSugerido || '').trim();
-  $('pd-prioridade').value = 'Normal';
-  $('pd-descricao').value = '';
-  $('pd-itens-tbody').innerHTML = '';
-  $('msg-pd').textContent = '';
-  adicionarItemPD();
-  $('overlay-pre-demanda').style.display = 'flex';
-}
-
-function fecharModalPreDemanda() {
-  $('overlay-pre-demanda').style.display = 'none';
-}
-
-function adicionarItemPD(desc = '', qtd = 1, unidade = '', catalogoId = '') {
-  const tbody = $('pd-itens-tbody');
-  if (!tbody) return;
-  const rid   = 'pd-item-' + (++_pdItemSeq);
-  const inpId = 'pd-desc-' + _pdItemSeq;
-  const tr    = document.createElement('tr');
-  tr.id = rid;
-  const catIdVal    = catalogoId || '';
-  const descDisplay = desc || '';
-  tr.innerHTML = `
-    <td style="position:relative;min-width:220px;">
-      <input type="hidden" class="pd-item-cat-id" value="${escapeHTML(catIdVal)}">
-      <input type="hidden" class="pd-item-unid-id" value="">
-      <input type="text" id="${inpId}" name="pd-busca-${_pdItemSeq}" class="form-input-style pd-item-desc" value="${escapeHTML(descDisplay)}"
-             placeholder="Digite para buscar no catálogo..."
-             autocomplete="new-password" data-form-type="other" role="combobox" aria-autocomplete="list" aria-expanded="false"
-             style="${catIdVal ? 'border-color:#48bb78;background:#f0fff4;' : ''}">
-    </td>
-    <td><input type="number" class="form-input-style pd-item-qtd" value="${Number(qtd) || 1}" min="0.001" step="any" style="width:80px;"></td>
-    <td><input type="text" class="pd-item-sigla" value="${escapeHTML(unidade)}" readonly
-               style="width:65px;background:#f7fafc;color:#718096;border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:13px;"></td>
-    <td><button type="button" class="btn-excluir" onclick="document.getElementById('${rid}').remove()">✕</button></td>`;
-  tbody.appendChild(tr);
-
-  requestAnimationFrame(() => {
-    const inp = tr.querySelector('.pd-item-desc');
-    if (!inp) return;
-    _bindAutocompleteCatalogo(inp, tr, 'pd');
-  });
-}
-
-function coletarItensPD() {
-  const linhas = [...document.querySelectorAll('#pd-itens-tbody tr')];
-  return linhas.map(tr => ({
-    catalogo_id: tr.querySelector('.pd-item-cat-id')?.value  || null,
-    unidade_id:  tr.querySelector('.pd-item-unid-id')?.value || null,
-    descricao:   tr.querySelector('.pd-item-desc')?.value.trim() || '',
-    quantidade:  parseFloat(tr.querySelector('.pd-item-qtd')?.value) || 1,
-    unidade:     tr.querySelector('.pd-item-sigla')?.value.trim() || '',
-  })).filter(i => i.descricao && i.catalogo_id);
-}
-
+// ── portado de homologação: salvarPreDemanda ──
 async function salvarPreDemanda() {
   const origemTipo   = $('pd-origem-tipo').value;
   const origemId     = $('pd-origem-id').value;
@@ -3632,183 +4959,63 @@ async function salvarPreDemanda() {
   setTimeout(fecharModalPreDemanda, 1200);
 }
 
-if ($('btn-salvar-pd')) {
-  $('btn-salvar-pd').addEventListener('click', salvarPreDemanda);
-}
+// ── portado de homologação: salvarSolicitacaoCompra ──
+async function salvarSolicitacaoCompra() {
+  const idEdicao   = $('sc-id-edicao').value;
+  const tipo       = $('sc-tipo').value;
+  const setor      = $('sc-setor').value.trim();
+  const descricao  = $('sc-descricao').value.trim();
+  const prioridade = $('sc-prioridade').value;
+  const status     = $('sc-status').value;
+  const data       = $('sc-data').value || hoje();
+  const justifica  = $('sc-justificativa').value.trim();
+  const itens      = coletarItensSC();
 
-// ── Aprovação de pré-demandas (compras-sc.html) ──────────────────────
-let _pdCache = [];
-
-function _badgeTipoPD(tipo) {
-  return tipo === 'SS' ? '<span class="tag-badge andamento">🧰 SS</span>' : '<span class="tag-badge">📦 SC</span>';
-}
-
-async function carregarPreDemandas() {
-  const tbody = $('tbody-pre-demandas');
-  if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
-
-  const { data, error } = await db.from('compras_pre_demandas')
-    .select('*, profiles(nome)')
-    .eq('status', 'Pendente')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan="8" class="td-loading">Erro ao carregar: ${escapeHTML(error.message)}</td></tr>`;
+  if (!setor || !descricao) {
+    msgForm('msg-sc', '⚠️ Preencha Setor e Descrição.', 'red');
     return;
   }
+  if (!_validarItensSC(itens, 'msg-sc')) return;
 
-  _pdCache = data || [];
-  if ($('pd-badge-count')) $('pd-badge-count').textContent = _pdCache.length;
-
-  tbody.innerHTML = _pdCache.length ? _pdCache.map(p => `
-    <tr>
-      <td><strong>${escapeHTML(p.origem_numero)}</strong><br><span style="font-size:10px;color:var(--gray-400);">${escapeHTML(p.origem_tipo)}</span></td>
-      <td>${_badgeTipoPD(p.tipo_solicitacao)}</td>
-      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHTML(p.descricao)}">${escapeHTML(p.descricao)}</td>
-      <td>${escapeHTML(p.setor)}</td>
-      <td>${_badgePrioridadeSC(p.prioridade)}</td>
-      <td style="font-size:11px;">${(p.itens||[]).map(i => `${i.quantidade}x ${escapeHTML(i.descricao)}`).join('<br>')}</td>
-      <td style="color:var(--gray-500);font-size:12px;">${escapeHTML(p.profiles?.nome || '—')}<br>${fmtDate(p.created_at?.split('T')[0])}</td>
-      <td style="display:flex;gap:4px;">
-        <button class="btn-primary" style="padding:3px 10px;font-size:11px;background:#10b981;" onclick="aprovarPreDemanda('${p.id}')">✓ Aprovar</button>
-        <button class="btn-excluir" onclick="rejeitarPreDemanda('${p.id}')">✕ Rejeitar</button>
-      </td>
-    </tr>`).join('') : '<tr><td colspan="8" class="td-loading">Nenhuma pré-demanda pendente.</td></tr>';
-}
-
-async function aprovarPreDemanda(id) {
-  const p = _pdCache.find(x => x.id === id);
-  if (!p) return;
-  if (!confirm(`Aprovar esta pré-demanda e gerar uma ${p.tipo_solicitacao} a partir da ${p.origem_numero}?`)) return;
-
-  const numero = await gerarNumeroSolicitacao(p.tipo_solicitacao);
-
-  const { data: nova, error } = await db.from('compras_solicitacoes').insert({
-    numero,
-    tipo: p.tipo_solicitacao,
-    descricao: p.descricao,
-    setor: p.setor,
-    prioridade: p.prioridade,
-    status: 'Pendente',
-    justificativa: `Gerada automaticamente a partir da pré-demanda da ${p.origem_numero}.`,
-    data_necessaria: hoje(),
-    solicitante_id: p.solicitante_id,
-  }).select('id').single();
-
-  if (error) { alert('Erro ao gerar solicitação: ' + error.message); return; }
-
-  const itensPayload = (p.itens || []).map(i => ({ ...i, solicitacao_id: nova.id }));
-  if (itensPayload.length) await db.from('compras_solicitacoes_itens').insert(itensPayload);
+  msgForm('msg-sc', '⏳ Salvando...', 'blue');
 
   const { data: { user } } = await db.auth.getUser();
-  await db.from('compras_pre_demandas').update({
-    status: 'Aprovada',
-    solicitacao_id: nova.id,
-    decidido_por: user?.email || null,
-    data_decisao: new Date().toISOString(),
-  }).eq('id', id);
 
-  await carregarPreDemandas();
+  const payload = {
+    tipo,
+    descricao,
+    setor,
+    prioridade,
+    status,
+    justificativa: justifica || null,
+    data_necessaria: data,
+    solicitante_id: user?.id || null,
+  };
+
+  let solicitacaoId = idEdicao;
+
+  if (idEdicao) {
+    const { error } = await db.from('compras_solicitacoes').update(payload).eq('id', idEdicao);
+    if (error) { msgForm('msg-sc', '❌ Erro ao atualizar: ' + error.message, 'red'); return; }
+    // Remove itens antigos e recria (forma mais simples e segura)
+    await db.from('compras_solicitacoes_itens').delete().eq('solicitacao_id', idEdicao);
+  } else {
+    payload.numero = await gerarNumeroSolicitacao(tipo);
+    const { data: nova, error } = await db.from('compras_solicitacoes').insert(payload).select('id').single();
+    if (error) { msgForm('msg-sc', '❌ Erro ao registrar: ' + error.message, 'red'); return; }
+    solicitacaoId = nova.id;
+  }
+
+  const itensPayload = itens.map(i => ({ ...i, solicitacao_id: solicitacaoId }));
+  const { error: errItens } = await db.from('compras_solicitacoes_itens').insert(itensPayload);
+  if (errItens) { msgForm('msg-sc', '⚠️ Solicitação salva, mas houve erro nos itens: ' + errItens.message, 'red'); }
+  else { msgForm('msg-sc', idEdicao ? '✅ Solicitação atualizada com sucesso!' : '✅ Solicitação registrada com sucesso!', 'green'); }
+
+  resetarFormSC();
   await carregarSolicitacoesCompra();
 }
 
-async function rejeitarPreDemanda(id) {
-  if (!confirm('Rejeitar esta pré-demanda? Nenhuma SC/SS será criada.')) return;
-  const { data: { user } } = await db.auth.getUser();
-  await db.from('compras_pre_demandas').update({
-    status: 'Rejeitada',
-    decidido_por: user?.email || null,
-    data_decisao: new Date().toISOString(),
-  }).eq('id', id);
-  await carregarPreDemandas();
-}
-
-// =====================================================================
-//  CATÁLOGO DE ITENS — compras_catalogo_itens
-//  Página: compras-catalogo.html
-// =====================================================================
-
-let _catCache = [];   // cache de itens do catálogo
-let _umCache  = [];   // cache de unidades de medida
-
-// ── Prefixos de código por grupo ─────────────────────────────────────
-const _CAT_PREFIXO = {
-  'Material':   'MAT',
-  'Serviço':    'SVC',
-  'EPI':        'EPI',
-  'Ferramenta': 'FER',
-  'Químico':    'QUI',
-  'Outro':      'OUT',
-};
-
-// ── Alterna abas ─────────────────────────────────────────────────────
-function alternarAbaCatalogo(aba) {
-  ['itens','unidades'].forEach(a => {
-    const el = $('aba-catalogo-' + a);
-    if (el) el.style.display = a === aba ? '' : 'none';
-  });
-}
-
-// ── Geração de código automático ─────────────────────────────────────
-async function atualizarCodigoCatalogo() {
-  const grupo   = $('cat-grupo')?.value || 'Material';
-  const prefixo = _CAT_PREFIXO[grupo] || 'OUT';
-  if ($('cat-id-edicao')?.value) return; // em edição não altera código
-  const { data } = await db.from('compras_catalogo_itens')
-    .select('codigo')
-    .like('codigo', prefixo + '-%')
-    .order('codigo', { ascending: false })
-    .limit(1);
-  const ultimo = data?.[0]?.codigo || '';
-  const seq    = parseInt(ultimo.split('-').pop(), 10) || 0;
-  if ($('cat-codigo')) $('cat-codigo').value = `${prefixo}-${String(seq + 1).padStart(4, '0')}`;
-}
-
-// ── Carrega unidades no select do formulário ──────────────────────────
-async function carregarUnidadesMedida() {
-  const tbody = $('tbody-unidades-medida');
-
-  const { data, error } = await db.from('compras_unidades_medida')
-    .select('*')
-    .order('sigla');
-
-  if (error) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="td-loading">Erro: ${escapeHTML(error.message)}</td></tr>`;
-    return;
-  }
-
-  _umCache = data || [];
-
-  // Popula selects de unidades em todos os formulários que os usam
-  ['cat-unidade'].map($).filter(Boolean).forEach(sel => {
-    const atual = sel.value;
-    sel.innerHTML = '<option value="">-- Unidade --</option>';
-    _umCache.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value       = u.id;
-      opt.textContent = `${u.sigla} — ${u.descricao}`;
-      sel.appendChild(opt);
-    });
-    if (atual) sel.value = atual;
-  });
-
-  // Renderiza tabela
-  if (!tbody) return;
-  tbody.innerHTML = _umCache.length ? _umCache.map(u => `
-    <tr>
-      <td><strong>${escapeHTML(u.sigla)}</strong></td>
-      <td>${escapeHTML(u.descricao)}</td>
-      <td>${u.ativo ? '<span class="tag-badge success">Ativo</span>' : '<span class="tag-badge danger">Inativo</span>'}</td>
-      <td style="display:flex;gap:4px;">
-        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarUnidadeMedida(${u.id})">✏️ Editar</button>
-        <button class="btn-excluir" onclick="toggleAtivoUM(${u.id},${u.ativo})">
-          ${u.ativo ? '⛔ Desativar' : '✅ Ativar'}
-        </button>
-      </td>
-    </tr>`).join('') : '<tr><td colspan="4" class="td-loading">Nenhuma unidade cadastrada.</td></tr>';
-}
-
+// ── portado de homologação: salvarUnidadeMedida ──
 async function salvarUnidadeMedida() {
   const id      = $('um-id-edicao')?.value || '';
   const sigla   = ($('um-sigla')?.value || '').trim().toUpperCase();
@@ -3828,153 +5035,7 @@ async function salvarUnidadeMedida() {
   await carregarUnidadesMedida();
 }
 
-function editarUnidadeMedida(id) {
-  const u = _umCache.find(x => x.id === id);
-  if (!u) return;
-  if ($('um-id-edicao'))  $('um-id-edicao').value  = u.id;
-  if ($('um-sigla'))      $('um-sigla').value       = u.sigla;
-  if ($('um-descricao'))  $('um-descricao').value   = u.descricao;
-  if ($('um-form-titulo')) $('um-form-titulo').textContent = '✏️ Editando Unidade — ' + u.sigla;
-  if ($('btn-cancelar-um')) $('btn-cancelar-um').style.display = 'inline-block';
-  $('um-sigla')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-async function toggleAtivoUM(id, ativo) {
-  const acao = ativo ? 'desativar' : 'ativar';
-  if (!confirm(`Deseja ${acao} esta unidade de medida?`)) return;
-  const { error } = await db.from('compras_unidades_medida').update({ ativo: !ativo }).eq('id', id);
-  if (error) { alert('Erro: ' + error.message); return; }
-  await carregarUnidadesMedida();
-}
-
-function resetarFormUM() {
-  if ($('um-id-edicao'))   $('um-id-edicao').value   = '';
-  if ($('um-sigla'))       $('um-sigla').value        = '';
-  if ($('um-descricao'))   $('um-descricao').value    = '';
-  if ($('um-form-titulo')) $('um-form-titulo').textContent = '📐 Nova Unidade de Medida';
-  if ($('btn-cancelar-um')) $('btn-cancelar-um').style.display = 'none';
-  if ($('msg-um')) $('msg-um').textContent = '';
-}
-
-// ── Catálogo de Itens ─────────────────────────────────────────────────
-async function carregarCatalogo() {
-  const tbody = $('tbody-catalogo');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
-
-  const { data, error } = await db.from('compras_catalogo_itens')
-    .select('*, compras_unidades_medida(sigla, descricao)')
-    .order('codigo');
-
-  if (error) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="td-loading">Erro: ${escapeHTML(error.message)}</td></tr>`;
-    return;
-  }
-
-  _catCache = data || [];
-  _renderStatsCatalogo();
-  filtrarCatalogo();
-}
-
-function _renderStatsCatalogo() {
-  if ($('cat-stat-total'))    $('cat-stat-total').textContent    = _catCache.filter(i => i.ativo).length;
-  if ($('cat-stat-material')) $('cat-stat-material').textContent = _catCache.filter(i => i.grupo === 'Material' && i.ativo).length;
-  if ($('cat-stat-servico'))  $('cat-stat-servico').textContent  = _catCache.filter(i => i.grupo === 'Serviço' && i.ativo).length;
-  if ($('cat-stat-inativos')) $('cat-stat-inativos').textContent = _catCache.filter(i => !i.ativo).length;
-}
-
-const _CAT_GRUPO_ICON = { Material:'📦', 'Serviço':'🧰', EPI:'🦺', Ferramenta:'🔧', Químico:'🧪', Outro:'📎' };
-
-function filtrarCatalogo() {
-  const tbody = $('tbody-catalogo');
-  if (!tbody) return;
-  const termo  = ($('cat-filtro-texto')?.value || '').toLowerCase().trim();
-  const grupo  = $('cat-filtro-grupo')?.value  || '';
-  const ativo  = $('cat-filtro-ativo')?.value  || '';
-
-  let dados = [..._catCache];
-  if (grupo) dados = dados.filter(i => i.grupo === grupo);
-  if (ativo) dados = dados.filter(i => String(i.ativo) === ativo);
-  if (termo) dados = dados.filter(i =>
-    i.codigo.toLowerCase().includes(termo) ||
-    i.descricao.toLowerCase().includes(termo) ||
-    (i.especificacao || '').toLowerCase().includes(termo)
-  );
-
-  tbody.innerHTML = dados.length ? dados.map(i => `
-    <tr style="${!i.ativo ? 'opacity:.55;' : ''}">
-      <td><strong style="font-family:monospace;">${escapeHTML(i.codigo)}</strong></td>
-      <td>${escapeHTML(i.descricao)}</td>
-      <td><span class="tag-badge">${_CAT_GRUPO_ICON[i.grupo] || ''} ${escapeHTML(i.grupo)}</span></td>
-      <td><strong>${escapeHTML(i.compras_unidades_medida?.sigla || '—')}</strong>
-          <small style="color:#a0aec0;"> ${escapeHTML(i.compras_unidades_medida?.descricao || '')}</small></td>
-      <td style="font-size:11px;color:#718096;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-          title="${escapeHTML(i.especificacao || '')}">${escapeHTML(i.especificacao || '—')}</td>
-      <td>${i.ativo ? '<span class="tag-badge success">Ativo</span>' : '<span class="tag-badge danger">Inativo</span>'}</td>
-      <td style="display:flex;gap:4px;">
-        <button class="btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editarItemCatalogo('${i.id}')">✏️</button>
-        <button class="btn-excluir" onclick="toggleAtivoCatalogo('${i.id}',${i.ativo})">
-          ${i.ativo ? '⛔' : '✅'}
-        </button>
-      </td>
-    </tr>`).join('') : '<tr><td colspan="7" class="td-loading">Nenhum item encontrado.</td></tr>';
-}
-
-async function salvarItemCatalogo() {
-  const id         = $('cat-id-edicao')?.value || '';
-  const codigo     = ($('cat-codigo')?.value     || '').trim();
-  const descricao  = ($('cat-descricao')?.value  || '').trim();
-  const grupo      = $('cat-grupo')?.value       || 'Material';
-  const unidadeId  = $('cat-unidade')?.value     || '';
-  const especif    = ($('cat-especificacao')?.value || '').trim();
-  const ativo      = $('cat-ativo')?.value !== 'false';
-
-  if (!descricao)  { msgForm('msg-cat', '⚠️ Preencha a Descrição do item.', 'red'); return; }
-  if (!unidadeId)  { msgForm('msg-cat', '⚠️ Selecione a Unidade de Medida.', 'red'); return; }
-  if (!codigo)     { msgForm('msg-cat', '⚠️ Código não gerado. Selecione o Grupo e tente novamente.', 'red'); return; }
-
-  msgForm('msg-cat', '⏳ Salvando...', 'blue');
-
-  const payload = {
-    codigo,
-    descricao,
-    grupo,
-    unidade_id:    parseInt(unidadeId, 10),
-    especificacao: especif || null,
-    ativo,
-  };
-
-  const { error } = id
-    ? await db.from('compras_catalogo_itens').update(payload).eq('id', id)
-    : await db.from('compras_catalogo_itens').insert(payload);
-
-  if (error) {
-    const msg = error.message.includes('uq_catalogo_descricao')
-      ? '❌ Já existe um item com esta descrição no catálogo.'
-      : '❌ Erro ao salvar: ' + error.message;
-    msgForm('msg-cat', msg, 'red');
-    return;
-  }
-
-  msgForm('msg-cat', id ? '✅ Item atualizado com sucesso!' : '✅ Item cadastrado no catálogo!', 'green');
-  resetarFormCatalogo();
-  await carregarCatalogo();
-}
-
-function editarItemCatalogo(id) {
-  const i = _catCache.find(x => x.id === id);
-  if (!i) return;
-  if ($('cat-id-edicao'))      $('cat-id-edicao').value      = i.id;
-  if ($('cat-codigo'))         $('cat-codigo').value         = i.codigo;
-  if ($('cat-descricao'))      $('cat-descricao').value      = i.descricao;
-  if ($('cat-grupo'))          $('cat-grupo').value          = i.grupo;
-  if ($('cat-unidade'))        $('cat-unidade').value        = i.unidade_id;
-  if ($('cat-especificacao'))  $('cat-especificacao').value  = i.especificacao || '';
-  if ($('cat-ativo'))          $('cat-ativo').value          = String(i.ativo);
-  if ($('cat-form-titulo'))    $('cat-form-titulo').textContent = `✏️ Editando — ${i.codigo}`;
-  if ($('btn-cancelar-cat'))   $('btn-cancelar-cat').style.display = 'inline-block';
-  $('cat-descricao')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
+// ── portado de homologação: toggleAtivoCatalogo ──
 async function toggleAtivoCatalogo(id, ativo) {
   const acao = ativo ? 'desativar' : 'ativar';
   if (!confirm(`Deseja ${acao} este item do catálogo?`)) return;
@@ -3983,16 +5044,11 @@ async function toggleAtivoCatalogo(id, ativo) {
   await carregarCatalogo();
 }
 
-function resetarFormCatalogo() {
-  if ($('cat-id-edicao'))     $('cat-id-edicao').value     = '';
-  if ($('cat-codigo'))        $('cat-codigo').value        = '';
-  if ($('cat-descricao'))     $('cat-descricao').value     = '';
-  if ($('cat-grupo'))         $('cat-grupo').value         = 'Material';
-  if ($('cat-unidade'))       $('cat-unidade').value       = '';
-  if ($('cat-especificacao')) $('cat-especificacao').value = '';
-  if ($('cat-ativo'))         $('cat-ativo').value         = 'true';
-  if ($('cat-form-titulo'))   $('cat-form-titulo').textContent = '📝 Novo Item no Catálogo';
-  if ($('btn-cancelar-cat'))  $('btn-cancelar-cat').style.display = 'none';
-  if ($('msg-cat'))           $('msg-cat').textContent = '';
-  atualizarCodigoCatalogo();
+// ── portado de homologação: toggleAtivoUM ──
+async function toggleAtivoUM(id, ativo) {
+  const acao = ativo ? 'desativar' : 'ativar';
+  if (!confirm(`Deseja ${acao} esta unidade de medida?`)) return;
+  const { error } = await db.from('compras_unidades_medida').update({ ativo: !ativo }).eq('id', id);
+  if (error) { alert('Erro: ' + error.message); return; }
+  await carregarUnidadesMedida();
 }

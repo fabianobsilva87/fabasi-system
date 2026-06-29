@@ -107,9 +107,26 @@ body {
 .dash-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); font-weight: 600; }
 .dash-card-value { font-size: 28px; font-weight: 800; color: var(--gray-800); line-height: 1; }
 .dash-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+.dash-charts-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 18px; }
 .chart-card { display: flex; flex-direction: column; }
 .chart-wrapper { position: relative; height: 220px; width: 100%; }
 .chart-wrapper canvas { position: absolute; inset: 0; }
+
+/* ── KPI cards novo dashboard ── */
+.dash-section-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--gray-500); margin-bottom: 10px; }
+.dash-kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.dash-kpi { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .15s; }
+.dash-kpi:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.dash-kpi-blue  { border-left: 3px solid #2a78d6; }
+.dash-kpi-teal  { border-left: 3px solid #1baf7a; }
+.dash-kpi-amber { border-left: 3px solid #eda100; }
+.dash-kpi-red   { border-left: 3px solid #e34948; }
+.dash-kpi-icon  { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+.dash-kpi-body  { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash-kpi-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-kpi-value { font-size: 26px; font-weight: 800; color: var(--gray-800); line-height: 1.1; }
+.dash-kpi-sub   { font-size: 11px; color: var(--gray-400); }
+.dash-kpi-sub-danger { color: #ef4444; }
 
 /* Atividades */
 #dash-atividades { display: flex; flex-direction: column; gap: 8px; }
@@ -237,6 +254,8 @@ tbody tr:hover td { background: var(--gray-50); }
   .form-grid { grid-template-columns: 1fr !important; }
   .form-grid.thirds { grid-template-columns: 1fr !important; }
   .dash-charts-grid { grid-template-columns: 1fr !important; }
+  .dash-charts-grid-3 { grid-template-columns: 1fr !important; }
+  .dash-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .admin-split-grid { grid-template-columns: 1fr; }
   .admin-form-side { border-right: none; padding-right: 0; }
 }

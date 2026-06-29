@@ -14,6 +14,7 @@
     <aside class="sidebar no-print">
       <div class="sidebar-header">
         <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        
         <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
@@ -24,6 +25,7 @@
         <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
         <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
         <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação de Manutenções PMOC</div>
         <div class="nav-label">Manutenção</div>
         <div class="nav-item active" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
         <div class="nav-label">Suprimentos</div>
@@ -34,6 +36,7 @@
         <div class="nav-label">Administração</div>
         <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
         <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
         <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
       </nav>
       <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
@@ -58,8 +61,20 @@
               <div class="form-group"><label>Status Operacional</label><select id="os-status" class="form-input-style"><option value="Aberta">Aberta / Pendente</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option></select></div>
               <div class="form-group" style="grid-column:span 2;"><label>Descrição da Ocorrência / Sintomas *</label><textarea id="os-defeito" rows="2" placeholder="Descreva os sintomas..."></textarea></div>
               <div class="form-group" style="grid-column:span 2;"><label>Diagnóstico Técnico / Ações Executadas</label><textarea id="os-laudo" rows="3" placeholder="Detalhamento..."></textarea></div>
-              <div class="form-group"><label>📷 Foto ANTES (situação encontrada)</label><input type="file" id="os-foto-antes" accept="image/*" capture="environment" class="form-input-style"></div>
-              <div class="form-group"><label>📷 Foto DEPOIS (serviço concluído)</label><input type="file" id="os-foto-depois" accept="image/*" capture="environment" class="form-input-style"></div>
+              <div class="form-group" style="grid-column:span 2;"><label>📷 Evidência de Campo</label>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                  <div style="flex:1;min-width:200px;">
+                    <label style="font-size:12px;font-weight:600;color:#4a5568;">📷 Antes</label>
+                    <input type="file" id="os-foto-antes" accept="image/*" multiple class="form-input-style">
+                    <div id="os-foto-antes-preview" style="margin-top:8px;"></div>
+                  </div>
+                  <div style="flex:1;min-width:200px;">
+                    <label style="font-size:12px;font-weight:600;color:#4a5568;">📷 Depois</label>
+                    <input type="file" id="os-foto-depois" accept="image/*" multiple class="form-input-style">
+                    <div id="os-foto-depois-preview" style="margin-top:8px;"></div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="btn-row">
               <button id="btn-salvar-os" class="btn-primary">✓ Registrar Ordem de Serviço</button>
@@ -99,15 +114,13 @@
               <div class="form-group"><label>Equipamento</label><input type="text" id="osg-equipamento"></div>
               <div class="form-group"><label>Status Atual</label><select id="osg-status" class="form-input-style"><option value="Aberta">Aberta</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option></select></div>
               <div class="form-group"><label>Técnico Atribuído</label><select id="osg-tecnico" class="form-input-style"></select></div>
-              <div class="form-group"><label>📷 Foto ANTES (situação encontrada)</label><input type="file" id="osg-foto-antes" accept="image/*" capture="environment" class="form-input-style"></div>
-              <div class="form-group"><label>📷 Foto DEPOIS (serviço concluído)</label><input type="file" id="osg-foto-depois" accept="image/*" capture="environment" class="form-input-style"></div>
             </div>
             <div class="btn-row"><button id="btn-salvar-osg" class="btn-primary">✓ Salvar Ordem Facilities</button><button id="btn-cancelar-edicao-osg" class="btn-secondary" style="display:none;">✕ Cancelar Edição</button></div>
             <p id="msg-osg" class="msg-form"></p>
           </div>
           <div class="card">
             <h3 class="card-title">Ordens de Serviço de Facilities Processadas</h3>
-            <div class="table-wrap"><table><thead><tr><th>Código O.S.</th><th>Chamada</th><th>Setor</th><th>Área(s)</th><th>Fotos</th><th>Status</th></tr></thead><tbody id="tbody-osg"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Código O.S.</th><th>Chamada</th><th>Setor</th><th>Área(s)</th><th>Status</th></tr></thead><tbody id="tbody-osg"></tbody></table></div>
           </div>
         </div>
 
@@ -120,61 +133,6 @@
 
         <div id="area-os-impressao" class="print-only"></div>
         <div id="area-osg-impressao" class="print-only"></div>
-
-        <!-- ===== MODAL: NOVA PRÉ-DEMANDA (OS → SC/SS) ===== -->
-        <div id="overlay-pre-demanda" class="no-print" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:1000;align-items:center;justify-content:center;">
-          <div class="card" style="max-width:600px;width:92%;max-height:88vh;overflow-y:auto;margin:0;">
-            <h3 class="card-title">📦 Nova Pré-Demanda — Compras</h3>
-            <p style="font-size:12px;color:#718096;margin-bottom:14px;">
-              Origem: <strong id="pd-origem-numero">—</strong>. Após aprovação no módulo de Compras, esta pré-demanda
-              será convertida automaticamente em uma <strong>SC</strong> (materiais) ou <strong>SS</strong> (serviço de terceiros).
-            </p>
-            <input type="hidden" id="pd-origem-tipo">
-            <input type="hidden" id="pd-origem-id">
-            <input type="hidden" id="pd-origem-numero-val">
-
-            <div class="form-grid thirds">
-              <div class="form-group">
-                <label>Tipo de Demanda *</label>
-                <select id="pd-tipo" class="form-input-style">
-                  <option value="SC">📦 SC — Compra de Materiais</option>
-                  <option value="SS">🧰 SS — Contratação de Serviço (terceiros)</option>
-                </select>
-              </div>
-              <div class="form-group"><label>Setor *</label><input type="text" id="pd-setor" placeholder="Ex: Bloco B - Manutenção"></div>
-              <div class="form-group">
-                <label>Prioridade</label>
-                <select id="pd-prioridade" class="form-input-style">
-                  <option value="Normal">Normal</option>
-                  <option value="Alta">Alta</option>
-                  <option value="Urgente">Urgente</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top:12px;">
-              <label>Descrição / Justificativa *</label>
-              <textarea id="pd-descricao" rows="2" placeholder="Descreva o que é necessário e por quê..."></textarea>
-            </div>
-
-            <div style="margin-top:16px;">
-              <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">📋 Itens Necessários *</label>
-              <div class="table-wrap">
-                <table>
-                  <thead><tr><th style="width:50%;">Descrição</th><th>Quantidade</th><th>Unidade</th><th></th></tr></thead>
-                  <tbody id="pd-itens-tbody"></tbody>
-                </table>
-              </div>
-              <button type="button" class="btn-refresh" style="margin-top:8px;" onclick="adicionarItemPD()">➕ Adicionar Item</button>
-            </div>
-
-            <div class="btn-row" style="margin-top:18px;">
-              <button id="btn-salvar-pd" class="btn-primary">📨 Enviar para Aprovação</button>
-              <button class="btn-secondary" onclick="fecharModalPreDemanda()">✕ Cancelar</button>
-            </div>
-            <p id="msg-pd" class="msg-form"></p>
-          </div>
-        </div>
       </div>
     </main>
   </div>

@@ -18,13 +18,14 @@
         <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
-            <nav>
+      <nav>
         <div class="nav-label">Visão Geral</div>
         <div class="nav-item active" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
         <div class="nav-label">Refrigeração</div>
         <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
         <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
         <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação de Manutenções PMOC</div>
         <div class="nav-label">Manutenção</div>
         <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
         <div class="nav-label">Suprimentos</div>
@@ -35,6 +36,7 @@
         <div class="nav-label">Administração</div>
         <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
         <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
         <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
       </nav>
       <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
@@ -43,37 +45,57 @@
     <main class="main-content">
       <div class="topbar no-print"><h2>📊 Dashboard Executivo & Operacional</h2></div>
       <div class="section-content">
-        <div class="dash-cards-grid">
+
+        <!-- ===== KPI CARDS — 6 cards ===== -->
+        <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;">VISÃO GERAL DO PARQUE</p>
+        <div class="dash-cards-grid" style="grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;">
+
           <div class="dash-card">
             <div class="dash-card-icon">🌡️</div>
-            <p class="dash-card-title">Equipamentos Ativos</p>
+            <p class="dash-card-title">Ativos Cadastrados</p>
             <h3 id="dash-txt-ativos" class="dash-card-value">—</h3>
           </div>
+
           <div class="dash-card">
             <div class="dash-card-icon">📋</div>
-            <p class="dash-card-title">Fichas PMOC</p>
+            <p class="dash-card-title">Fichas PMOC Ativas</p>
             <h3 id="dash-txt-fichas" class="dash-card-value">—</h3>
           </div>
+
           <div class="dash-card dash-card-warning">
             <div class="dash-card-icon">⚠️</div>
-            <p class="dash-card-title">O.S. Pendentes</p>
+            <p class="dash-card-title">O.S. Abertas</p>
             <h3 id="dash-txt-os-abertas" class="dash-card-value">—</h3>
           </div>
+
           <div class="dash-card dash-card-success">
             <div class="dash-card-icon">✅</div>
             <p class="dash-card-title">O.S. Concluídas</p>
             <h3 id="dash-txt-os-fechadas" class="dash-card-value">—</h3>
           </div>
+
+          <div class="dash-card" style="border-top:3px solid #0ea5e9;">
+            <div class="dash-card-icon">💧</div>
+            <p class="dash-card-title">Filtros a Vencer</p>
+            <h3 id="dash-txt-filtros-vencer" class="dash-card-value">—</h3>
+          </div>
+
+          <div class="dash-card" style="border-top:3px solid #ef4444;">
+            <div class="dash-card-icon">🕐</div>
+            <p class="dash-card-title">PMOC Vencidos</p>
+            <h3 id="dash-txt-pmoc-vencidos" class="dash-card-value">—</h3>
+          </div>
+
         </div>
 
-        <!-- PAINEL DE ALERTAS DE VENCIMENTO -->
+        <!-- ===== PAINEL DE ALERTAS ===== -->
         <div id="painel-alertas-vencimento" style="display:none;">
           <div style="background:linear-gradient(135deg,#fff7ed,#fff);border:1.5px solid #f97316;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-              <span style="font-size:22px;">&#128680;</span>
+              <span style="font-size:22px;">🚨</span>
               <div>
-                <h3 style="margin:0;font-size:16px;font-weight:700;color:#c2410c;">Alertas de Vencimento &mdash; Pr&oacute;ximos 30 dias</h3>
-                <p style="margin:0;font-size:12px;color:#9a3412;" id="txt-alerta-subtitulo">Itens que requerem aten&ccedil;&atilde;o imediata</p>
+                <h3 style="margin:0;font-size:16px;font-weight:700;color:#c2410c;">Alertas de Vencimento — Próximos 30 dias</h3>
+                <p style="margin:0;font-size:12px;color:#9a3412;" id="txt-alerta-subtitulo">Itens que requerem atenção imediata</p>
               </div>
               <span id="badge-alertas-count" style="margin-left:auto;background:#ef4444;color:#fff;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:700;"></span>
             </div>
@@ -81,49 +103,112 @@
           </div>
         </div>
 
-        <div class="card">
-          <h3 class="card-title">📅 Próximas Manutenções Agendadas (Previsão PMOC)</h3>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Equipamento (TAG)</th><th>Localização</th><th>Data Programada</th><th>Status</th></tr></thead>
-              <tbody id="tbody-agenda-pmoc"><tr><td colspan="4" class="td-loading">Carregando cronograma...</td></tr></tbody>
-            </table>
+        <!-- ===== INVENTÁRIO DE GÁS + DISTRIBUIÇÃO POR CATEGORIA ===== -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+
+          <!-- Inventário de Gás Refrigerante -->
+          <div class="card" style="padding:20px;">
+            <h3 class="card-title" style="margin-bottom:4px;">🧪 Inventário de Gás Refrigerante</h3>
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Equipamentos AC · volume por tipo de fluido</p>
+            <div id="dash-inv-gas" style="font-size:13px;color:#a0aec0;">Carregando inventário de gás...</div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:#718096;">Volume total inventariado</span>
+              <span id="dash-gas-total" style="font-size:13px;font-weight:700;color:#1e3a5f;">— kg</span>
+            </div>
           </div>
+
+          <!-- Distribuição por Categoria -->
+          <div class="card" style="padding:20px;">
+            <h3 class="card-title" style="margin-bottom:4px;">🗂️ Distribuição por Categoria</h3>
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Total de ativos no parque</p>
+            <div id="dash-dist-cat" style="font-size:13px;color:#a0aec0;">Carregando categorias...</div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:#718096;">Criticidade Alta (Classe A)</span>
+              <span id="dash-cat-criticos" style="font-size:13px;font-weight:700;color:#ef4444;">— ativos</span>
+            </div>
+          </div>
+
         </div>
 
-        <div class="dash-charts-grid">
-          <div class="card chart-card">
-            <h3 class="card-title">📈 Volumetria de O.S. — Todas as Origens (AC + Facilities)</h3>
-            <div class="chart-wrapper"><canvas id="chartStatusOS"></canvas></div>
+        <!-- ===== STATUS OS + CONFORMIDADE FILTROS + COBERTURA PMOC ===== -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;">
+
+          <!-- Status das O.S. -->
+          <div class="card chart-card" style="padding:20px;">
+            <h3 class="card-title" style="margin-bottom:14px;">📝 Status das O.S.</h3>
+            <div class="chart-wrapper" style="max-height:180px;">
+              <canvas id="chartStatusOS"></canvas>
+            </div>
+            <div style="margin-top:10px;font-size:11px;color:#718096;display:flex;flex-direction:column;gap:4px;">
+              <span><span style="color:#f59e0b;font-size:14px;">●</span> Aberta / Pendente</span>
+              <span><span style="color:#3b82f6;font-size:14px;">●</span> Em Andamento</span>
+              <span><span style="color:#10b981;font-size:14px;">●</span> Concluída</span>
+            </div>
           </div>
-          <div class="card chart-card">
-            <h3 class="card-title">🎯 Severidade por Classe de Ativo</h3>
-            <div class="chart-wrapper"><canvas id="chartCriticidade"></canvas></div>
+
+          <!-- Conformidade de Filtros -->
+          <div class="card" style="padding:20px;">
+            <h3 class="card-title" style="margin-bottom:4px;">💧 Conformidade — Filtros</h3>
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Bebedouros com filtro e lacre no prazo</p>
+            <div id="dash-conf-filtros" style="font-size:13px;color:#a0aec0;">Carregando conformidade...</div>
           </div>
+
+          <!-- Cobertura PMOC -->
+          <div class="card" style="padding:20px;">
+            <h3 class="card-title" style="margin-bottom:14px;">📋 Cobertura PMOC</h3>
+            <div id="dash-cob-pmoc" style="font-size:13px;color:#a0aec0;">Carregando cobertura...</div>
+          </div>
+
         </div>
 
-        <div class="dash-charts-grid" style="margin-top:0;">
-          <div class="card chart-card">
-            <h3 class="card-title">📝 Distribuição de O.S. — Facilities</h3>
-            <div class="chart-wrapper"><canvas id="chartStatusOSG"></canvas></div>
+        <!-- ===== AGENDA + LOGS ===== -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+
+          <div class="card">
+            <h3 class="card-title">📅 Próximas Manutenções Agendadas (Previsão PMOC)</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Equipamento (TAG)</th><th>Localização</th><th>Data Programada</th><th>Status</th></tr></thead>
+                <tbody id="tbody-agenda-pmoc"><tr><td colspan="4" class="td-loading">Carregando cronograma...</td></tr></tbody>
+              </table>
+            </div>
           </div>
+
           <div class="card">
             <h3 class="card-title">🕐 Logs Críticos Recentes</h3>
             <div id="dash-atividades" style="font-size:13px;">Carregando trilha de auditoria...</div>
           </div>
+
         </div>
+
+        <!-- ===== GRÁFICOS CRITICIDADE + FACILITIES ===== -->
+        <div class="dash-charts-grid" style="margin-bottom:20px;">
+          <div class="card chart-card">
+            <h3 class="card-title">🎯 Severidade por Classe de Ativo</h3>
+            <div class="chart-wrapper"><canvas id="chartCriticidade"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3 class="card-title">📝 Distribuição de O.S. — Facilities</h3>
+            <div class="chart-wrapper"><canvas id="chartStatusOSG"></canvas></div>
+          </div>
+        </div>
+
       </div>
     </main>
   </div>
 
   <script src="app.js"></script>
   <script>
-    // Inicialização orientada ao ciclo de vida da página
     window.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         renderizarGraficosDashboard();
         carregarAgendaManutencoes();
         carregarAlertasVencimento();
+        carregarKPIsExtras();
+        carregarInventarioGas();
+        carregarDistribuicaoCategoria();
+        carregarConformidadeFiltros();
+        carregarCoberturaPMOC();
       }, 400);
     });
   </script>

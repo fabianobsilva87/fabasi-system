@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concredur — Locais</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏗️</div><h3>Concredur</h3><p>Gestão de Manutenção</p>
+        
+      <div class="env-badge-hmg">🧪 HOMOLOGAÇÃO</div>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+    </div>
+    <nav>
+      <div class="nav-label">Visão Geral</div>
+      <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+      <div class="nav-label">Refrigeração</div>
+      <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+      <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+      <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+      <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação de Manutenções PMOC</div>
+      <div class="nav-label">Manutenção</div>
+      <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+      <div class="nav-label">Suprimentos</div>
+      <div class="nav-item" onclick="location.href='compras-sc.html'"><span>🛒</span> Solicitações (SC/SS)</div>
+      <div class="nav-item" onclick="location.href='compras-cot.html'"><span>📊</span> Cotações (COT)</div>
+      <div class="nav-item" onclick="location.href='compras-oc.html'"><span>📦</span> Ordens de Compra (OC)</div>
+      <div class="nav-item" onclick="location.href='compras-catalogo.html'"><span>📚</span> Catálogo de Itens</div>
+      <div class="nav-label">Administração</div>
+      <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+      <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+      <div class="nav-item active" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+      <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+    </nav>
+    <div class="sidebar-footer"><button id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <button class="btn-refresh" onclick="alternarAbasLocais('instituicao')">🏛️ Instituições / Unidades</button>
+      <button class="btn-refresh" style="background:#7c3aed; border-color:#7c3aed; color:#fff;" onclick="alternarAbasLocais('bloco')">🏢 Blocos / Edificações</button>
+    </div>
+
+    <div class="section-content">
+
+      <!-- ===== ABA: INSTITUIÇÕES / UNIDADES ===== -->
+      <div id="aba-instituicao" class="app-sub-panel">
+        <div class="card">
+          <h3 class="card-title">🏛️ Nova Instituição / Unidade</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Ex: Matriz Sede, Filial Centro. Cada Bloco/Edificação cadastrado ficará vinculado a uma destas unidades.</p>
+
+          <input type="hidden" id="inst-id-edicao" value="">
+
+          <div class="form-grid">
+            <div class="form-group"><label>Nome da Instituição / Unidade *</label><input type="text" id="inst-nome" placeholder="Ex: Matriz Sede, Filial Centro"></div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button id="btn-salvar-instituicao" class="btn-primary">💾 Salvar Instituição</button>
+            <button id="btn-cancelar-instituicao" class="btn-secondary" style="display:none;" onclick="resetarFormInstituicao()">✕ Cancelar</button>
+          </div>
+          <p id="msg-instituicao" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Instituições / Unidades Cadastradas</h3>
+            <button class="btn-refresh" onclick="carregarInstituicoes()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Instituição / Unidade</th><th>Blocos vinculados</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-instituicoes"><tr><td colspan="3" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ABA: BLOCOS / EDIFICAÇÕES ===== -->
+      <div id="aba-bloco" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🏢 Novo Bloco / Edificação</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Ex: Bloco A, Prédio Central. Todo Bloco precisa estar vinculado a uma Instituição / Unidade.</p>
+
+          <input type="hidden" id="bloco-id-edicao" value="">
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Instituição / Unidade *</label>
+              <select id="bloco-instituicao" class="form-input-style"><option value="">— Selecione —</option></select>
+            </div>
+            <div class="form-group"><label>Nome do Bloco / Edificação *</label><input type="text" id="bloco-nome" placeholder="Ex: Bloco A, Prédio Central"></div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button id="btn-salvar-bloco" class="btn-primary">💾 Salvar Bloco</button>
+            <button id="btn-cancelar-bloco" class="btn-secondary" style="display:none;" onclick="resetarFormBloco()">✕ Cancelar</button>
+          </div>
+          <p id="msg-bloco" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Blocos / Edificações Cadastrados</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="filtro-bloco-instituicao" class="form-input-style" style="font-size:12px;" onchange="carregarBlocos()"><option value="">Todas as Instituições</option></select>
+              <button class="btn-refresh" onclick="carregarBlocos()">↺ Atualizar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Bloco / Edificação</th><th>Instituição / Unidade</th><th>Ativos vinculados</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-blocos"><tr><td colspan="4" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script>
+// ===================== CONTROLE DE ABAS =====================
+function alternarAbasLocais(aba) {
+  ['instituicao','bloco'].forEach(a => {
+    const el = document.getElementById('aba-' + a);
+    if (el) el.style.display = a === aba ? 'block' : 'none';
+  });
+}
+
+// ===================== INIT =====================
+window.addEventListener('DOMContentLoaded', async () => {
+  await carregarInstituicoes();
+  await popularSelectInstituicoes('bloco-instituicao');
+  await popularSelectInstituicoes('filtro-bloco-instituicao', true);
+  await carregarBlocos();
+});
+</script>
+</body>
+</html>
