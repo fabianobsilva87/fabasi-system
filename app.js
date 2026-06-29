@@ -2182,7 +2182,7 @@ let _scItemSeq  = 0;
 
 // ── Autocomplete: busca no catálogo enquanto o usuário digita ────────
 async function _buscarCatalogo(termo) {
-  if (!termo || termo.length < 2) return [];
+  if (!termo || termo.length < 1) return [];
   const { data } = await db.from('compras_catalogo_itens')
     .select('id, codigo, descricao, grupo, unidade_id, compras_unidades_medida(sigla)')
     .eq('ativo', true)
@@ -2284,7 +2284,7 @@ function _bindAutocompleteCatalogo(inp, tr, prefixo) {
 
     clearTimeout(_debounce);
     const termo = inp.value.trim();
-    if (termo.length < 2) {
+    if (termo.length < 1) {
       _fecharDropdownsCatalogo();
       return;
     }
@@ -2309,7 +2309,7 @@ function _bindAutocompleteCatalogo(inp, tr, prefixo) {
 
   inp.addEventListener('focus', () => {
     const termo = inp.value.trim();
-    if (termo.length >= 2) inp.dispatchEvent(new Event('input'));
+    if (termo.length >= 1) inp.dispatchEvent(new Event('input'));
   });
 
   inp.addEventListener('blur', () => {
@@ -2333,10 +2333,11 @@ function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', cata
     <td style="position:relative;min-width:240px;">
       <input type="hidden" class="sc-item-cat-id" value="${escapeHTML(catIdVal)}">
       <input type="hidden" class="sc-item-unid-id" value="">
-      <input type="text" id="${inpId}" class="form-input-style sc-item-desc" value="${escapeHTML(descDisplay)}"
-             placeholder="Digite para buscar no catálogo..." autocomplete="off"
+      <input type="text" id="${inpId}" name="sc-busca-${_scItemSeq}" class="form-input-style sc-item-desc" value="${escapeHTML(descDisplay)}"
+             placeholder="Digite para buscar no catálogo..."
+             autocomplete="new-password" data-form-type="other" role="combobox" aria-autocomplete="list" aria-expanded="false"
              style="${catIdVal ? 'border-color:#48bb78;background:#f0fff4;' : ''}">
-      ${catIdVal ? '' : '<small style="color:#e53e3e;font-size:10px;">⚠ Selecione um item do catálogo</small>'}
+      ${catIdVal ? '' : '<small class="cat-aviso" style="color:#e53e3e;font-size:10px;">⚠ Selecione um item do catálogo</small>'}
     </td>
     <td><input type="number" class="form-input-style sc-item-qtd" value="${Number(qtd) || 1}" min="0.001" step="any" style="width:90px;"></td>
     <td><input type="text" class="sc-item-sigla" value="${escapeHTML(unidDisplay)}" readonly
@@ -2348,6 +2349,8 @@ function adicionarItemSC(desc = '', qtd = 1, unidade = '', catalogoId = '', cata
   requestAnimationFrame(() => {
     const inp = tr.querySelector('.sc-item-desc');
     if (!inp) return;
+    // Se não há catalogoId (linha nova), garantir que o browser não preencheu o campo com autofill
+    if (!catIdVal && inp.value && inp.value !== descDisplay) inp.value = descDisplay;
     _bindAutocompleteCatalogo(inp, tr);
   });
 }
@@ -3565,8 +3568,9 @@ function adicionarItemPD(desc = '', qtd = 1, unidade = '', catalogoId = '') {
     <td style="position:relative;min-width:220px;">
       <input type="hidden" class="pd-item-cat-id" value="${escapeHTML(catIdVal)}">
       <input type="hidden" class="pd-item-unid-id" value="">
-      <input type="text" id="${inpId}" class="form-input-style pd-item-desc" value="${escapeHTML(descDisplay)}"
-             placeholder="Digite para buscar no catálogo..." autocomplete="off"
+      <input type="text" id="${inpId}" name="pd-busca-${_pdItemSeq}" class="form-input-style pd-item-desc" value="${escapeHTML(descDisplay)}"
+             placeholder="Digite para buscar no catálogo..."
+             autocomplete="new-password" data-form-type="other" role="combobox" aria-autocomplete="list" aria-expanded="false"
              style="${catIdVal ? 'border-color:#48bb78;background:#f0fff4;' : ''}">
     </td>
     <td><input type="number" class="form-input-style pd-item-qtd" value="${Number(qtd) || 1}" min="0.001" step="any" style="width:80px;"></td>
