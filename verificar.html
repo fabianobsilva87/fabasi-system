@@ -20,35 +20,51 @@
     .status-banner.invalido { background: #fee2e2; color: #991b1b; border-bottom: 2px solid #fca5a5; }
     .status-banner.loading  { background: #f1f5f9; color: #64748b; border-bottom: 2px solid #e2e8f0; }
     .status-icon { font-size: 22px; }
-    .body { padding: 22px 28px; }
-    .field-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-bottom: 16px; }
+    .body { padding: 22px 28px; overflow: hidden; }
+
+    /* Grid de campos — colunas com largura mínima para não estourar */
+    .field-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+    .field { min-width: 0; overflow: hidden; }
     .field label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 2px; }
-    .field span  { font-size: 14px; font-weight: 600; color: #1a202c; }
+    .field span  { font-size: 14px; font-weight: 600; color: #1a202c; display: block; word-break: break-word; overflow-wrap: anywhere; }
     .field.full  { grid-column: span 2; }
+
+    /* Parágrafos de texto longo (laudo, descrição) */
+    .body p, .body div { max-width: 100%; }
+    p { word-break: break-word; overflow-wrap: anywhere; }
+
     .divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
-    .tag-tipo { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .tag-tipo { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; flex-shrink: 0; }
     .tag-pmoc { background: #dbeafe; color: #1e40af; }
     .tag-os   { background: #ede9fe; color: #5b21b6; }
-    .tag-osg  { background: #fce7f3; color: #9d174d; }
     .tag-eq   { background: #f0fdf4; color: #166534; }
-    .checklist-mini { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    .checklist-mini { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; table-layout: fixed; }
     .checklist-mini th { background: #f1f5f9; color: #64748b; padding: 5px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
-    .checklist-mini td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
+    .checklist-mini td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; word-break: break-word; }
     .ok  { color: #059669; font-weight: 700; }
     .nok { color: #dc2626; font-weight: 700; }
     .na  { color: #a0aec0; }
     .assinatura-row { display: flex; gap: 24px; margin-top: 16px; }
-    .assinatura-box { flex: 1; text-align: center; }
+    .assinatura-box { flex: 1; min-width: 0; text-align: center; }
     .assinatura-box img { max-width: 160px; max-height: 55px; display: block; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 4px; }
-    .assinatura-box .linha { border-top: 1px solid #64748b; margin-top: 6px; padding-top: 4px; font-size: 10px; color: #64748b; }
+    .assinatura-box .linha { border-top: 1px solid #64748b; margin-top: 6px; padding-top: 4px; font-size: 10px; color: #64748b; word-break: break-word; }
     .footer { padding: 14px 28px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
     .footer a { color: #1a56db; text-decoration: none; }
     .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #1a56db; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 32px auto; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Caixas de texto de laudo/descrição dentro do histórico */
+    .txt-box { font-size: 11px; color: #4a5568; background: #fff; padding: 6px 8px;
+               border-radius: 4px; border: 1px solid #e2e8f0;
+               word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap; }
+
     @media (max-width: 500px) {
       .field-group { grid-template-columns: 1fr; }
       .field.full  { grid-column: span 1; }
       .assinatura-row { flex-direction: column; }
+      .body { padding: 16px; }
+      .header { padding: 16px; }
+      .status-banner { padding: 12px 16px; font-size: 13px; }
     }
   </style>
 </head>
@@ -98,16 +114,20 @@
 
   // Compatibilidade: lê meta_pmoc (novo) com fallback para observacoes regex (legado)
   function lerMetaPMOC(ficha) {
-    if (ficha.meta_pmoc && Object.keys(ficha.meta_pmoc).length > 0) return ficha.meta_pmoc;
+    if (ficha.meta_pmoc && typeof ficha.meta_pmoc === 'object' && Object.keys(ficha.meta_pmoc).length > 0) {
+      return { ...ficha.meta_pmoc, _obsLimpa: ficha.observacoes || '' };
+    }
     const obs = ficha.observacoes || '';
     const m = (p) => { const r = obs.match(p); return r ? r[1] : null; };
+    // Remove todos os blocos [Chave: Valor] das observações para exibir só o texto livre
+    const _obsLimpa = obs.replace(/\[[^\]]+\]/g, '').trim();
     return {
       data_inspecao:    m(/\[DataInspecao:\s*([^\]]+)\]/),
       frequencia:       m(/\[Frequencia:\s*([^\]]+)\]/)     || 'Mensal',
       tipo_equipamento: m(/\[TipoEquipamento:\s*([^\]]+)\]/)|| 'OUT',
-      checklist:        (() => { try { return JSON.parse(m(/\[Checklist:\s*(\{[^\]]+\})\]/)||'{}'); } catch(e) { return {}; } })(),
+      checklist:        (() => { try { return JSON.parse(m(/\[Checklist:\s*(\{[^}]*\})\]/) || '{}'); } catch(e) { return {}; } })(),
       fiscal_nome:      (m(/\[FiscalNome:\s*([^\]]+)\]/)    || '—').trim(),
-      _obsLimpa:        obs.replace(/\[[^\]]+\]/g,'').trim(),
+      _obsLimpa,
     };
   }
 
@@ -175,92 +195,17 @@
         const freq       = meta.frequencia       || '—';
         const tipo_eq    = meta.tipo_equipamento || '—';
         const fiscalNome = meta.fiscal_nome      || '—';
-        const rtNome     = f.rt_nome     || meta.rt_nome     || null;
-        const rtRegistro = f.rt_registro || meta.rt_registro || null;
         const checklist  = meta.checklist        || {};
         const eq         = f.equipamentos        || {};
         const codigo     = `L-PMOC-${f.id.toString().slice(0,6).toUpperCase()}`;
 
         const labelChk = {
-          fil_01:'[FIL-01] Filtros de Ar (G4/F7/F9) — Higienização ou Substituição',
-          bio_01:'[BIO-01] Bandeja de Condensados — Limpeza e Pastilha Sanitizante',
-          bio_02:'[BIO-02] Rede de Drenagem — Desobstrução e Teste de Escoamento',
-          mec_01:'[MEC-01] Conjunto Ventilação — Ruídos, Coxins e Fixadores',
-          fil_02:'[FIL-02] Diferencial de Pressão de Filtros — Medição com Manômetro',
-          bio_03:'[BIO-03] Serpentinas — Limpeza Química com Produto Específico por Pressão',
-          ele_01:'[ELE-01] Medição de Corrente/Tensão dos Compressores e Motores',
-          ele_02:'[ELE-02] Reaperto Geral dos Bornes de Comando e Potência',
-          mec_02:'[MEC-02] Lubrificação de Rolamentos e Buchas do Motoventilador',
-          ref_01:'[REF-01] Verificação de Carga de Gás Refrigerante (Pressão de Alta/Baixa)',
-          ref_02:'[REF-02] Verificação de Vazamentos no Circuito Frigorífico (Detector de Gás)',
-          ele_03:'[ELE-03] Medição de Isolamento Elétrico (Megôhmetro) dos Motores',
-          ele_04:'[ELE-04] Teste dos Dispositivos de Proteção (Pressostatos e Termostatos)',
-          mec_03:'[MEC-03] Inspeção e Substituição de Correias e Polias (se aplicável)',
-          bio_04:'[BIO-04] Coleta de Amostra de Água para Análise Microbiológica',
-          ins_01:'[INS-01] Inspeção Estrutural — Suportes, Fixações e Isolamento Térmico das Linhas',
-          ref_03:'[REF-03] Substituição de Gás Refrigerante (se necessário) e Registro ART/Boletim',
-          mec_04:'[MEC-04] Substituição de Rolamentos, Buchas e Selos Mecânicos Desgastados',
-          mec_05:'[MEC-05] Limpeza e Inspeção do Compressor — Verificação de Óleo e Visor',
-          ele_05:'[ELE-05] Revisão de Capacitores e Contatores com Desgaste Visível',
-          ele_06:'[ELE-06] Termografia Elétrica do Painel de Comando e Cabos de Alimentação',
-          bio_05:'[BIO-05] Higienização Completa e Laudos Microbiológicos do Sistema de Ar',
-          ins_02:'[INS-02] Revisão Geral do PMOC — Atualização de Documentação e ART',
-          ins_03:'[INS-03] Análise de Desempenho — Delta T Evaporador, COP e Eficiência do Sistema',
-          beb_01:'[BEB-01] Limpeza Externa — Gabinete, Torneiras e Bica (produto neutro)',
-          beb_02:'[BEB-02] Verificação do Funcionamento do Sistema de Refrigeração (temperatura adequada)',
-          beb_03:'[BEB-03] Inspeção Visual de Vazamentos nas Conexões e Tubulações',
-          beb_04:'[BEB-04] Verificação e Higienização da Bandeja Coletora',
-          beb_05:'[BEB-05] Higienização Interna Completa com Solução Sanitizante (hipoclorito)',
-          beb_06:'[BEB-06] Limpeza e Verificação do Reservatório Interno de Água',
-          beb_07:'[BEB-07] Verificação de Carga de Gás / Funcionamento do Compressor',
-          beb_08:'[BEB-08] Verificação de Validade e Condição do Elemento Filtrante',
-          beb_09:'[BEB-09] Substituição do Elemento Filtrante (carvão ativado / sedimentos)',
-          beb_10:'[BEB-10] Análise Microbiológica da Água (coleta para laudo laboratorial)',
-          beb_11:'[BEB-11] Verificação e Regulagem da Temperatura de Saída da Água',
-          beb_12:'[BEB-12] Aplicação de Lacre e Registro de Sanitização com Número de Protocolo',
-          beb_13:'[BEB-13] Revisão Completa do Sistema de Refrigeração (compressor, termostato, serpentina)',
-          beb_14:'[BEB-14] Substituição de Vedações, O-rings e Torneiras com Desgaste Aparente',
-          beb_15:'[BEB-15] Laudo Sanitário Anual — Documentação e Registro em Livro de Controle ANVISA',
-          clm_01:"[CLM-01] Limpeza do Reservatório de Água — Remoção de Lodo e Calcário",
-          clm_02:'[CLM-02] Limpeza e Inspeção do Painel Evaporativo (sem danificar as células)',
-          clm_03:'[CLM-03] Verificação do Nível e Funcionamento da Boia de Controle de Água',
-          clm_04:"[CLM-04] Verificação da Bomba d'Água — Funcionamento e Fluxo de Distribuição",
-          clm_05:'[CLM-05] Inspeção do Ventilador Axial — Ruídos, Vibração e Fixação da Hélice',
-          clm_06:'[CLM-06] Limpeza Química do Reservatório — Descalcificação com Produto Específico',
-          clm_07:'[CLM-07] Verificação e Limpeza dos Distribuidores de Água (chuveiros/aspersores)',
-          clm_08:'[CLM-08] Medição de Corrente do Motor do Ventilador e da Bomba (amperagem)',
-          clm_09:'[CLM-09] Lubrificação de Rolamentos do Motor e da Bomba',
-          clm_10:'[CLM-10] Inspeção do Estado do Painel Evaporativo — Avaliação para Substituição',
-          clm_11:'[CLM-11] Análise Microbiológica da Água do Reservatório (Controle de Legionela)',
-          clm_12:'[CLM-12] Verificação do Sistema Elétrico — Quadro, Contactores e Proteções',
-          clm_13:'[CLM-13] Tratamento Biocida da Água — Aplicação de Produto Antiincrustante',
-          clm_14:'[CLM-14] Substituição do Painel Evaporativo (celulose ou polipropileno)',
-          clm_15:'[CLM-15] Revisão Geral da Bomba — Impelidor, Eixo e Vedação Mecânica',
-          clm_16:'[CLM-16] Laudo e Documentação Técnica Anual — Relatório de Controle de Qualidade da Água',
-          ven_01:'[VEN-01] Limpeza das Pás / Hélice e Grelha de Proteção (remoção de poeira acumulada)',
-          ven_02:'[VEN-02] Verificação de Ruídos Anormais, Vibração Excessiva e Folgas Mecânicas',
-          ven_03:'[VEN-03] Verificação de Fixação — Parafusos, Bucins e Suportes',
-          ven_04:'[VEN-04] Lubrificação dos Rolamentos / Buchas com Graxa Adequada',
-          ven_05:'[VEN-05] Medição de Corrente do Motor (amperagem nominal x real)',
-          ven_06:'[VEN-06] Verificação e Reaperto das Conexões Elétricas no Quadro de Comando',
-          ven_07:'[VEN-07] Medição de Isolamento Elétrico (Megôhmetro) do Motor',
-          ven_08:'[VEN-08] Análise de Vibração com Acelerômetro — Verificação de Desbalanceamento',
-          ven_09:'[VEN-09] Substituição de Rolamentos e Buchas com Desgaste Aparente',
-          ven_10:'[VEN-10] Balanceamento Dinâmico das Pás / Hélice (se aplicável)',
-          ger_01:'[GER-01] Inspeção Visual Geral do Equipamento — Estado de Conservação e Integridade',
-          ger_02:'[GER-02] Limpeza Geral — Remoção de Poeira, Oxidação e Sujidades',
-          ger_03:'[GER-03] Verificação de Fixação — Suportes, Parafusos e Estrutura',
-          ger_04:'[GER-04] Verificação Elétrica — Conexões, Chave Geral e Proteções',
-          ger_05:'[GER-05] Teste de Funcionamento e Verificação de Parâmetros Operacionais',
           'limpeza-filtro':'Limpeza de Filtro','limpeza-evaporadora':'Limpeza Evaporadora',
           'limpeza-condensadora':'Limpeza Condensadora','verificacao-dreno':'Verificação de Dreno',
           'verificacao-eletrica':'Verificação Elétrica','verificacao-fluido':'Verificação de Fluido',
           'teste-operacao':'Teste de Operação','verificacao-ruidos':'Verificação de Ruídos','limpeza-geral':'Limpeza Geral',
         };
-        const statusChk = {
-          C:'<span class="ok">✓ Conforme</span>', NC:'<span class="nok">✗ Não Conforme</span>', NA:'<span class="na">N/A</span>',
-          OK:'<span class="ok">✓ OK</span>', NOK:'<span class="nok">✗ NOK</span>',
-        };
+        const statusChk = { OK:'<span class="ok">✓ OK</span>', NOK:'<span class="nok">✗ NOK</span>', NA:'<span class="na">N/A</span>' };
         const chkRows = Object.entries(checklist).map(([k,v]) =>
           `<tr><td>${escapeHTML(labelChk[k]||k)}</td><td style="text-align:center;">${statusChk[v]||escapeHTML(v)}</td></tr>`
         ).join('');
@@ -283,7 +228,6 @@
             <div class="field"><label>Data da Inspeção</label><span>${escapeHTML(dataInsp)}</span></div>
             <div class="field"><label>Frequência</label><span>${escapeHTML(freq)}</span></div>
             <div class="field"><label>Fiscal / Validador</label><span>${escapeHTML(fiscalNome)}</span></div>
-            ${rtNome ? `<div class="field"><label>Responsável Técnico (RT)</label><span>${escapeHTML(rtNome)}${rtRegistro ? ' — ' + escapeHTML(rtRegistro) : ''}</span></div>` : ''}
           </div>
           ${chkRows ? `
           <hr class="divider">
@@ -297,7 +241,6 @@
           <div class="assinatura-row">
             <div class="assinatura-box">${assinaturaHTML(lerAssinatura(f,'assinatura_tecnico_url','assinatura_digital'))}<div class="linha">${escapeHTML(f.tecnico_nome)}<br>Técnico Executor</div></div>
             <div class="assinatura-box">${assinaturaHTML(lerAssinatura(f,'assinatura_fiscal_url','assinatura_fiscal'))}<div class="linha">${escapeHTML(fiscalNome)}<br>Fiscal / Validador</div></div>
-            ${rtNome ? `<div class="assinatura-box">${assinaturaHTML(f.assinatura_rt_url)}<div class="linha">${escapeHTML(rtNome)}<br>Responsável Técnico${rtRegistro ? ' — ' + escapeHTML(rtRegistro) : ''}</div></div>` : ''}
           </div>`;
 
       // ════════════════════════ OS ════════════════════════
@@ -334,57 +277,13 @@
             <div class="field"><label>Tipo de Manutenção</label><span>${escapeHTML(os.tipo_os)}</span></div>
             <div class="field full"><label>Abertura da O.S.</label><span>${fmtDate(os.created_at)}</span></div>
           </div>
-          ${os.descricao_defeito ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Descrição da Ocorrência</div><p style="font-size:12px;line-height:1.6;color:#374151;">${escapeHTML(os.descricao_defeito)}</p>` : ''}
-          ${os.laudo_tecnico ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Diagnóstico / Ações</div><p style="font-size:12px;line-height:1.6;color:#374151;">${escapeHTML(os.laudo_tecnico)}</p>` : ''}
+          ${os.descricao_defeito ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Descrição da Ocorrência</div><p class="txt-box" style="font-size:12px;">${escapeHTML(os.descricao_defeito)}</p>` : ''}
+          ${os.laudo_tecnico ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Diagnóstico / Ações</div><p class="txt-box" style="font-size:12px;">${escapeHTML(os.laudo_tecnico)}</p>` : ''}
           <hr class="divider">
           <div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Assinatura do Técnico</div>
           <div class="assinatura-row">
             <div class="assinatura-box">${assinaturaHTML(lerAssinatura(col,'assinatura_url','assinatura_digital'))}<div class="linha">${escapeHTML(col.nome||'—')}<br>Técnico Executor</div></div>
           </div>`;
-
-      // ════════════════════════ OSG (Facilities) ════════════════════════
-      } else if (tipo === 'osg') {
-        const { data: osg, error } = await db
-          .from('ordens_servico_geral')
-          .select('*')
-          .eq('id', id)
-          .single();
-        if (error || !osg) { mostrarErro('Ordem de Serviço Facilities não encontrada na base de dados.'); return; }
-
-        const codigo = osg.numero_os || `OSG-${osg.id.toString().slice(0,5).toUpperCase()}`;
-        const statusCor = { 'Aberta':'#fef3c7','Em Andamento':'#dbeafe','Concluída':'#d1fae5' };
-        const statusTxt = { 'Aberta':'#92400e','Em Andamento':'#1e40af','Concluída':'#065f46' };
-        const st = osg.status_os || 'Aberta';
-        const areas = Array.isArray(osg.areas_tecnicas) ? osg.areas_tecnicas.join(', ') : (osg.areas_tecnicas || osg.area || '—');
-
-        document.getElementById('status-banner').className = 'status-banner valido';
-        document.getElementById('status-texto').textContent = `✅ Documento autêntico — ${codigo}`;
-        document.getElementById('spinner').remove();
-        document.getElementById('corpo').innerHTML = `
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-            <span class="tag-tipo tag-osg">🏢 O.S. Facilities</span>
-            <strong style="font-size:15px;">${escapeHTML(codigo)}</strong>
-            <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;margin-left:auto;background:${statusCor[st]||'#f1f5f9'};color:${statusTxt[st]||'#374151'}">${escapeHTML(st)}</span>
-          </div>
-          <div class="field-group">
-            <div class="field full"><label>Serviço Requisitado</label><span>${escapeHTML(osg.servico_requisitado)}</span></div>
-            <div class="field"><label>Setor / Destino</label><span>${escapeHTML(osg.setor)}</span></div>
-            <div class="field"><label>Tipo de Intervenção</label><span>${escapeHTML(osg.tipo_manutencao || '—')}</span></div>
-            <div class="field"><label>Especialidades Envolvidas</label><span>${escapeHTML(areas)}</span></div>
-            <div class="field full"><label>Abertura da O.S.</label><span>${fmtDate(osg.created_at)}</span></div>
-          </div>
-          ${osg.falha_relatada ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Falha Relatada / Descrição do Serviço</div><p style="font-size:12px;line-height:1.6;color:#374151;">${escapeHTML(osg.falha_relatada)}</p>` : ''}
-          ${(osg.foto_antes_url || osg.foto_depois_url) ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Evidência Fotográfica — Antes / Depois</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-              <div style="text-align:center;">
-                <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Antes</p>
-                ${osg.foto_antes_url ? `<img src="${osg.foto_antes_url}" style="max-width:100%;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
-              </div>
-              <div style="text-align:center;">
-                <p style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;margin-bottom:4px;">Depois</p>
-                ${osg.foto_depois_url ? `<img src="${osg.foto_depois_url}" style="max-width:100%;border-radius:4px;border:1px solid #e2e8f0;">` : '<p style="font-size:11px;color:#a0aec0;">Não registrada</p>'}
-              </div>
-            </div>` : ''}`;
 
       // ════════════════════════ EQUIPAMENTO ════════════════════════
       } else if (tipo === 'equipamento') {
@@ -400,10 +299,16 @@
         const cs      = critCor[crit] || critCor['Média'];
         const catLabel = { AC:'❄️ Ar Condicionado', BEB:'💧 Bebedouro', CLIM:'🌀 Climatizador Evaporativo', VEN:'💨 Ventilador/Exaustor', OUT:'🔧 Outros' };
         const codigo  = `EQ-${(eq.tag||eq.id.toString().slice(0,6)).toUpperCase()}`;
-        const extras  = eq.extras_tecnico || {};
-        const extraFields = Object.entries(extras).map(([k,v]) =>
-          `<div class="field"><label>${escapeHTML(k.replace(/-/g,' '))}</label><span>${escapeHTML(v)}</span></div>`
-        ).join('');
+        const extras  = (() => {
+          const raw = eq.extras_tecnico || eq.extras || {};
+          if (typeof raw === 'string') { try { return JSON.parse(raw); } catch(e) { return {}; } }
+          return raw;
+        })();
+        const extraFields = Object.entries(extras)
+          .filter(([k, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+          .map(([k, v]) =>
+            `<div class="field"><label>${escapeHTML(k.replace(/-/g,' '))}</label><span>${escapeHTML(v)}</span></div>`
+          ).join('');
 
         document.getElementById('status-banner').className = 'status-banner valido';
         document.getElementById('status-texto').textContent = `✅ Ativo autêntico — ${codigo}`;
@@ -484,7 +389,7 @@
         const freq     = meta.frequencia || '—';
         const tipo     = meta.tipo_equipamento || '—';
         const fiscal   = meta.fiscal_nome || '—';
-        const obs      = meta._obsLimpa || f.observacoes || '';
+        const obs      = meta._obsLimpa || '';
         const checklist = meta.checklist || {};
         const chkRows = Object.entries(checklist).map(([k,v]) =>
           `<tr><td style="padding:3px 6px;font-size:11px;">${escapeHTML(labelChk[k]||k)}</td><td style="padding:3px 6px;text-align:center;font-size:11px;">${statusChk[v]||escapeHTML(v)}</td></tr>`
@@ -501,7 +406,7 @@
               <div style="font-size:11px;"><span style="color:#a0aec0;">Fiscal:</span> <strong>${escapeHTML(fiscal)}</strong></div>
             </div>
             ${chkRows ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:6px 0 3px;">Checklist de Manutenção</div><table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:4px;">${chkRows}</table>` : ''}
-            ${obs ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Observações</div><div style="font-size:11px;color:#4a5568;background:#fff;padding:6px 8px;border-radius:4px;border:1px solid #e2e8f0;">${escapeHTML(obs)}</div>` : ''}
+            ${obs ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Observações</div><div class="txt-box">${escapeHTML(obs)}</div>` : ''}
             ${f.foto_url ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Evidência Fotográfica</div><img src="${f.foto_url}" style="max-width:100%;max-height:180px;border-radius:4px;border:1px solid #e2e8f0;">` : ''}
             ${(assinTec || assinFis) ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Assinaturas</div><div style="display:flex;gap:12px;flex-wrap:wrap;">
               ${assinTec ? `<div style="text-align:center;"><img src="${assinTec}" style="max-width:140px;max-height:50px;border-bottom:1px solid #cbd5e0;"><div style="font-size:9px;color:#718096;">Técnico</div></div>` : ''}
@@ -546,8 +451,8 @@
               <div style="font-size:11px;"><span style="color:#a0aec0;">Data:</span> <strong>${fmtDate(os.created_at)}</strong></div>
               <div style="font-size:11px;"><span style="color:#a0aec0;">Técnico:</span> <strong>${escapeHTML(os.colaboradores?.nome||'—')}</strong></div>
             </div>
-            ${os.descricao_defeito ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:6px 0 3px;">Ocorrência / Sintomas</div><div style="font-size:11px;color:#4a5568;background:#fff;padding:6px 8px;border-radius:4px;border:1px solid #e2e8f0;">${escapeHTML(os.descricao_defeito)}</div>` : ''}
-            ${os.laudo_tecnico ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Diagnóstico / Ações Executadas</div><div style="font-size:11px;color:#4a5568;background:#fff;padding:6px 8px;border-radius:4px;border:1px solid #e2e8f0;">${escapeHTML(os.laudo_tecnico)}</div>` : ''}
+            ${os.descricao_defeito ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:6px 0 3px;">Ocorrência / Sintomas</div><div class="txt-box">${escapeHTML(os.descricao_defeito)}</div>` : ''}
+            ${os.laudo_tecnico ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Diagnóstico / Ações Executadas</div><div class="txt-box">${escapeHTML(os.laudo_tecnico)}</div>` : ''}
             ${os.foto_url ? `<div style="font-size:10px;color:#718096;text-transform:uppercase;margin:8px 0 3px;">Evidência Fotográfica</div><img src="${os.foto_url}" style="max-width:100%;max-height:180px;border-radius:4px;border:1px solid #e2e8f0;">` : ''}
           </div>`;
 

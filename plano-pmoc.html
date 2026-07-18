@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concredur — Plano PMOC</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    .plano-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .plano-grid .full { grid-column: 1 / -1; }
+    .plano-field label { font-size: 12px; font-weight: 600; color: var(--gray-600); display: block; margin-bottom: 4px; }
+    .plano-field input, .plano-field select, .plano-field textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--gray-300);
+      border-radius: var(--radius); font-size: 13px; font-family: inherit; color: var(--gray-800);
+      background: #fff;
+    }
+    .plano-field textarea { resize: vertical; min-height: 64px; }
+    .plano-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: var(--shadow-sm); padding: 18px 20px; margin-bottom: 18px; }
+    .plano-card h3 {
+      font-size: 13px; font-weight: 700; color: #1e3a5f; margin-bottom: 14px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--gray-200);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .plano-hint { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+    .plano-aviso {
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius);
+      padding: 10px 14px; font-size: 12px; color: #3730a3; margin-bottom: 18px; line-height: 1.55;
+    }
+    .btn-toolbar { padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; border: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-toolbar.primary   { background: #4169e1; color: #fff; }
+    .btn-toolbar.primary:hover { background: #1e3a5f; }
+    .btn-toolbar.success   { background: #059669; color: #fff; }
+    .btn-toolbar.success:hover { background: #047857; }
+    #plano-toast {
+      position: fixed; bottom: 28px; right: 24px; z-index: 2000;
+      background: #1e3a5f; color: #fff; padding: 10px 18px; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    #plano-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <img class="sidebar-logo-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAA9CAYAAADoByY0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyNpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDYuMC1jMDAyIDc5LjE2NDQ4OCwgMjAyMC8wNy8xMC0yMjowNjo1MyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIyLjAgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjM4MEYxMjVBNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjM4MEYxMjVCNTg3NDExRUU5QTBGQkI4N0VFOTE2RTJGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MzgwRjEyNTg1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6MzgwRjEyNTk1ODc0MTFFRTlBMEZCQjg3RUU5MTZFMkYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6klSGIAAAP7ElEQVR42uxdCXQV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" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge">
+        <span class="user-icon-dot">●</span>
+        <span id="user-display-email">...</span>
+      </div>
+    </div>
+    <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item active" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+    <div class="sidebar-footer">
+      <button id="btn-logout" class="btn-sair">⬅ Sair</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <h2>📘 Plano PMOC — Documento Estruturado</h2>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn-toolbar primary" onclick="salvarConfigPlano()">💾 Salvar Dados</button>
+        <button class="btn-toolbar success" onclick="gerarDocumentoPMOC()">🖨️ Gerar Documento PMOC</button>
+      </div>
+    </div>
+
+    <div class="section-content">
+      <div class="plano-aviso">
+        Este módulo gera o <strong>Plano de Manutenção, Operação e Controle (PMOC)</strong> completo e estruturado
+        — capa, identificações, plano de atividades, cronograma anual, orientações e termo de responsabilidade —
+        conforme a <strong>Lei nº 13.589/2018</strong> e a <strong>Portaria MS nº 3.523/98</strong>.
+        Os dados preenchidos abaixo ficam salvos e são reutilizados nas próximas emissões.
+      </div>
+
+      <!-- 1. Estabelecimento -->
+      <div class="plano-card">
+        <h3>🏛️ Identificação do Estabelecimento (Proprietário)</h3>
+        <div class="plano-grid">
+          <div class="plano-field full">
+            <label>Razão Social / Nome do Estabelecimento *</label>
+            <input type="text" id="pp-razao" placeholder="Ex: Univag Centro Universitário">
+          </div>
+          <div class="plano-field">
+            <label>CNPJ</label>
+            <input type="text" id="pp-cnpj" placeholder="00.000.000/0000-00">
+          </div>
+          <div class="plano-field">
+            <label>Telefone</label>
+            <input type="text" id="pp-telefone" placeholder="(65) 0000-0000">
+          </div>
+          <div class="plano-field full">
+            <label>Endereço Completo</label>
+            <input type="text" id="pp-endereco" placeholder="Av., nº, bairro, cidade — UF, CEP">
+          </div>
+          <div class="plano-field">
+            <label>Responsável Legal / Representante</label>
+            <input type="text" id="pp-resp-legal" placeholder="Nome do representante">
+          </div>
+          <div class="plano-field">
+            <label>Cargo do Responsável Legal</label>
+            <input type="text" id="pp-resp-cargo" placeholder="Ex: Diretor Administrativo">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Responsável Técnico -->
+      <div class="plano-card">
+        <h3>🧑‍🔧 Responsável Técnico pela Assinatura do PMOC</h3>
+        <div class="plano-grid">
+          <div class="plano-field full">
+            <label>Nome Completo *</label>
+            <input type="text" id="pp-rt-nome" placeholder="Nome do responsável técnico">
+          </div>
+          <div class="plano-field">
+            <label>Título Profissional</label>
+            <input type="text" id="pp-rt-titulo" placeholder="Ex: Engenheiro Mecânico / Técnico em Refrigeração">
+          </div>
+          <div class="plano-field">
+            <label>Conselho de Classe</label>
+            <select id="pp-rt-conselho">
+              <option value="CREA">CREA</option>
+              <option value="CFT">CFT</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="plano-field">
+            <label>Nº de Registro no Conselho *</label>
+            <input type="text" id="pp-rt-registro" placeholder="Ex: CREA-MT 000000-D">
+          </div>
+          <div class="plano-field">
+            <label>Nº ART / TRT</label>
+            <input type="text" id="pp-rt-art" placeholder="Anotação/Termo de Responsabilidade Técnica">
+            <div class="plano-hint">A ART/TRT vincula legalmente o profissional a este plano.</div>
+          </div>
+          <div class="plano-field">
+            <label>Telefone</label>
+            <input type="text" id="pp-rt-telefone" placeholder="(65) 00000-0000">
+          </div>
+          <div class="plano-field">
+            <label>E-mail</label>
+            <input type="text" id="pp-rt-email" placeholder="email@exemplo.com">
+          </div>
+          <div class="plano-field full">
+            <label>Empresa Executante da Manutenção (se houver)</label>
+            <input type="text" id="pp-rt-empresa" placeholder="Razão social / CNPJ da empresa mantenedora">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Parâmetros do Plano -->
+      <div class="plano-card">
+        <h3>⚙️ Parâmetros do Plano</h3>
+        <div class="plano-grid">
+          <div class="plano-field">
+            <label>Ano de Vigência</label>
+            <input type="number" id="pp-ano" min="2020" max="2100">
+          </div>
+          <div class="plano-field">
+            <label>Mês de Início do Ciclo</label>
+            <select id="pp-mes-inicio"></select>
+            <div class="plano-hint">Define os meses das rotinas trimestrais, semestrais e anuais no cronograma.</div>
+          </div>
+          <div class="plano-field">
+            <label>Local de Emissão</label>
+            <input type="text" id="pp-local-emissao" placeholder="Ex: Várzea Grande — MT">
+          </div>
+          <div class="plano-field">
+            <label>Data de Emissão</label>
+            <input type="date" id="pp-data-emissao">
+          </div>
+          <div class="plano-field full">
+            <label>Observações Gerais (impressas na seção de orientações)</label>
+            <textarea id="pp-obs" placeholder="Particularidades da instituição, restrições de horário para execução, etc."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="plano-toast"></div>
+
+<script src="app.js"></script>
+<script>
+// =====================================================================
+//  PLANO PMOC — Documento estruturado
+//  Reutiliza do app.js: db, $, escapeHTML, LOGO_ETIQUETA,
+//  CHECKLIST_PMOC_DEFS e CHECKLIST_PERIODICIDADE_INFO (fonte única).
+// =====================================================================
+
+const PLANO_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                     'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const PLANO_MESES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+const PLANO_CAT_LABEL = {
+  AC:   'Ar Condicionado',
+  BEB:  'Bebedouro',
+  CLIM: 'Climatizador Evaporativo',
+  VEN:  'Ventilador / Exaustor',
+  OUT:  'Outros Equipamentos',
+};
+
+const PLANO_PERIODO_LABEL = {
+  mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
+};
+
+// Normaliza variações de categoria (ex: 'CLM' legado → 'CLIM')
+function planoNormCat(c) {
+  if (!c) return 'OUT';
+  if (c === 'CLM') return 'CLIM';
+  return PLANO_CAT_LABEL[c] ? c : 'OUT';
+}
+
+let _planoToastTimer = null;
+function planoToast(msg, err = false) {
+  const el = $('plano-toast');
+  el.textContent = msg;
+  el.style.background = err ? '#dc2626' : '#1e3a5f';
+  el.classList.add('show');
+  if (_planoToastTimer) clearTimeout(_planoToastTimer);
+  _planoToastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Configuração (tabela pmoc_plano_config, linha única id=1) ─────────────
+function planoColetarConfig() {
+  return {
+    razao:         $('pp-razao').value.trim(),
+    cnpj:          $('pp-cnpj').value.trim(),
+    telefone:      $('pp-telefone').value.trim(),
+    endereco:      $('pp-endereco').value.trim(),
+    resp_legal:    $('pp-resp-legal').value.trim(),
+    resp_cargo:    $('pp-resp-cargo').value.trim(),
+    rt_nome:       $('pp-rt-nome').value.trim(),
+    rt_titulo:     $('pp-rt-titulo').value.trim(),
+    rt_conselho:   $('pp-rt-conselho').value,
+    rt_registro:   $('pp-rt-registro').value.trim(),
+    rt_art:        $('pp-rt-art').value.trim(),
+    rt_telefone:   $('pp-rt-telefone').value.trim(),
+    rt_email:      $('pp-rt-email').value.trim(),
+    rt_empresa:    $('pp-rt-empresa').value.trim(),
+    ano:           parseInt($('pp-ano').value, 10) || new Date().getFullYear(),
+    mes_inicio:    parseInt($('pp-mes-inicio').value, 10) || 0,
+    local_emissao: $('pp-local-emissao').value.trim(),
+    data_emissao:  $('pp-data-emissao').value || hoje(),
+    obs:           $('pp-obs').value.trim(),
+  };
+}
+
+function planoAplicarConfig(cfg) {
+  if (!cfg) return;
+  const setVal = (id, v) => { if (v !== undefined && v !== null) $(id).value = v; };
+  setVal('pp-razao', cfg.razao);           setVal('pp-cnpj', cfg.cnpj);
+  setVal('pp-telefone', cfg.telefone);     setVal('pp-endereco', cfg.endereco);
+  setVal('pp-resp-legal', cfg.resp_legal); setVal('pp-resp-cargo', cfg.resp_cargo);
+  setVal('pp-rt-nome', cfg.rt_nome);       setVal('pp-rt-titulo', cfg.rt_titulo);
+  setVal('pp-rt-conselho', cfg.rt_conselho); setVal('pp-rt-registro', cfg.rt_registro);
+  setVal('pp-rt-art', cfg.rt_art);         setVal('pp-rt-telefone', cfg.rt_telefone);
+  setVal('pp-rt-email', cfg.rt_email);     setVal('pp-rt-empresa', cfg.rt_empresa);
+  setVal('pp-ano', cfg.ano);               setVal('pp-mes-inicio', cfg.mes_inicio);
+  setVal('pp-local-emissao', cfg.local_emissao);
+  setVal('pp-data-emissao', cfg.data_emissao);
+  setVal('pp-obs', cfg.obs);
+}
+
+async function salvarConfigPlano() {
+  const cfg = planoColetarConfig();
+  if (!cfg.razao)       { planoToast('⚠️ Informe a razão social do estabelecimento.', true); return; }
+  if (!cfg.rt_nome)     { planoToast('⚠️ Informe o nome do responsável técnico.', true); return; }
+  if (!cfg.rt_registro) { planoToast('⚠️ Informe o nº de registro no conselho de classe.', true); return; }
+
+  const { error } = await db.from('pmoc_plano_config').upsert({
+    id: 1,
+    dados: cfg,
+    atualizado_em: new Date().toISOString(),
+  });
+  if (error) {
+    const dica = /pmoc_plano_config/.test(error.message)
+      ? ' Execute a migração SQL (migration_pmoc_plano_config.sql) no Supabase.' : '';
+    planoToast('❌ Erro ao salvar: ' + error.message + dica, true);
+    return;
+  }
+  planoToast('✅ Dados do plano salvos com sucesso!');
+}
+
+async function carregarConfigPlano() {
+  try {
+    const { data, error } = await db
+      .from('pmoc_plano_config')
+      .select('dados')
+      .eq('id', 1)
+      .maybeSingle();
+    if (!error && data && data.dados) planoAplicarConfig(data.dados);
+  } catch (e) { console.warn('Config do plano não carregada:', e); }
+}
+
+// ── Equipamentos ──────────────────────────────────────────────────────────
+let _planoEqs = [];
+
+async function carregarEquipamentosPlano() {
+  const { data, error } = await db
+    .from('equipamentos')
+    .select('id, tag, produto, marca, categoria, potencia, bloco, setor, sala, criticidade, nr_serie, patrimonio')
+    .order('tag', { ascending: true });
+  if (error) { planoToast('❌ Erro ao carregar equipamentos: ' + error.message, true); return; }
+  _planoEqs = data || [];
+}
+
+// ── Cronograma: meses ativos de cada periodicidade a partir do mês inicial ─
+function planoMesesAtivos(periodoKey, mesInicio) {
+  const passo = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 }[periodoKey] || 1;
+  const meses = new Set();
+  for (let m = mesInicio; m < mesInicio + 12; m += passo) meses.add(m % 12);
+  return meses;
+}
+
+// ── Geração do documento ──────────────────────────────────────────────────
+function gerarDocumentoPMOC() {
+  const cfg = planoColetarConfig();
+  if (!cfg.razao)       { planoToast('⚠️ Preencha a razão social antes de gerar.', true); return; }
+  if (!cfg.rt_nome)     { planoToast('⚠️ Preencha o responsável técnico antes de gerar.', true); return; }
+  if (!cfg.rt_registro) { planoToast('⚠️ Preencha o registro no conselho antes de gerar.', true); return; }
+  if (!_planoEqs.length) { planoToast('⚠️ Nenhum equipamento cadastrado para compor o plano.', true); return; }
+
+  const emissaoBR = fmtDate(cfg.data_emissao);
+  const catsPresentes = [...new Set(_planoEqs.map(e => planoNormCat(e.categoria)))]
+    .sort((a, b) => Object.keys(PLANO_CAT_LABEL).indexOf(a) - Object.keys(PLANO_CAT_LABEL).indexOf(b));
+
+  // ── Capa ──
+  const capa = `
+    <div class="capa">
+      <img src="${LOGO_ETIQUETA}" alt="Logo" style="height:52px;margin-bottom:26px;">
+      <div class="capa-titulo">PLANO DE MANUTENÇÃO,<br>OPERAÇÃO E CONTROLE</div>
+      <div class="capa-sub">PMOC — Sistemas de Climatização e Refrigeração</div>
+      <div class="capa-legal">Lei Federal nº 13.589/2018 · Portaria MS nº 3.523/98 · RE ANVISA nº 09/2003 · ABNT NBR 16401</div>
+      <div class="capa-box">
+        <div class="capa-linha"><span>Estabelecimento</span><strong>${escapeHTML(cfg.razao)}</strong></div>
+        ${cfg.cnpj ? `<div class="capa-linha"><span>CNPJ</span><strong>${escapeHTML(cfg.cnpj)}</strong></div>` : ''}
+        <div class="capa-linha"><span>Vigência</span><strong>Ano de ${cfg.ano}</strong></div>
+        <div class="capa-linha"><span>Responsável Técnico</span><strong>${escapeHTML(cfg.rt_nome)}</strong></div>
+        <div class="capa-linha"><span>Registro</span><strong>${escapeHTML(cfg.rt_conselho)} ${escapeHTML(cfg.rt_registro)}</strong></div>
+        ${cfg.rt_art ? `<div class="capa-linha"><span>ART/TRT</span><strong>${escapeHTML(cfg.rt_art)}</strong></div>` : ''}
+      </div>
+      <div class="capa-emissao">${escapeHTML(cfg.local_emissao || '')}${cfg.local_emissao ? ', ' : ''}${emissaoBR}</div>
+    </div>`;
+
+  // ── 1. Identificação do estabelecimento ──
+  const sec1 = `
+    <div class="sec">
+      <div class="sec-titulo">1. IDENTIFICAÇÃO DO ESTABELECIMENTO (PROPRIETÁRIO)</div>
+      <table class="tb-ident">
+        <tr><td class="lbl">Razão Social</td><td>${escapeHTML(cfg.razao)}</td>
+            <td class="lbl">CNPJ</td><td>${escapeHTML(cfg.cnpj || '—')}</td></tr>
+        <tr><td class="lbl">Endereço</td><td colspan="3">${escapeHTML(cfg.endereco || '—')}</td></tr>
+        <tr><td class="lbl">Telefone</td><td>${escapeHTML(cfg.telefone || '—')}</td>
+            <td class="lbl">Responsável Legal</td><td>${escapeHTML(cfg.resp_legal || '—')}${cfg.resp_cargo ? ' — ' + escapeHTML(cfg.resp_cargo) : ''}</td></tr>
+      </table>
+    </div>`;
+
+  // ── 2. Responsável técnico ──
+  const sec2 = `
+    <div class="sec">
+      <div class="sec-titulo">2. IDENTIFICAÇÃO DO RESPONSÁVEL TÉCNICO</div>
+      <table class="tb-ident">
+        <tr><td class="lbl">Nome</td><td>${escapeHTML(cfg.rt_nome)}</td>
+            <td class="lbl">Título Profissional</td><td>${escapeHTML(cfg.rt_titulo || '—')}</td></tr>
+        <tr><td class="lbl">Registro no Conselho</td><td>${escapeHTML(cfg.rt_conselho)} ${escapeHTML(cfg.rt_registro)}</td>
+            <td class="lbl">Nº ART / TRT</td><td>${escapeHTML(cfg.rt_art || '—')}</td></tr>
+        <tr><td class="lbl">Telefone</td><td>${escapeHTML(cfg.rt_telefone || '—')}</td>
+            <td class="lbl">E-mail</td><td>${escapeHTML(cfg.rt_email || '—')}</td></tr>
+        <tr><td class="lbl">Empresa Executante</td><td colspan="3">${escapeHTML(cfg.rt_empresa || '—')}</td></tr>
+      </table>
+    </div>`;
+
+  // ── 3. Objetivo e base legal ──
+  const sec3 = `
+    <div class="sec">
+      <div class="sec-titulo">3. OBJETIVO, ABRANGÊNCIA E BASE LEGAL</div>
+      <p class="texto">Este Plano de Manutenção, Operação e Controle (PMOC) estabelece as rotinas de manutenção
+      preventiva e de controle dos sistemas de climatização, refrigeração e ventilação instalados no
+      estabelecimento identificado na Seção 1, com o objetivo de garantir a qualidade do ar de interiores,
+      a preservação da saúde dos ocupantes e a integridade e eficiência dos equipamentos.</p>
+      <p class="texto">O plano abrange todos os equipamentos relacionados na Seção 4, executado conforme as
+      atividades e periodicidades definidas na Seção 5 e o cronograma da Seção 6, em atendimento à
+      <strong>Lei Federal nº 13.589/2018</strong>, à <strong>Portaria MS nº 3.523/98</strong>, à
+      <strong>Resolução RE ANVISA nº 09/2003</strong> e às normas técnicas
+      <strong>ABNT NBR 16401</strong> e correlatas.</p>
+      <p class="texto">A execução das atividades é registrada nas fichas de manutenção (laudos PMOC) do sistema
+      de gestão, que ficam disponíveis para verificação pela fiscalização, acompanhadas das respectivas
+      evidências e assinaturas dos executantes.</p>
+    </div>`;
+
+  // ── 4. Relação de equipamentos, agrupada por bloco › setor ──
+  const grupos = {};
+  _planoEqs.forEach(eq => {
+    const chave = [(eq.bloco || 'Sem bloco'), (eq.setor || 'Sem setor')].join(' › ');
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(eq);
+  });
+
+  const resumoCat = catsPresentes.map(c => {
+    const n = _planoEqs.filter(e => planoNormCat(e.categoria) === c).length;
+    return `<td style="text-align:center;"><strong>${n}</strong><br><span style="font-size:8px;">${PLANO_CAT_LABEL[c]}</span></td>`;
+  }).join('');
+
+  let linhasEq = '';
+  Object.entries(grupos).sort((a, b) => a[0].localeCompare(b[0])).forEach(([grupo, eqs]) => {
+    linhasEq += `<tr class="tr-grupo"><td colspan="7">📍 ${escapeHTML(grupo)}</td></tr>`;
+    eqs.forEach(eq => {
+      linhasEq += `<tr>
+        <td><strong>${escapeHTML(eq.tag)}</strong></td>
+        <td>${escapeHTML(eq.produto || '—')}</td>
+        <td>${escapeHTML(PLANO_CAT_LABEL[planoNormCat(eq.categoria)])}</td>
+        <td>${escapeHTML(eq.marca || '—')}</td>
+        <td>${escapeHTML(eq.potencia || '—')}</td>
+        <td>${escapeHTML(eq.sala || '—')}</td>
+        <td style="text-align:center;">${escapeHTML(eq.criticidade || '—')}</td>
+      </tr>`;
+    });
+  });
+
+  const sec4 = `
+    <div class="sec">
+      <div class="sec-titulo">4. RELAÇÃO DE AMBIENTES E EQUIPAMENTOS CLIMATIZADOS</div>
+      <table class="tb-resumo"><tr>
+        <td style="text-align:center;"><strong>${_planoEqs.length}</strong><br><span style="font-size:8px;">Total de Ativos</span></td>
+        ${resumoCat}
+      </tr></table>
+      <table class="tb-lista">
+        <thead><tr>
+          <th>TAG</th><th>Equipamento</th><th>Categoria</th><th>Marca</th>
+          <th>Capacidade</th><th>Sala/Ambiente</th><th>Crit.</th>
+        </tr></thead>
+        <tbody>${linhasEq}</tbody>
+      </table>
+    </div>`;
+
+  // ── 5. Plano de atividades (fonte única: CHECKLIST_PMOC_DEFS do app.js) ──
+  let sec5Corpo = '';
+  catsPresentes.forEach(cat => {
+    const defs = CHECKLIST_PMOC_DEFS[cat] || CHECKLIST_PMOC_DEFS.OUT;
+    let linhas = '';
+    CHECKLIST_PERIODICIDADE_INFO.forEach(p => {
+      const itens = defs[p.key] || [];
+      if (!itens.length) return;
+      linhas += `<tr class="tr-periodo"><td colspan="2">${PLANO_PERIODO_LABEL[p.key]}</td></tr>`;
+      itens.forEach(([, label]) => {
+        linhas += `<tr><td>${escapeHTML(label)}</td><td style="text-align:center;width:82px;">${PLANO_PERIODO_LABEL[p.key]}</td></tr>`;
+      });
+    });
+    const nEq = _planoEqs.filter(e => planoNormCat(e.categoria) === cat).length;
+    sec5Corpo += `
+      <div class="cat-titulo">${escapeHTML(PLANO_CAT_LABEL[cat])} — ${nEq} equipamento(s)</div>
+      <table class="tb-lista">
+        <thead><tr><th>Atividade de Manutenção e Controle</th><th style="width:82px;">Periodicidade</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>`;
+  });
+
+  const sec5 = `
+    <div class="sec">
+      <div class="sec-titulo">5. PLANO DE ATIVIDADES DE MANUTENÇÃO E CONTROLE</div>
+      <p class="texto">As atividades abaixo são cumulativas por periodicidade: nas execuções trimestrais são
+      realizadas também as rotinas mensais; nas semestrais, as mensais e trimestrais; e assim sucessivamente.
+      A execução é registrada por equipamento na respectiva ficha de manutenção (laudo PMOC).</p>
+      ${sec5Corpo}
+    </div>`;
+
+  // ── 6. Cronograma anual ──
+  const mesInicio = cfg.mes_inicio;
+  let linhasCron = '';
+  catsPresentes.forEach(cat => {
+    const defs = CHECKLIST_PMOC_DEFS[cat] || CHECKLIST_PMOC_DEFS.OUT;
+    const periodosCat = CHECKLIST_PERIODICIDADE_INFO.filter(p => (defs[p.key] || []).length);
+    periodosCat.forEach((p, idx) => {
+      const ativos = planoMesesAtivos(p.key, mesInicio);
+      const cels = Array.from({ length: 12 }, (_, m) =>
+        `<td class="cron-cel ${ativos.has(m) ? 'on-' + p.freqLetra : ''}">${ativos.has(m) ? p.freqLetra : ''}</td>`
+      ).join('');
+      linhasCron += `<tr>
+        ${idx === 0 ? `<td rowspan="${periodosCat.length}" class="cron-cat">${escapeHTML(PLANO_CAT_LABEL[cat])}</td>` : ''}
+        <td>${PLANO_PERIODO_LABEL[p.key]}</td>${cels}
+      </tr>`;
+    });
+  });
+
+  const sec6 = `
+    <div class="sec">
+      <div class="sec-titulo">6. CRONOGRAMA ANUAL DE EXECUÇÃO — ${cfg.ano}</div>
+      <p class="texto">Ciclo iniciado em <strong>${PLANO_MESES[mesInicio]}/${cfg.ano}</strong>. As datas efetivas
+      de execução dentro de cada mês seguem a programação operacional do sistema (aba Programação PMOC),
+      calculada em dias úteis.</p>
+      <table class="tb-cron">
+        <thead><tr><th>Categoria</th><th>Rotina</th>${PLANO_MESES_CURTO.map(m => `<th>${m}</th>`).join('')}</tr></thead>
+        <tbody>${linhasCron}</tbody>
+      </table>
+      <div class="cron-legenda">
+        <span><span class="pill on-M">M</span> Mensal</span>
+        <span><span class="pill on-T">T</span> Trimestral</span>
+        <span><span class="pill on-S">S</span> Semestral</span>
+        <span><span class="pill on-A">A</span> Anual</span>
+      </div>
+    </div>`;
+
+  // ── 7. Orientações ──
+  const orientacoes = [
+    'Todas as execuções devem ser registradas na ficha de manutenção (laudo PMOC) do respectivo equipamento, com identificação do executante, data e evidências fotográficas quando aplicável.',
+    'Utilizar exclusivamente produtos saneantes desinfetantes regularizados junto à ANVISA, conforme RE nº 09/2003, respeitando diluições e instruções dos fabricantes.',
+    'Filtros de ar substituídos e resíduos da limpeza devem ser acondicionados e descartados de forma a evitar a dispersão de particulados nos ambientes ocupados.',
+    'Não conformidades identificadas durante as rotinas devem gerar Ordem de Serviço corretiva, com prazo de tratamento compatível com a criticidade do equipamento.',
+    'Os executantes devem utilizar os EPIs adequados às atividades (proteção respiratória, luvas, óculos), especialmente em higienizações químicas e serviços em altura.',
+    'Este PMOC e os registros de execução devem permanecer disponíveis no estabelecimento para apresentação à fiscalização sanitária, conforme Portaria MS nº 3.523/98.',
+    'O plano deve ser revisado sempre que houver inclusão, substituição ou desativação de equipamentos, alteração de uso dos ambientes ou mudança do responsável técnico.',
+  ];
+  const sec7 = `
+    <div class="sec">
+      <div class="sec-titulo">7. ORIENTAÇÕES E RECOMENDAÇÕES GERAIS</div>
+      <ol class="lista-orient">${orientacoes.map(o => `<li>${o}</li>`).join('')}</ol>
+      ${cfg.obs ? `<p class="texto"><strong>Observações específicas do estabelecimento:</strong> ${escapeHTML(cfg.obs)}</p>` : ''}
+    </div>`;
+
+  // ── 8. Termo de responsabilidade e assinaturas ──
+  const sec8 = `
+    <div class="sec sec-termo">
+      <div class="sec-titulo">8. TERMO DE RESPONSABILIDADE TÉCNICA</div>
+      <p class="texto">Declaro, na qualidade de responsável técnico, que o presente Plano de Manutenção,
+      Operação e Controle foi elaborado em conformidade com a legislação e as normas técnicas vigentes,
+      responsabilizando-me pela sua implantação, acompanhamento e atualização durante o período de vigência.</p>
+      <div class="assinaturas">
+        <div class="ass-bloco">
+          <div class="ass-linha"></div>
+          <div class="ass-nome">${escapeHTML(cfg.rt_nome)}</div>
+          <div class="ass-info">${escapeHTML(cfg.rt_titulo || 'Responsável Técnico')}</div>
+          <div class="ass-info">${escapeHTML(cfg.rt_conselho)} ${escapeHTML(cfg.rt_registro)}${cfg.rt_art ? ' · ART/TRT ' + escapeHTML(cfg.rt_art) : ''}</div>
+        </div>
+        <div class="ass-bloco">
+          <div class="ass-linha"></div>
+          <div class="ass-nome">${escapeHTML(cfg.resp_legal || 'Responsável Legal')}</div>
+          <div class="ass-info">${escapeHTML(cfg.resp_cargo || 'Representante do Estabelecimento')}</div>
+          <div class="ass-info">${escapeHTML(cfg.razao)}</div>
+        </div>
+      </div>
+      <div class="ass-local">${escapeHTML(cfg.local_emissao || '')}${cfg.local_emissao ? ', ' : ''}${emissaoBR}</div>
+    </div>`;
+
+  const rodape = `
+    <div class="doc-rodape">
+      PMOC ${cfg.ano} — ${escapeHTML(cfg.razao)} · Documento gerado pelo sistema Concredur em ${fmtDate(hoje())}
+      · Lei nº 13.589/2018 · Portaria MS nº 3.523/98
+    </div>`;
+
+  const html = capa + sec1 + sec2 + sec3 + sec4 + sec5 + sec6 + sec7 + sec8 + rodape;
+
+  // ── Popup de impressão (mesma técnica das demais impressões do sistema) ──
+  const win = window.open('', '_blank', 'width=1000,height=760');
+  if (!win) { planoToast('⚠️ Permita pop-ups para gerar o documento.', true); return; }
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>PMOC ${cfg.ano} — ${escapeHTML(cfg.razao)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      @page{size:A4 portrait;margin:14mm}
+      body{font-family:'Inter',Arial,sans-serif;color:#1a202c;background:#fff;font-size:10px;line-height:1.5;}
+
+      /* Capa */
+      .capa{min-height:230mm;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-align:center;page-break-after:always;break-after:page;}
+      .capa-titulo{font-size:26px;font-weight:700;color:#1e3a5f;line-height:1.25;margin-bottom:8px;}
+      .capa-sub{font-size:13px;color:#4a5568;margin-bottom:6px;}
+      .capa-legal{font-size:9px;color:#94a3b8;margin-bottom:34px;}
+      .capa-box{border:1px solid #cbd5e1;border-radius:8px;padding:18px 26px;min-width:340px;text-align:left;}
+      .capa-linha{display:flex;justify-content:space-between;gap:24px;padding:4px 0;font-size:11px;
+                  border-bottom:1px dashed #e2e8f0;}
+      .capa-linha:last-child{border-bottom:none;}
+      .capa-linha span{color:#64748b;}
+      .capa-emissao{margin-top:30px;font-size:10px;color:#64748b;}
+
+      /* Seções */
+      .sec{margin-bottom:16px;break-inside:auto;}
+      .sec-titulo{background:#1e3a5f;color:#fff;font-size:10.5px;font-weight:700;
+                  padding:5px 10px;margin-bottom:8px;break-after:avoid;page-break-after:avoid;}
+      .texto{font-size:9.5px;text-align:justify;margin-bottom:6px;color:#334155;}
+
+      table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px;}
+      td,th{border:1px solid #cbd5e1;padding:3px 6px;vertical-align:top;}
+      thead th{background:#eef2ff;color:#1e3a5f;font-weight:700;text-align:left;break-inside:avoid;}
+      tr{break-inside:avoid;page-break-inside:avoid;}
+
+      .tb-ident .lbl{background:#f8fafc;font-weight:700;color:#475569;width:110px;white-space:nowrap;}
+      .tb-resumo td{text-align:center;background:#f8fafc;font-size:11px;padding:6px;}
+      .tr-grupo td{background:#f0f4ff;font-weight:700;color:#1e3a5f;font-size:8.5px;}
+      .tr-periodo td{background:#f8fafc;font-weight:700;color:#475569;font-size:8.5px;letter-spacing:.03em;}
+      .cat-titulo{font-size:9.5px;font-weight:700;color:#1e3a5f;margin:10px 0 4px;break-after:avoid;page-break-after:avoid;}
+
+      /* Cronograma */
+      .tb-cron th{text-align:center;font-size:8px;padding:3px 2px;}
+      .tb-cron td{text-align:center;font-size:8.5px;}
+      .cron-cat{font-weight:700;color:#1e3a5f;text-align:left !important;background:#f8fafc;}
+      .cron-cel{width:22px;color:#94a3b8;}
+      .cron-cel.on-M{background:#dbeafe;color:#1d4ed8;font-weight:700;}
+      .cron-cel.on-T{background:#ede9fe;color:#6d28d9;font-weight:700;}
+      .cron-cel.on-S{background:#fce7f3;color:#9d174d;font-weight:700;}
+      .cron-cel.on-A{background:#fef3c7;color:#92400e;font-weight:700;}
+      .cron-legenda{display:flex;gap:14px;font-size:8.5px;color:#475569;align-items:center;}
+      .pill{display:inline-block;padding:1px 6px;border-radius:8px;font-weight:700;font-size:8px;margin-right:3px;}
+      .pill.on-M{background:#dbeafe;color:#1d4ed8;} .pill.on-T{background:#ede9fe;color:#6d28d9;}
+      .pill.on-S{background:#fce7f3;color:#9d174d;} .pill.on-A{background:#fef3c7;color:#92400e;}
+
+      .lista-orient{padding-left:18px;font-size:9.5px;color:#334155;}
+      .lista-orient li{margin-bottom:4px;text-align:justify;}
+
+      /* Assinaturas */
+      .sec-termo{break-inside:avoid;page-break-inside:avoid;}
+      .assinaturas{display:flex;gap:40px;justify-content:space-around;margin-top:44px;}
+      .ass-bloco{flex:1;text-align:center;max-width:300px;}
+      .ass-linha{border-bottom:1px solid #1a202c;margin-bottom:5px;height:34px;}
+      .ass-nome{font-size:10px;font-weight:700;}
+      .ass-info{font-size:8.5px;color:#475569;}
+      .ass-local{text-align:center;margin-top:22px;font-size:9.5px;color:#475569;}
+
+      .doc-rodape{margin-top:18px;padding-top:6px;border-top:1px solid #cbd5e1;
+                  font-size:7.5px;color:#94a3b8;text-align:center;}
+    </style></head>
+    <body>${html}
+    <script>window.addEventListener('load',function(){setTimeout(function(){window.print();window.addEventListener('afterprint',function(){window.close();});},600);});<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+// ── Inicialização ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Popular meses
+  $('pp-mes-inicio').innerHTML = PLANO_MESES
+    .map((m, i) => `<option value="${i}">${m}</option>`).join('');
+  // Padrões
+  $('pp-ano').value = new Date().getFullYear();
+  $('pp-data-emissao').value = hoje();
+  // Carrega config salva e inventário
+  await carregarConfigPlano();
+  await carregarEquipamentosPlano();
+});
+</script>
+</body>
+</html>
