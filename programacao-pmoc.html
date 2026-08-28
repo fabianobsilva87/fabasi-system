@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Programação e cronograma de manutenções PMOC — Concredur / Univag.">
+    <meta name="description" content="Programação e cronograma de manutenções PMOC — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
-    <link rel="icon" href="logo-univag.png" type="image/png">
-  <title>Concredur — Programação PMOC</title>
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+  <title>Fabasi — Programação PMOC</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="config.js"></script>
@@ -290,7 +290,7 @@
 <div class="app-container">
   <aside class="sidebar no-print">
     <div class="sidebar-header">
-      <img class="sidebar-logo-img" src="logo-univag.png" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+      <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
       <div class="user-logged-badge">
         <span class="user-icon-dot">●</span>
         <span id="user-display-email">...</span>
@@ -1432,7 +1432,7 @@ function exportarXLS() {
   XLSX.utils.book_append_sheet(wb, ws1, 'Programação PMOC');
   XLSX.utils.book_append_sheet(wb, ws2, 'Resumo');
   const hoje = hojeStr();
-  XLSX.writeFile(wb, `Univag_ProgramacaoPMOC_${hoje}.xlsx`);
+  XLSX.writeFile(wb, `Fabasi_ProgramacaoPMOC_${hoje}.xlsx`);
   toast('📊 XLS exportado com sucesso!');
 }
 
@@ -1481,7 +1481,7 @@ function imprimirProgramacao() {
       <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1e3a5f;padding-bottom:10px;margin-bottom:16px;">
         <div>
           <h2 style="margin:0;font-size:16px;color:#1e3a5f;">Programação de Manutenções PMOC</h2>
-          <p style="margin:0;font-size:11px;color:#718096;">Univag Centro Universitário — Gerado em ${dataHoje}</p>
+          <p style="margin:0;font-size:11px;color:#718096;">Fabasi Engenharia & Construção — Gerado em ${dataHoje}</p>
         </div>
         <div style="font-size:11px;color:#718096;text-align:right;">
           Equipamentos: <strong>${lista.length}</strong><br>
@@ -1500,13 +1500,13 @@ function imprimirProgramacao() {
         </thead>
         <tbody>${linhas}</tbody>
       </table>
-      <p style="font-size:10px;color:#a0aec0;margin-top:14px;">DU = Dias Úteis (segunda a sexta-feira). Documento gerado automaticamente pelo sistema Concredur.</p>
+      <p style="font-size:10px;color:#a0aec0;margin-top:14px;">DU = Dias Úteis (segunda a sexta-feira). Documento gerado automaticamente pelo sistema Fabasi.</p>
     </div>`;
 
   const win = window.open('', '_blank', 'width=1000,height=750');
   if (!win) { alert('Permita pop-ups para imprimir.'); return; }
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-    <title>Programação PMOC — Univag</title>
+    <title>Programação PMOC — Fabasi</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     @page{margin:12mm;size:A4 landscape}
@@ -1822,7 +1822,7 @@ function exportarAnualXLS() {
     ...Array(12).fill({wch:22})];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Programação ${ano}`);
-  XLSX.writeFile(wb, `Univag_ProgramacaoAnual_${ano}.xlsx`);
+  XLSX.writeFile(wb, `Fabasi_ProgramacaoAnual_${ano}.xlsx`);
   toast('📊 XLS Anual exportado!');
 }
 
@@ -1871,7 +1871,7 @@ function imprimirAnual() {
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1e3a5f;padding-bottom:10px;margin-bottom:14px;">
       <div>
         <h2 style="margin:0;font-size:15px;color:#1e3a5f;">Programação Anual de Manutenções PMOC — ${ano}</h2>
-        <p style="margin:2px 0 0;font-size:10px;color:#718096;">Univag Centro Universitário — 4º dia útil: ${fmtBR(inicio)} — Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+        <p style="margin:2px 0 0;font-size:10px;color:#718096;">Fabasi Engenharia & Construção — 4º dia útil: ${fmtBR(inicio)} — Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
       </div>
       <div style="font-size:10px;color:#718096;text-align:right;">
         Equipamentos: <strong>${lista.length}</strong><br>
@@ -1892,13 +1892,13 @@ function imprimirAnual() {
       </thead>
       <tbody>${linhas}</tbody>
     </table>
-    <p style="font-size:9px;color:#a0aec0;margin-top:12px;">DU = Dias Úteis (seg–sex). Início calculado no 4º dia útil do ano. Documento gerado automaticamente — Concredur/Univag.</p>
+    <p style="font-size:9px;color:#a0aec0;margin-top:12px;">DU = Dias Úteis (seg–sex). Início calculado no 4º dia útil do ano. Documento gerado automaticamente — Fabasi.</p>
   </div>`;
 
   const win = window.open('', '_blank', 'width=1200,height=800');
   if (!win) { alert('Permita pop-ups para imprimir.'); return; }
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-    <title>Programação Anual PMOC ${ano} — Univag</title>
+    <title>Programação Anual PMOC ${ano} — Fabasi</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     @page{margin:8mm;size:A4 landscape}

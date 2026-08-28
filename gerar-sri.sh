@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-#  CONCREDUR — T4.2: fixar versões de CDN e gerar hashes SRI
+#  FABASI — T4.2: fixar versões de CDN e gerar hashes SRI
 #
 #  POR QUE ISTO É UM SCRIPT E NÃO UMA ALTERAÇÃO JÁ APLICADA:
 #  calcular um hash SRI exige baixar o arquivo exato da CDN. Um hash

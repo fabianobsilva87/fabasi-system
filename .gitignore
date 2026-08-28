@@ -1,0 +1,12 @@
+# SO / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Node (caso ferramentas locais tipo `serve` sejam usadas)
+node_modules/
+
+# Arquivos temporários de teste
+*.log
