@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Inventário e gerenciamento de ativos homologados — Concredur / Univag.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-univag.png" type="image/png">
+    <title>Concredur — Gerenciamento de Ativos</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-univag.png" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+            <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item active" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <h2>⚙️ Painel Central de Controle de Ativos</h2>
+        <button type="button" class="btn-refresh" style="margin-left:auto;background:var(--brand-navy);border-color:var(--brand-navy);color:#fff;" onclick="location.href='impressoes.html'" title="Capas de setor, laudos em branco, relatórios, etiquetas e exportações">🖨️ Central de Impressões</button>
+      </div>
+      <div class="section-content">
+        <div class="card">
+          <h3 class="card-title">Filtros Avançados de Busca</h3>
+          <div class="form-grid" style="grid-template-columns: 2fr 1fr;">
+            <div class="form-group">
+              <label for="search-eq-termo">Filtro por TAG ou Nome do Ativo</label>
+              <input type="text" id="search-eq-termo" placeholder="Buscar..." oninput="filtrarEquipamentos(0)">
+            </div>
+            <div class="form-group">
+              <label for="search-eq-criticidade">Classe de Criticidade</label>
+              <select id="search-eq-criticidade" class="form-input-style" onchange="filtrarEquipamentos(0)">
+                <option value="">Todas</option>
+                <option value="Alta">Classe Alta (A)</option>
+                <option value="Média">Classe Média (B)</option>
+                <option value="Baixa">Classe Baixa (C)</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid #edf2f7;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#4a5568;">📍 Filtrar por local:</span>
+            <select id="gerir-filtro-instituicao" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarInstituicao()">
+              <option value="">Todas as Instituições</option>
+            </select>
+            <select id="gerir-filtro-bloco" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarBloco()">
+              <option value="">Todos os Blocos</option>
+            </select>
+            <select id="gerir-filtro-setor" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarSetor()">
+              <option value="">Todos os Setores</option>
+            </select>
+            <select id="gerir-filtro-sala" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarSala()">
+              <option value="">Todas as Salas</option>
+            </select>
+            <button type="button" class="btn-refresh" style="font-size:12px;" onclick="gerirLimparFiltrosLocal()">✕ Limpar local</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Inventário de Ativos Homologados</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>TAG</th><th>Equipamento / Marca</th><th>Localização</th><th>Criticidade</th><th>QR Code</th><th>Ações</th></tr>
+              </thead>
+              <tbody id="tbody-equipamentos-gerir">
+                <tr><td colspan="6" class="td-loading">Consultando registros ativos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination-container no-print" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+            <button type="button" class="btn-secondary" id="btn-eq-prev" onclick="mudarPaginaEquipamento(-1)">◀ Anterior</button>
+            <span id="txt-eq-paginacao" style="font-weight:700;">Página 1 de 1</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label for="select-itens-pagina" style="font-size:13px;color:#4a5568;font-weight:500;">Exibir:</label>
+              <select id="select-itens-pagina" onchange="alterarItensPorPagina(this.value)" style="padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-weight:600;color:var(--brand-navy);background:#fff;cursor:pointer;">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="30">30</option>
+                <option value="50">50</option>
+              </select>
+              <span style="font-size:12px;color:#718096;">por página</span>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-eq-next" onclick="mudarPaginaEquipamento(1)">Próximo ▶</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="qrcode-temp-generator" style="display:none; position:absolute; pointer-events:none;"></div>
+  <script src="app.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — sequenciamento real, sem aposta de 400 ms
+      await Promise.all([carregarEquipamentos(), inicializarFiltrosGerir()]);
+    });
+  </script>
+</body>
+</html>

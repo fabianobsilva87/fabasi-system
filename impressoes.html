@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Central de impressões: capas, laudos, etiquetas e QR Codes — Concredur / Univag.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-univag.png" type="image/png">
+    <title>Univag — Central de Impressões</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+      /* ----- Central de Impressões: grade de ações ----- */
+      .impr-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 14px;
+      }
+      .impr-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+      }
+      .impr-card:hover {
+        border-color: var(--brand-navy);
+        box-shadow: 0 4px 14px rgba(30, 58, 95, .10);
+        transform: translateY(-1px);
+      }
+      .impr-card-head { display: flex; align-items: center; gap: 10px; }
+      .impr-card-icon { font-size: 22px; line-height: 1; }
+      .impr-card-title { font-size: 14px; font-weight: 700; color: var(--brand-navy); }
+      .impr-card-desc { font-size: 12px; color: #718096; line-height: 1.5; flex: 1; }
+      .impr-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+      .impr-btn {
+        background: var(--brand-navy); color: #fff; border: 1px solid var(--brand-navy);
+        border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600;
+        cursor: pointer; font-family: inherit;
+      }
+      .impr-btn:hover { background: #16304f; }
+      .impr-btn.alt { background: #4169e1; border-color: #4169e1; }
+      .impr-btn.alt:hover { background: #3455c4; }
+      .impr-escopo {
+        font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+        padding: 3px 8px; border-radius: 12px;
+      }
+      .impr-escopo.filtro { background: #dbeafe; color: #1e40af; }
+      .impr-escopo.todos  { background: #e2e8f0; color: #4a5568; }
+      .impr-contador {
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--brand-navy);
+        border-radius: 6px; padding: 12px 16px; margin-top: 14px;
+      }
+      .impr-contador strong { font-size: 20px; color: var(--brand-navy); }
+      .impr-contador span { font-size: 12px; color: #4a5568; }
+    </style>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-univag.png" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item active" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <h2>🖨️ Central de Impressões e Documentos</h2>
+        <button type="button" class="btn-refresh" style="margin-left:auto;" onclick="location.href='gerir-equipamentos.html'">⚙️ Voltar ao Gerenciamento</button>
+      </div>
+
+      <div class="section-content">
+
+        <!-- ESCOPO / FILTROS -->
+        <div class="card">
+          <h3 class="card-title">Escopo dos Documentos</h3>
+          <p style="font-size:12px;color:#718096;margin:-6px 0 14px;line-height:1.5;">
+            Os filtros abaixo definem quais ativos entram nos documentos marcados como
+            <span class="impr-escopo filtro">Respeita filtros</span>. Ações marcadas como
+            <span class="impr-escopo todos">Todos os ativos</span> ignoram os filtros e processam o inventário completo.
+          </p>
+          <div class="form-grid" style="grid-template-columns: 2fr 1fr;">
+            <div class="form-group">
+              <label for="search-eq-termo">Filtro por TAG ou Nome do Ativo</label>
+              <input type="text" id="search-eq-termo" placeholder="Buscar..." oninput="atualizarEscopoImpressao()">
+            </div>
+            <div class="form-group">
+              <label for="search-eq-criticidade">Classe de Criticidade</label>
+              <select id="search-eq-criticidade" class="form-input-style" onchange="atualizarEscopoImpressao()">
+                <option value="">Todas</option>
+                <option value="Alta">Classe Alta (A)</option>
+                <option value="Média">Classe Média (B)</option>
+                <option value="Baixa">Classe Baixa (C)</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid #edf2f7;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#4a5568;">📍 Filtrar por local:</span>
+            <select id="gerir-filtro-instituicao" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarInstituicao()">
+              <option value="">Todas as Instituições</option>
+            </select>
+            <select id="gerir-filtro-bloco" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarBloco()">
+              <option value="">Todos os Blocos</option>
+            </select>
+            <select id="gerir-filtro-setor" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarSetor()">
+              <option value="">Todos os Setores</option>
+            </select>
+            <select id="gerir-filtro-sala" class="form-input-style" style="font-size:12px;width:auto;min-width:170px;" onchange="gerirAoMudarSala()">
+              <option value="">Todas as Salas</option>
+            </select>
+          </div>
+          <div class="impr-contador">
+            <strong id="impr-qtd-filtrada">—</strong>
+            <span>ativo(s) no escopo atual, de um total de <strong id="impr-qtd-total" style="font-size:13px;">—</strong> cadastrados.</span>
+            <button type="button" class="btn-secondary" style="margin-left:auto;padding:5px 12px;font-size:12px;" onclick="limparFiltrosImpressao()">↺ Limpar filtros</button>
+          </div>
+        </div>
+
+        <!-- DOCUMENTOS PMOC -->
+        <div class="card">
+          <h3 class="card-title">📋 Documentos PMOC</h3>
+          <div class="impr-grid">
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">📘</span><span class="impr-card-title">Plano PMOC Completo</span></div>
+              <div class="impr-card-desc">Documento estruturado do PMOC — capa, identificações, plano de atividades, cronograma anual, orientações e termo de responsabilidade técnica com ART. Abre o módulo para preencher o responsável pela assinatura e gerar o documento.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo todos">Todos os ativos</span>
+                <button type="button" class="impr-btn" onclick="location.href='plano-pmoc.html'">Abrir módulo</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">🗂️</span><span class="impr-card-title">Capas de Setor</span></div>
+              <div class="impr-card-desc">Folha de rosto A4 por setor, com código de volume, composição por categoria, índice de TAGs e quadro de arquivamento. Para organizar as pastas físicas.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro">Respeita filtros</span>
+                <button type="button" class="impr-btn" onclick="acaoImpressao('emitirCapasSetorPMOC')">Gerar</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">📝</span><span class="impr-card-title">Laudos PMOC em Branco</span></div>
+              <div class="impr-card-desc">Checklist de manutenção preventiva por ativo, pronto para preenchimento em campo (C / NC / NA, data e técnico), em A4 paisagem.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro">Respeita filtros</span>
+                <button type="button" class="impr-btn" onclick="acaoImpressao('emitirLaudosEmBrancoPMOC')">Gerar</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- DOCUMENTOS DE ORDENS DE SERVIÇO -->
+        <div class="card">
+          <h3 class="card-title">🛠️ Documentos de Ordens de Serviço</h3>
+          <div class="impr-grid">
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">🗂️</span><span class="impr-card-title">Capas de O.S. por Setor</span></div>
+              <div class="impr-card-desc">Folha de rosto A4 por setor, no mesmo padrão das Capas de Setor do PMOC, para arquivar fisicamente as Ordens de Serviço preenchidas manualmente. Não traz O.S. do sistema — é a capa/separador do volume onde elas serão anexadas.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro">Respeita filtros</span>
+                <button type="button" class="impr-btn" onclick="acaoImpressao('emitirCapasSetorOS')">Gerar</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- RELATÓRIOS E EXPORTAÇÃO -->
+        <div class="card">
+          <h3 class="card-title">📄 Relatórios e Exportação</h3>
+          <div class="impr-grid">
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">📄</span><span class="impr-card-title">Relatório Geral de Ativos</span></div>
+              <div class="impr-card-desc">Inventário consolidado em A4 paisagem: TAG, categoria, equipamento, localização completa, série, patrimônio e criticidade.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro">Respeita filtros</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('emitirRelatorioGeralAtivos')">Imprimir</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">🌡️</span><span class="impr-card-title">Adequação de Carga por Sala</span></div>
+              <div class="impr-card-desc">Compara a carga térmica prevista de cada sala com a capacidade de ar-condicionado instalada, classificando em adequada, subdimensionada, superdimensionada ou sem climatização, com quadro-resumo. A4 paisagem.</div>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin:2px 0 4px;">
+                <div style="font-size:11px;font-weight:700;color:#4a5568;margin-bottom:6px;">Intervalos de classificação <small style="font-weight:400;color:#a0aec0;">(% da carga prevista)</small></div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#4a5568;">
+                  <span>Adequada de</span>
+                  <!-- Default alinhado a ADEQUACAO_TERMICA_PISO/TETO (app.js): o mesmo piso
+                       usado na Seção 5.4 do Plano PMOC. Antes 100%, o que fazia o relatório
+                       divergir do documento oficial na faixa 96%–99,9%. -->
+                  <input type="number" id="adeq-limite-min" min="1" step="1" value="96" style="width:60px;padding:3px 6px;font-size:11px;text-align:right;" onchange="salvarLimitesAdequacao()">
+                  <span>% até</span>
+                  <input type="number" id="adeq-limite-max" min="1" step="1" value="130" style="width:60px;padding:3px 6px;font-size:11px;text-align:right;" onchange="salvarLimitesAdequacao()">
+                  <span>%</span>
+                </div>
+                <div style="font-size:10px;color:#a0aec0;margin-top:5px;line-height:1.5;">Abaixo do mínimo → <strong>subdimensionada</strong> · acima do máximo → <strong>superdimensionada</strong>.</div>
+              </div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro" title="Respeita o filtro de local (Instituição/Bloco/Setor/Sala). Os filtros de TAG e Criticidade não se aplicam, pois este relatório é por sala.">Respeita filtro de local</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('emitirRelatorioAdequacaoSalas')">Imprimir</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">⚖️</span><span class="impr-card-title">Divergência de Criticidade (Ativo × Matriz de Riscos)</span></div>
+              <div class="impr-card-desc">Compara a criticidade cadastrada em cada ativo com a criticidade indicada pela matriz do ambiente (Tipo de Ambiente da sala). Destaca os ativos divergentes, confronta a distribuição do parque com a faixa de referência do PMOC (15–25% Alta / 40–50% Média / 30–40% Baixa) e traz ação recomendada por ativo. A4 paisagem.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro">Respeita filtros</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('emitirRelatorioDivergenciaCriticidade')">Imprimir</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">📊</span><span class="impr-card-title">Exportar Inventário (XLS)</span></div>
+              <div class="impr-card-desc">Planilha com duas abas — Inventário e Resumo — usando separadores decimais brasileiros e BTU/h em formato numérico.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo filtro">Respeita filtros</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('exportarEquipamentosXLS')">Exportar</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ETIQUETAS E QR CODE -->
+        <div class="card">
+          <h3 class="card-title">🏷️ Etiquetas e QR Code</h3>
+          <div class="impr-grid">
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">➕</span><span class="impr-card-title">Gerar QR Faltantes</span></div>
+              <div class="impr-card-desc">Cria o token de verificação pública para todos os ativos que ainda não possuem QR Code cadastrado. Operação em lote no banco.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo todos">Todos os ativos</span>
+                <button type="button" class="impr-btn" style="background:#10b981;border-color:#10b981;" onclick="acaoImpressao('gerarTokensFaltantes')">Executar</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">🏷️</span><span class="impr-card-title">Etiquetas de Identificação</span></div>
+              <div class="impr-card-desc">Etiquetas com QR Code de todos os ativos que já possuem token, dispostas em folha A4 para recorte e aplicação nos equipamentos.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo todos">Todos os ativos</span>
+                <button type="button" class="impr-btn" onclick="acaoImpressao('imprimirTodasEtiquetas')">Imprimir</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ETIQUETAS DE CONTROLE DE LIMPEZA -->
+        <div class="card">
+          <h3 class="card-title">🧴 Etiquetas de Controle de Limpeza</h3>
+          <div class="impr-grid">
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">💧</span><span class="impr-card-title">Bebedouros (BEB)</span></div>
+              <div class="impr-card-desc">Etiqueta de controle de higienização e troca de filtro para bebedouros, conforme rotina sanitária.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo todos">Todos os ativos</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('imprimirEtiquetaBebedouro')">Imprimir</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">🌀</span><span class="impr-card-title">Climatizadores (CLM)</span></div>
+              <div class="impr-card-desc">Etiqueta de registro de limpeza do reservatório, colmeia e sistema de água dos climatizadores evaporativos.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo todos">Todos os ativos</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('imprimirEtiquetaLimpezaClimatizador')">Imprimir</button>
+              </div>
+            </div>
+
+            <div class="impr-card">
+              <div class="impr-card-head"><span class="impr-card-icon">💨</span><span class="impr-card-title">Ventiladores / Exaustores (VEN)</span></div>
+              <div class="impr-card-desc">Etiqueta de registro de limpeza de hélices, grades e carcaça de ventiladores e sistemas de exaustão.</div>
+              <div class="impr-card-foot">
+                <span class="impr-escopo todos">Todos os ativos</span>
+                <button type="button" class="impr-btn alt" onclick="acaoImpressao('imprimirEtiquetaLimpezaVentilador')">Imprimir</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:#a0aec0;padding:4px 2px 20px;line-height:1.6;">
+          💡 As impressões abrem em uma nova janela do navegador. Se nada acontecer, verifique se os
+          <strong>pop-ups estão liberados</strong> para este site.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div id="qrcode-temp-generator" style="display:none; position:absolute; pointer-events:none;"></div>
+  <script src="app.js"></script>
+  <script>
+    // Invoca a função de impressão de forma defensiva: se a rotina ainda não existir
+    // nesta build do app.js, avisa o usuário em vez de falhar silenciosamente no console.
+    // Persiste e restaura os intervalos de classificação de adequação de carga por sala.
+    // Guardados no navegador (localStorage) para que a preferência do usuário se mantenha
+    // entre sessões. Faixa válida: mínimo ≥ 1 e máximo ≥ mínimo.
+    const ADEQ_LIMITES_KEY = 'univag_adeq_limites';
+    function salvarLimitesAdequacao() {
+      const min = parseInt(document.getElementById('adeq-limite-min')?.value);
+      const max = parseInt(document.getElementById('adeq-limite-max')?.value);
+      if (Number.isFinite(min) && Number.isFinite(max)) {
+        try { localStorage.setItem(ADEQ_LIMITES_KEY, JSON.stringify({ min, max })); } catch (e) {}
+      }
+    }
+    function restaurarLimitesAdequacao() {
+      try {
+        const raw = localStorage.getItem(ADEQ_LIMITES_KEY);
+        if (!raw) return;
+        const { min, max } = JSON.parse(raw);
+        const elMin = document.getElementById('adeq-limite-min');
+        const elMax = document.getElementById('adeq-limite-max');
+        if (elMin && Number.isFinite(min)) elMin.value = min;
+        if (elMax && Number.isFinite(max)) elMax.value = max;
+      } catch (e) {}
+    }
+
+    function acaoImpressao(nomeFuncao) {
+      const fn = window[nomeFuncao];
+      if (typeof fn !== 'function') {
+        alert('Esta rotina de impressão não está disponível nesta versão do sistema (' + nomeFuncao + ').');
+        return;
+      }
+      fn();
+    }
+
+    // Recalcula o contador de escopo a partir da mesma função usada por todos os documentos.
+    function atualizarEscopoImpressao() {
+      if (typeof obterEquipamentosFiltrados !== 'function') return;
+      const filtrados = obterEquipamentosFiltrados();
+      const total     = (typeof globalEquipamentos !== 'undefined' && globalEquipamentos) ? globalEquipamentos.length : 0;
+      const elF = document.getElementById('impr-qtd-filtrada');
+      const elT = document.getElementById('impr-qtd-total');
+      if (elF) elF.textContent = filtrados.length;
+      if (elT) elT.textContent = total;
+    }
+
+    function limparFiltrosImpressao() {
+      const termo = document.getElementById('search-eq-termo');
+      const crit  = document.getElementById('search-eq-criticidade');
+      if (termo) termo.value = '';
+      if (crit)  crit.value  = '';
+      if (typeof gerirLimparFiltrosLocal === 'function') gerirLimparFiltrosLocal();
+      atualizarEscopoImpressao();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      restaurarLimitesAdequacao();
+      (async () => {
+        await window.sessaoPronta;   // T2.2 — sequenciamento real, sem aposta de 400 ms
+        if (typeof carregarEquipamentos === 'function') await carregarEquipamentos();
+        if (typeof inicializarFiltrosGerir === 'function') await inicializarFiltrosGerir();
+        atualizarEscopoImpressao();
+      })();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Programação e cronograma de manutenções PMOC — Concredur / Univag.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-univag.png" type="image/png">
+  <title>Concredur — Programação PMOC</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    /* ── Abas principais ── */
+    .prog-tabs {
+      display: flex; gap: 0; border-bottom: 2px solid var(--gray-200);
+      margin-bottom: 20px;
+    }
+    .prog-tab {
+      padding: 10px 22px; font-size: 13px; font-weight: 600;
+      color: var(--gray-500); cursor: pointer; border: none; background: none;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: color .15s, border-color .15s; font-family: inherit;
+    }
+    .prog-tab:hover { color: var(--brand-navy); }
+    .prog-tab.active { color: var(--brand-navy); border-bottom-color: var(--brand-navy); }
+    .prog-tab-panel { display: none; }
+    .prog-tab-panel.active { display: block; }
+
+    /* ── Programação Anual ── */
+    .anual-toolbar {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+      margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--gray-200);
+    }
+    .anual-toolbar label { font-size: 12px; font-weight: 600; color: var(--gray-500); display:block; margin-bottom:3px; }
+    .anual-toolbar input[type="number"],
+    .anual-toolbar select {
+      padding: 7px 10px; border: 1px solid var(--gray-300); border-radius: var(--radius);
+      font-size: 13px; font-family: inherit; color: var(--gray-700); background: #fff;
+    }
+    .anual-inicio-info {
+      font-size: 12px; color: #059669; font-weight: 600; padding: 7px 12px;
+      background: #d1fae5; border-radius: var(--radius); align-self: flex-end;
+    }
+    .anual-table-wrap { overflow-x: auto; }
+    .anual-table {
+      width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1100px;
+    }
+    .anual-table thead th {
+      background: var(--brand-navy); color: #fff; padding: 8px 10px;
+      text-align: center; font-weight: 600; white-space: nowrap;
+      border: 1px solid rgba(255,255,255,.12); font-size: 11px;
+    }
+    .anual-table thead th.th-eq { text-align: left; min-width: 200px; }
+    .anual-table thead th.th-config { min-width: 130px; }
+    .anual-table thead th.th-mes { min-width: 72px; font-size: 10.5px; }
+    .anual-table tbody tr { border-bottom: 1px solid var(--gray-200); }
+    .anual-table tbody tr:hover { background: var(--gray-50); }
+    .anual-table td { padding: 6px 8px; vertical-align: middle; border: 1px solid var(--gray-200); }
+    .anual-table td.td-eq { min-width: 200px; }
+    .anual-tag { font-weight: 700; font-size: 12px; color: var(--brand-navy); }
+    .anual-sub { font-size: 11px; color: var(--gray-500); margin-top: 1px; }
+    .anual-cell { text-align: center; font-size: 11px; padding: 5px 4px !important; }
+    .anual-pill {
+      display: inline-block; padding: 2px 6px; border-radius: 10px;
+      font-size: 10px; font-weight: 700; white-space: nowrap; line-height: 1.4;
+    }
+    .anual-pill.M  { background: #dbeafe; color: #1d4ed8; }
+    .anual-pill.T  { background: #ede9fe; color: #6d28d9; }
+    .anual-pill.S  { background: #fce7f3; color: #9d174d; }
+    .anual-pill.A  { background: #fef3c7; color: #92400e; }
+    .anual-pill.vazio { background: #f1f5f9; color: #94a3b8; font-weight: 400; }
+    .anual-dt { font-size: 10px; color: var(--gray-500); display: block; margin-top: 1px; }
+    .anual-select-freq {
+      width: 100%; padding: 4px 6px; border: 1px solid var(--gray-300);
+      border-radius: 4px; font-size: 11px; font-family: inherit;
+      color: var(--gray-700); background: #fff;
+    }
+    .anual-input-tec {
+      width: 100%; padding: 4px 6px; border: 1px solid var(--gray-300);
+      border-radius: 4px; font-size: 11px; font-family: inherit;
+    }
+    .anual-legend {
+      display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+      margin-bottom: 14px; font-size: 11px;
+    }
+    .anual-legend-item { display: flex; align-items: center; gap: 4px; }
+    .anual-bloco-header td {
+      background: #f0f4ff; font-weight: 700; font-size: 11px;
+      color: var(--brand-navy); padding: 5px 10px !important;
+      border-top: 2px solid #c7d2fe !important;
+    }
+
+    .prog-filtros {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+      margin-bottom: 18px;
+    }
+    .prog-filtros select,
+    .prog-filtros input[type="text"] {
+      padding: 7px 10px; border: 1px solid var(--gray-300); border-radius: var(--radius);
+      font-size: 13px; font-family: inherit; color: var(--gray-700); background: #fff;
+      min-width: 150px;
+    }
+    .prog-filtros label { font-size: 12px; font-weight: 600; color: var(--gray-500); display:block; margin-bottom:3px; }
+
+    .prog-table-wrap { overflow-x: auto; }
+    .prog-table {
+      width: 100%; border-collapse: collapse; font-size: 12.5px;
+      min-width: 980px;
+    }
+    .prog-table thead th {
+      background: var(--brand-navy); color: #fff; padding: 9px 10px;
+      text-align: center; font-weight: 600; white-space: nowrap;
+      border: 1px solid rgba(255,255,255,.12); font-size: 11.5px;
+    }
+    .prog-table thead th.th-eq { text-align: left; min-width: 210px; }
+    .prog-table tbody tr { border-bottom: 1px solid var(--gray-200); }
+    .prog-table tbody tr:hover { background: var(--gray-50); }
+    .prog-table td { padding: 8px 10px; vertical-align: middle; border: 1px solid var(--gray-200); }
+    .prog-table td.td-eq-info { min-width: 210px; }
+    .prog-tag { font-weight: 700; font-size: 12px; color: var(--brand-navy); }
+    .prog-local { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+    .prog-categoria {
+      font-size: 10px; font-weight: 700; background: #eef2ff;
+      color: #4169e1; padding: 2px 6px; border-radius: 10px;
+      display: inline-block; margin-top: 2px;
+    }
+    /* Fonte de dados da célula */
+    .prog-fonte {
+      font-size: 9px; color: var(--gray-400); margin-top: 1px; font-style: italic;
+    }
+    .prog-fonte.from-pmoc { color: #059669; font-style: normal; font-weight: 600; }
+
+    .prog-cell { min-width: 175px; text-align: center; position: relative; }
+    .prog-cell-inner { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+
+    .prog-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .prog-badge.ok   { background: var(--success-light); color: #065f46; }
+    .prog-badge.warn { background: var(--warning-light); color: #92400e; }
+    .prog-badge.late { background: var(--danger-light);  color: #991b1b; }
+    .prog-badge.none { background: var(--gray-100);      color: var(--gray-500); }
+
+    .prog-dt-label { font-size: 10px; color: var(--gray-400); margin-top: 1px; }
+    .prog-dt-value { font-size: 12px; font-weight: 600; color: var(--gray-700); }
+    .prog-dt-prox  { font-size: 11px; }
+
+    .btn-registrar {
+      margin-top: 5px; padding: 4px 10px; font-size: 11px; font-weight: 600;
+      background: #4169e1; color: #fff; border: none; border-radius: var(--radius);
+      cursor: pointer; font-family: inherit; transition: background .15s;
+    }
+    .btn-registrar:hover { background: var(--brand-navy); }
+    .btn-registrar.plain { background: var(--gray-200); color: var(--gray-600); }
+    .btn-registrar.plain:hover { background: var(--gray-300); }
+
+    .du-label { font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+    .du-label.ok   { color: #059669; }
+    .du-label.warn { color: #d97706; }
+    .du-label.late { color: #dc2626; }
+
+    /* Modal */
+    .prog-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    .prog-modal-overlay.open { display: flex; }
+    .prog-modal {
+      background: #fff; border-radius: 10px; width: 100%; max-width: 460px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.22); overflow: hidden;
+    }
+    .prog-modal-header {
+      background: var(--brand-navy); color: #fff; padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .prog-modal-header h3 { font-size: 14px; font-weight: 700; }
+    .prog-modal-close { background: none; border: none; color: rgba(255,255,255,.7); font-size: 18px; cursor: pointer; line-height: 1; }
+    .prog-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .prog-modal-field label { font-size: 12px; font-weight: 600; color: var(--gray-600); display: block; margin-bottom: 4px; }
+    .prog-modal-field input,
+    .prog-modal-field select,
+    .prog-modal-field textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--gray-300);
+      border-radius: var(--radius); font-size: 13px; font-family: inherit; color: var(--gray-800);
+    }
+    .prog-modal-field textarea { resize: vertical; min-height: 56px; }
+    .prog-modal-info {
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius);
+      padding: 10px 12px; font-size: 12px; color: #3730a3;
+    }
+    .prog-modal-info strong { display: block; font-size: 13px; color: var(--brand-navy); margin-bottom: 2px; }
+    .prog-modal-fonte-info {
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius);
+      padding: 8px 12px; font-size: 11px; color: #166534;
+    }
+    .prog-modal-footer { padding: 12px 20px; border-top: 1px solid var(--gray-200); display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-modal-save { padding: 8px 20px; background: #4169e1; color: #fff; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .btn-modal-save:hover { background: var(--brand-navy); }
+    .btn-modal-cancel { padding: 8px 16px; background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 13px; cursor: pointer; font-family: inherit; }
+    .btn-modal-delete { padding: 8px 16px; background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: var(--radius); font-size: 13px; cursor: pointer; font-family: inherit; margin-right: auto; }
+    .btn-modal-delete:hover { background: #fee2e2; border-color: #dc2626; }
+    .btn-modal-delete.confirmar { background: #dc2626; color: #fff; border-color: #dc2626; }
+    .btn-modal-delete.confirmar:hover { background: #b91c1c; }
+
+    /* Legenda */
+    .prog-legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; font-size: 11.5px; }
+    .prog-legend-item { display: flex; align-items: center; gap: 5px; }
+
+    /* KPIs */
+    .prog-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .prog-kpi-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 8px; padding: 14px 16px; box-shadow: var(--shadow-sm); text-align: center; }
+    .prog-kpi-card .kpi-val { font-size: 28px; font-weight: 700; color: var(--brand-navy); }
+    .prog-kpi-card .kpi-lbl { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+    .prog-kpi-card.vencido .kpi-val { color: var(--danger); }
+    .prog-kpi-card.alerta  .kpi-val { color: var(--warning); }
+    .prog-kpi-card.ok      .kpi-val { color: var(--success); }
+
+    /* Toolbar */
+    .btn-toolbar { padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; border: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-toolbar.primary   { background: #4169e1; color: #fff; }
+    .btn-toolbar.primary:hover   { background: var(--brand-navy); }
+    .btn-toolbar.secondary { background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-300); }
+    .btn-toolbar.secondary:hover { background: var(--gray-200); }
+    .btn-toolbar.success { background: #059669; color: #fff; }
+    .btn-toolbar.success:hover { background: #047857; }
+
+    .prog-loading { text-align: center; padding: 48px 0; color: var(--gray-400); font-size: 14px; }
+    .prog-empty   { text-align: center; padding: 40px 0; color: var(--gray-400); font-size: 13px; }
+
+    #prog-toast {
+      position: fixed; bottom: 28px; right: 24px; z-index: 2000;
+      background: var(--brand-navy); color: #fff; padding: 10px 18px; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    #prog-toast.show { opacity: 1; }
+
+    /* ── Retroativas & Projeção ── */
+    .prog-modal.retro-modal { max-width: 780px; }
+    .retro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .retro-grid .full { grid-column: 1 / -1; }
+    .retro-aviso {
+      background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius);
+      padding: 9px 12px; font-size: 11.5px; color: #92400e; line-height: 1.5;
+    }
+    .retro-preview-wrap {
+      max-height: 280px; overflow: auto;
+      border: 1px solid var(--gray-200); border-radius: var(--radius);
+    }
+    .retro-preview { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .retro-preview th {
+      background: var(--brand-navy); color: #fff; padding: 6px 8px; font-size: 10.5px;
+      text-align: left; position: sticky; top: 0; white-space: nowrap;
+    }
+    .retro-preview td { padding: 6px 8px; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+    .retro-datas { font-size: 10.5px; color: var(--gray-500); line-height: 1.6; }
+    .retro-pill-real { background: #d1fae5; color: #065f46; font-weight: 700; padding: 1px 6px; border-radius: 8px; font-size: 10px; white-space: nowrap; }
+    .retro-pill-est  { background: #fef3c7; color: #92400e; font-weight: 700; padding: 1px 6px; border-radius: 8px; font-size: 10px; white-space: nowrap; }
+    .retro-pill-fut  { background: #dbeafe; color: #1d4ed8; font-weight: 700; padding: 1px 6px; border-radius: 8px; font-size: 10px; white-space: nowrap; }
+    .retro-resumo {
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius);
+      padding: 8px 12px; font-size: 12px; color: #3730a3; font-weight: 600;
+    }
+    /* Histórico no modal de registro */
+    .hist-list { max-height: 150px; overflow: auto; border: 1px solid var(--gray-200); border-radius: var(--radius); }
+    .hist-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 11.5px; border-bottom: 1px solid var(--gray-100); }
+    .hist-item:last-child { border-bottom: none; }
+    .hist-tec { color: var(--gray-400); flex: 1; font-size: 10.5px; }
+    .hist-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+    .hist-badge.real { background: #d1fae5; color: #065f46; }
+    .hist-badge.estimada { background: #fef3c7; color: #92400e; }
+
+    /* ── Impressão via popup (mesma técnica do app.js) — não usa @media print ── */
+  </style>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <img class="sidebar-logo-img" src="logo-univag.png" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge">
+        <span class="user-icon-dot">●</span>
+        <span id="user-display-email">...</span>
+      </div>
+    </div>
+    <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item active" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+    <div class="sidebar-footer">
+      <button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <h2>📅 Programação de Manutenções PMOC</h2>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;" id="toolbar-status">
+        <button type="button" class="btn-toolbar secondary" id="btn-retro" onclick="abrirModalRetro()">🕒 Retroativas &amp; Projeção</button>
+        <button type="button" class="btn-toolbar success" id="btn-exportar" onclick="exportarXLS()">📊 Exportar XLS</button>
+        <button type="button" class="btn-toolbar secondary" id="btn-imprimir" onclick="imprimirProgramacao()">🖨️ Imprimir</button>
+        <button type="button" class="btn-toolbar primary" onclick="carregarProgramacao()">🔄 Atualizar</button>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; display:none;" id="toolbar-anual">
+        <button type="button" class="btn-toolbar success" onclick="exportarAnualXLS()">📊 Exportar XLS Anual</button>
+        <button type="button" class="btn-toolbar secondary" onclick="imprimirAnual()">🖨️ Imprimir Anual</button>
+        <button type="button" class="btn-toolbar primary" onclick="salvarConfiguracaoAnual()">💾 Salvar Configuração</button>
+      </div>
+    </div>
+
+    <div class="section-content">
+
+      <!-- Abas -->
+      <div class="prog-tabs no-print">
+        <button type="button" class="prog-tab active" onclick="mudarAba('status', this)">📊 Status das Manutenções</button>
+        <button type="button" class="prog-tab" onclick="mudarAba('anual', this)">📅 Programação Anual</button>
+      </div>
+
+      <!-- Painel: Status -->
+      <div class="prog-tab-panel active" id="panel-status">
+
+      <!-- KPIs -->
+      <div class="prog-kpis">
+        <div class="prog-kpi-card"><div class="kpi-val" id="kpi-total">—</div><div class="kpi-lbl">Equipamentos</div></div>
+        <div class="prog-kpi-card vencido"><div class="kpi-val" id="kpi-vencidos">—</div><div class="kpi-lbl">Manutenções Vencidas</div></div>
+        <div class="prog-kpi-card alerta"><div class="kpi-val" id="kpi-alerta">—</div><div class="kpi-lbl">Vencendo ≤ 5 DU</div></div>
+        <div class="prog-kpi-card ok"><div class="kpi-val" id="kpi-ok">—</div><div class="kpi-lbl">Em Dia</div></div>
+        <div class="prog-kpi-card"><div class="kpi-val" id="kpi-sem-reg">—</div><div class="kpi-lbl">Sem Registro</div></div>
+        <div class="prog-kpi-card"><div class="kpi-val" id="kpi-fichas">—</div><div class="kpi-lbl">Fichas PMOC (fonte)</div></div>
+      </div>
+
+      <div class="card">
+        <!-- Filtros -->
+        <div class="prog-filtros no-print">
+          <div>
+            <label for="f-busca">Buscar TAG / Produto</label>
+            <input type="text" id="f-busca" placeholder="Ex: AC-01, Split..." oninput="renderTabela()">
+          </div>
+          <div>
+            <label for="f-cat">Categoria</label>
+            <select id="f-cat" onchange="renderTabela()">
+              <option value="">Todas</option>
+              <option value="AC">Ar Condicionado (AC)</option>
+              <option value="BEB">Bebedouro (BEB)</option>
+              <option value="CLM">Climatizador (CLM)</option>
+              <option value="VEN">Ventilador/Exaustor (VEN)</option>
+              <option value="OUT">Outros (OUT)</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-bloco">Bloco / Edificação</label>
+            <input type="text" id="f-bloco" placeholder="Ex: Bloco A" oninput="renderTabela()">
+          </div>
+          <div>
+            <label for="f-status">Status</label>
+            <select id="f-status" onchange="renderTabela()">
+              <option value="">Todos</option>
+              <option value="late">Vencido</option>
+              <option value="warn">Alerta (≤ 5 DU)</option>
+              <option value="ok">Em Dia</option>
+              <option value="none">Sem Registro</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Legenda -->
+        <div class="prog-legend no-print">
+          <span style="font-weight:600; color:var(--gray-600); font-size:11px;">Legenda:</span>
+          <span class="prog-legend-item"><span class="prog-badge ok">✓ Em Dia</span></span>
+          <span class="prog-legend-item"><span class="prog-badge warn">⚠ Alerta</span></span>
+          <span class="prog-legend-item"><span class="prog-badge late">✗ Vencido</span></span>
+          <span class="prog-legend-item"><span class="prog-badge none">— Sem Registro</span></span>
+          <span style="font-size:11px; color:#059669; margin-left:4px; font-weight:600;">📋 fonte: Ficha PMOC</span>
+          <span style="font-size:11px; color:var(--gray-400);">✏️ fonte: Registro manual</span>
+          <span style="font-size:11px; color:var(--gray-400); margin-left:6px;">DU = Dias Úteis (seg–sex)</span>
+        </div>
+
+        <!-- Tabela -->
+        <div class="prog-table-wrap">
+          <div id="prog-loading" class="prog-loading">⏳ Carregando equipamentos e fichas PMOC...</div>
+          <div id="prog-empty" class="prog-empty" style="display:none;">Nenhum equipamento encontrado com os filtros selecionados.</div>
+          <table class="prog-table" id="prog-table" style="display:none;">
+            <thead>
+              <tr>
+                <th class="th-eq">Equipamento</th>
+                <th>🔧 Mensal<br><small style="font-weight:400;opacity:.8;">Ciclo: 22 DU</small></th>
+                <th>📅 Trimestral<br><small style="font-weight:400;opacity:.8;">Ciclo: 65 DU</small></th>
+                <th>📆 Semestral<br><small style="font-weight:400;opacity:.8;">Ciclo: 130 DU</small></th>
+                <th>📋 Anual<br><small style="font-weight:400;opacity:.8;">Ciclo: 261 DU</small></th>
+              </tr>
+            </thead>
+            <tbody id="prog-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      </div><!-- /panel-status -->
+
+      <!-- Painel: Programação Anual -->
+      <div class="prog-tab-panel" id="panel-anual">
+        <div class="card">
+          <!-- Toolbar anual -->
+          <div class="anual-toolbar no-print">
+            <div>
+              <label for="anual-ano">Ano de referência</label>
+              <input type="number" id="anual-ano" value="" min="2020" max="2050" style="width:90px;"
+                onchange="gerarProgramacaoAnual()">
+            </div>
+            <div>
+              <label for="anual-agrupar">Agrupar por</label>
+              <select id="anual-agrupar" onchange="gerarProgramacaoAnual()">
+                <option value="bloco">Bloco / Edificação</option>
+                <option value="setor">Setor</option>
+                <option value="nenhum">Sem agrupamento</option>
+              </select>
+            </div>
+            <div>
+              <label for="anual-cat">Filtrar categoria</label>
+              <select id="anual-cat" onchange="gerarProgramacaoAnual()">
+                <option value="">Todas</option>
+                <option value="AC">Ar Condicionado (AC)</option>
+                <option value="BEB">Bebedouro (BEB)</option>
+                <option value="CLM">Climatizador (CLM)</option>
+                <option value="VEN">Ventilador/Exaustor (VEN)</option>
+                <option value="OUT">Outros (OUT)</option>
+              </select>
+            </div>
+            <div id="anual-inicio-display" class="anual-inicio-info" style="display:none;">
+              📅 Início: <span id="anual-inicio-txt">—</span>
+            </div>
+          </div>
+
+          <!-- Legenda -->
+          <div class="anual-legend no-print">
+            <span style="font-weight:600; color:var(--gray-600);">Legenda:</span>
+            <span class="anual-legend-item"><span class="anual-pill M">M</span> Mensal</span>
+            <span class="anual-legend-item"><span class="anual-pill T">T</span> Trimestral (acum.)</span>
+            <span class="anual-legend-item"><span class="anual-pill S">S</span> Semestral (acum.)</span>
+            <span class="anual-legend-item"><span class="anual-pill A">A</span> Anual (acum.)</span>
+            <span style="font-size:11px; color:var(--gray-400); margin-left:8px;">Data exibida = previsão de execução por DU</span>
+          </div>
+
+          <!-- Tabela anual -->
+          <div class="anual-table-wrap">
+            <div id="anual-loading" style="text-align:center;padding:30px;color:var(--gray-400);">
+              ⏳ Selecione o ano e aguarde o carregamento...
+            </div>
+            <table class="anual-table" id="anual-table" style="display:none;">
+              <thead id="anual-thead"></thead>
+              <tbody id="anual-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /panel-anual -->
+
+    </div>
+  </main>
+</div>
+
+<!-- Modal de Registro -->
+<div class="prog-modal-overlay" id="modal-overlay">
+  <div class="prog-modal">
+    <div class="prog-modal-header">
+      <h3 id="modal-titulo">Registrar Manutenção</h3>
+      <button type="button" class="prog-modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="prog-modal-body">
+      <div class="prog-modal-info">
+        <strong id="modal-eq-info">—</strong>
+        <span id="modal-periodo-info">—</span>
+      </div>
+      <div id="modal-fonte-info" class="prog-modal-fonte-info" style="display:none;"></div>
+      <div class="prog-modal-field">
+        <label for="modal-data">Data de Execução *</label>
+        <input type="date" id="modal-data" />
+      </div>
+      <div class="prog-modal-field">
+        <label for="modal-tecnico">Técnico Responsável</label>
+        <input type="text" id="modal-tecnico" placeholder="Nome do técnico que executou">
+      </div>
+      <div class="prog-modal-field">
+        <label for="modal-obs">Observações (opcional)</label>
+        <textarea id="modal-obs" placeholder="Intercorrências, substituições realizadas, etc."></textarea>
+      </div>
+      <div id="modal-proxima-info" style="font-size:12px; color:var(--gray-500); display:none;">
+        ➜ Próxima manutenção calculada: <strong id="modal-proxima-dt"></strong> (em dias úteis)
+      </div>
+      <div class="prog-modal-field" id="modal-hist-wrap" style="display:none;">
+        <label>📜 Histórico de execuções</label>
+        <div id="modal-hist-list" class="hist-list"></div>
+      </div>
+    </div>
+    <div class="prog-modal-footer">
+      <button type="button" class="btn-modal-delete" id="btn-modal-delete" style="display:none;" onclick="excluirRegistro()">🗑️ Excluir registro</button>
+      <button type="button" class="btn-modal-cancel" onclick="fecharModal()">Cancelar</button>
+      <button type="button" class="btn-modal-save" onclick="salvarRegistro()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Retroativas & Projeção -->
+<div class="prog-modal-overlay" id="retro-overlay">
+  <div class="prog-modal retro-modal">
+    <div class="prog-modal-header">
+      <h3>🕒 Retroativas &amp; Projeção de Manutenções</h3>
+      <button type="button" class="prog-modal-close" onclick="fecharModalRetro()">✕</button>
+    </div>
+    <div class="prog-modal-body">
+      <div class="retro-aviso">
+        ⚠️ Informe a data da manutenção realizada <strong>neste mês</strong>. A partir dela o sistema
+        <strong>estima retroativamente</strong> as datas das manutenções anteriores (gravadas como
+        <em>estimadas</em>, para transparência) e <strong>projeta as próximas</strong> pelo ciclo em dias úteis.
+      </div>
+      <div class="retro-grid">
+        <div class="prog-modal-field full">
+          <label for="retro-escopo">Aplicar a</label>
+          <select id="retro-escopo"></select>
+        </div>
+        <div class="prog-modal-field">
+          <label for="retro-freq">Frequência do plano (PMOC)</label>
+          <select id="retro-freq">
+            <option value="Mensal">Mensal</option>
+            <option value="Trimestral">Trimestral</option>
+            <option value="Semestral">Semestral</option>
+            <option value="Anual">Anual</option>
+          </select>
+        </div>
+        <div class="prog-modal-field">
+          <label for="retro-data">Data da manutenção deste mês *</label>
+          <input type="date" id="retro-data">
+        </div>
+        <div class="prog-modal-field">
+          <label for="retro-desde">Gerar retroativas desde</label>
+          <input type="date" id="retro-desde">
+        </div>
+        <div class="prog-modal-field">
+          <label for="retro-ate">Projetar futuras até</label>
+          <input type="date" id="retro-ate">
+        </div>
+        <div class="prog-modal-field full">
+          <label for="retro-tecnico">Técnico responsável (opcional)</label>
+          <input type="text" id="retro-tecnico" placeholder="Nome do técnico executante">
+        </div>
+      </div>
+      <div id="retro-resumo" class="retro-resumo" style="display:none;"></div>
+      <div class="retro-preview-wrap" id="retro-preview-wrap" style="display:none;">
+        <table class="retro-preview">
+          <thead>
+            <tr>
+              <th>Periodicidade</th><th>Ciclo (DU)</th>
+              <th>Retroativas (estimadas)</th><th>Referência</th><th>Projeções futuras</th>
+            </tr>
+          </thead>
+          <tbody id="retro-preview-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="prog-modal-footer">
+      <button type="button" class="btn-modal-cancel" onclick="fecharModalRetro()">Cancelar</button>
+      <button type="button" class="btn-modal-cancel" onclick="retroExportarXLS()">📊 Exportar cronograma</button>
+      <button type="button" class="btn-modal-save" onclick="retroPreview()">🔍 Pré-visualizar</button>
+      <button type="button" class="btn-modal-save" id="btn-retro-salvar" onclick="retroSalvar()">💾 Salvar registros</button>
+    </div>
+  </div>
+</div>
+
+<div id="prog-toast"></div>
+
+<script>
+// ── Supabase ──────────────────────────────────────────────────────────────
+// Guarda de configuração DUPLICADA de app.js por decisão de projeto: esta página é
+// intencionalmente autocontida e não carrega app.js (invariante 3). Sem fallback:
+// antes o fallback vazio fazia createClient('','') lançar exceção genérica e a
+// página ficava em branco, sem nenhuma pista da causa.
+if (typeof SUPABASE_URL === 'undefined' || !SUPABASE_URL ||
+    typeof SUPABASE_ANON_KEY === 'undefined' || !SUPABASE_ANON_KEY) {
+  const _msgCfg =
+    '<div style="padding:40px;font-family:system-ui,-apple-system,sans-serif;color:#dc2626;max-width:640px;margin:0 auto">' +
+    '<h2 style="margin:0 0 12px">Falha de configuração</h2>' +
+    '<p style="color:#4a5568;line-height:1.6">O arquivo <code>config.js</code> não foi carregado, ou não define ' +
+    '<code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code>.<br>' +
+    'O sistema foi interrompido para não gravar dados em uma base incorreta.<br><br>' +
+    'Contate o administrador do sistema.</p></div>';
+  if (document.body) {
+    document.body.style.visibility = 'visible';
+    document.body.innerHTML = _msgCfg;
+  } else {
+    document.documentElement.innerHTML = '<body>' + _msgCfg + '</body>';
+  }
+  throw new Error('CONFIG_AUSENTE');
+}
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── Periodicidades ────────────────────────────────────────────────────────
+const PERIODOS = [
+  { key: 'mensal',     label: 'Mensal',     duCiclo: 22,  duAlerta: 5  },
+  { key: 'trimestral', label: 'Trimestral', duCiclo: 65,  duAlerta: 8  },
+  { key: 'semestral',  label: 'Semestral',  duCiclo: 130, duAlerta: 10 },
+  { key: 'anual',      label: 'Anual',      duCiclo: 261, duAlerta: 15 },
+];
+
+// Mapeia frequência textual (ficha PMOC) → chaves de PERIODOS
+const FREQ_PARA_KEY = {
+  'Mensal':     ['mensal'],
+  'Trimestral': ['mensal','trimestral'],
+  'Semestral':  ['mensal','trimestral','semestral'],
+  'Anual':      ['mensal','trimestral','semestral','anual'],
+};
+
+// ── Estado global ─────────────────────────────────────────────────────────
+let _equipamentos = [];
+let _programacoes = {};  // { eqId: { mensal:{data,tecnico,obs,fonte}, ... } }
+let _modalContext  = null;
+
+// ── Dias úteis ────────────────────────────────────────────────────────────
+function addDiasUteis(dateStr, du) {
+  const d = new Date(dateStr + 'T00:00:00');
+  let count = 0;
+  while (count < du) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+function difDiasUteis(dataInicio, dataFim) {
+  const a = new Date(dataInicio + 'T00:00:00');
+  const b = new Date(dataFim    + 'T00:00:00');
+  const sinal = b >= a ? 1 : -1;
+  let cur = new Date(sinal > 0 ? a : b);
+  const end = new Date(sinal > 0 ? b : a);
+  let du = 0;
+  while (cur < end) {
+    cur.setDate(cur.getDate() + 1);
+    if (cur.getDay() !== 0 && cur.getDay() !== 6) du++;
+  }
+  return du * sinal;
+}
+
+function hojeStr() { return new Date().toISOString().split('T')[0]; }
+
+function fmtBR(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+// ── T2.1: paginação — DUPLICADO de app.js por decisão de projeto (invariante 3:
+// esta página é autocontida e não carrega app.js). O PostgREST trunca em
+// max-rows (padrão 1.000) sem erro; sem isto o cronograma some do 1.001º
+// equipamento em diante. Mantenha em sincronia com app.js.
+async function fetchAll(construirQuery, chunk = 1000) {
+  const todos = [];
+  for (let de = 0; ; de += chunk) {
+    const { data, error } = await construirQuery().range(de, de + chunk - 1);
+    if (error) return { data: null, error };
+    if (data) for (const linha of data) todos.push(linha);
+    if (!data || data.length < chunk) break;
+  }
+  return { data: todos, error: null };
+}
+
+// Blocos de 500 IDs para não estourar o tamanho da URL (HTTP 414) no filtro .in().
+async function fetchAllIn(construirQuery, coluna, ids, blocoIds = 500, chunk = 1000) {
+  const todos = [];
+  const unicos = [...new Set(ids || [])];
+  if (!unicos.length) return { data: [], error: null };
+  for (let i = 0; i < unicos.length; i += blocoIds) {
+    const fatia = unicos.slice(i, i + blocoIds);
+    const { data, error } = await fetchAll(() => construirQuery().in(coluna, fatia), chunk);
+    if (error) return { data: null, error };
+    if (data) for (const linha of data) todos.push(linha);
+  }
+  return { data: todos, error: null };
+}
+
+// ── T1.1b: faixa de ambiente — DUPLICADO de app.js (invariante 3: página
+// autocontida, não carrega app.js). Mantenha em sincronia.
+// config.js expõe IS_HOMOLOGACAO, mas nada no sistema o consumia: o switch de
+// ambiente era completamente silencioso.
+function marcarAmbienteNaoProdutivo() {
+  if (typeof IS_HOMOLOGACAO === 'undefined' || !IS_HOMOLOGACAO) return;
+  if (document.getElementById('app-faixa-ambiente')) return;
+  const faixa = document.createElement('div');
+  faixa.id = 'app-faixa-ambiente';
+  faixa.textContent = '\u26A0 AMBIENTE DE HOMOLOGA\u00C7\u00C3O \u2014 os dados gravados aqui N\u00C3O v\u00E3o para a base de produ\u00E7\u00E3o';
+  document.body.appendChild(faixa);
+  document.body.classList.add('tem-faixa-ambiente');
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+// ── Status de célula ──────────────────────────────────────────────────────
+function calcStatus(ultimaData, duCiclo, duAlerta) {
+  if (!ultimaData) return { status: 'none', proxima: null, duRestantes: null };
+  const proxima = addDiasUteis(ultimaData, duCiclo);
+  const du      = difDiasUteis(hojeStr(), proxima);
+  let status = du < 0 ? 'late' : du <= duAlerta ? 'warn' : 'ok';
+  return { status, proxima, duRestantes: du };
+}
+
+function renderBadge(status) {
+  const map = { ok:['✓ Em Dia','ok'], warn:['⚠ Alerta','warn'], late:['✗ Vencido','late'], none:['— Sem Registro','none'] };
+  const [txt, cls] = map[status] || map.none;
+  return `<span class="prog-badge ${cls}">${txt}</span>`;
+}
+
+// ── Célula ────────────────────────────────────────────────────────────────
+function renderCell(eq, periodo) {
+  const prog   = (_programacoes[eq.id] || {})[periodo.key];
+  const ultima = prog ? prog.data : null;
+  const fonte  = prog ? prog.fonte : null; // 'pmoc' | 'manual' | null
+  const { status, proxima, duRestantes } = calcStatus(ultima, periodo.duCiclo, periodo.duAlerta);
+
+  let duHtml = '';
+  if (status === 'ok')   duHtml = `<span class="du-label ok">${duRestantes} DU restantes</span>`;
+  if (status === 'warn') duHtml = `<span class="du-label warn">${duRestantes} DU restantes</span>`;
+  if (status === 'late') duHtml = `<span class="du-label late">${Math.abs(duRestantes)} DU em atraso</span>`;
+
+  const ultimaHtml  = ultima  ? `<div class="prog-dt-label">Última: <span class="prog-dt-value">${fmtBR(ultima)}</span></div>` : '';
+  const proximaHtml = proxima ? `<div class="prog-dt-prox" style="color:var(--gray-500);font-size:11px;">Próx.: <strong>${fmtBR(proxima)}</strong></div>` : '';
+  const fonteHtml   = fonte === 'pmoc'   ? `<span class="prog-fonte from-pmoc">📋 Ficha PMOC</span>`
+                    : fonte === 'manual' ? `<span class="prog-fonte">✏️ Registro manual</span>`
+                    : '';
+
+  const eqId  = eq.id;
+  // T1.3 — a tag deixou de trafegar pelo atributo onclick. Escapar HTML aqui não
+  // resolveria: o parser decodifica &#039; antes do JS avaliar, quebrando a string.
+  // abrirModal() resolve tag e label pelas fontes internas (_equipamentos/PERIODOS).
+
+  return `
+    <td class="prog-cell">
+      <div class="prog-cell-inner">
+        ${renderBadge(status)}
+        ${ultimaHtml}
+        ${proximaHtml}
+        ${duHtml}
+        ${fonteHtml}
+        <button type="button" class="btn-registrar ${ultima ? 'plain' : ''}"
+          onclick="abrirModal('${esc(eqId)}','${esc(periodo.key)}')">
+          ${ultima ? '✏️ Atualizar' : '➕ Registrar'}
+        </button>
+      </div>
+    </td>`;
+}
+
+// ── Renderiza tabela ──────────────────────────────────────────────────────
+function renderTabela() {
+  const busca   = ($('f-busca')?.value  || '').toLowerCase();
+  const cat     = $('f-cat')?.value    || '';
+  const bloco   = ($('f-bloco')?.value  || '').toLowerCase();
+  const fStatus = $('f-status')?.value || '';
+
+  let lista = _equipamentos.filter(eq => {
+    if (busca && !eq.tag.toLowerCase().includes(busca) && !(eq.produto||'').toLowerCase().includes(busca)) return false;
+    if (cat   && eq.categoria !== cat) return false;
+    if (bloco && !(eq.bloco||'').toLowerCase().includes(bloco)) return false;
+    if (fStatus) {
+      const temStatus = PERIODOS.some(p => {
+        const prog = (_programacoes[eq.id] || {})[p.key];
+        const { status } = calcStatus(prog?.data, p.duCiclo, p.duAlerta);
+        return status === fStatus;
+      });
+      if (!temStatus) return false;
+    }
+    return true;
+  });
+
+  const tbody = $('prog-tbody');
+  const table = $('prog-table');
+  const empty = $('prog-empty');
+
+  if (!lista.length) {
+    table.style.display = 'none';
+    empty.style.display = 'block';
+    atualizarKPIs([]);
+    return;
+  }
+
+  table.style.display = '';
+  empty.style.display = 'none';
+
+  tbody.innerHTML = lista.map(eq => {
+    const local = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ');
+    const catLabel = eq.categoria || '—';
+    return `
+      <tr>
+        <td class="td-eq-info">
+          <div class="prog-tag">${esc(eq.tag)}</div>
+          <div class="prog-local">${esc(eq.produto||'')}${eq.produto && local ? ' — ':' '}${esc(local)}</div>
+          <span class="prog-categoria">${esc(catLabel)}</span>
+        </td>
+        ${PERIODOS.map(p => renderCell(eq, p)).join('')}
+      </tr>`;
+  }).join('');
+
+  atualizarKPIs(lista);
+}
+
+// ── KPIs ──────────────────────────────────────────────────────────────────
+function atualizarKPIs(lista) {
+  let vencidos = 0, alerta = 0, ok = 0, semReg = 0;
+  lista.forEach(eq => {
+    PERIODOS.forEach(p => {
+      const prog = (_programacoes[eq.id] || {})[p.key];
+      const { status } = calcStatus(prog?.data, p.duCiclo, p.duAlerta);
+      if (status === 'late') vencidos++;
+      else if (status === 'warn') alerta++;
+      else if (status === 'ok')  ok++;
+      else semReg++;
+    });
+  });
+  $('kpi-total').textContent    = lista.length;
+  $('kpi-vencidos').textContent = vencidos;
+  $('kpi-alerta').textContent   = alerta;
+  $('kpi-ok').textContent       = ok;
+  $('kpi-sem-reg').textContent  = semReg;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────
+function abrirModal(eqId, periodoKey) {
+  // T1.3 — tag e label resolvidos internamente, não mais recebidos do atributo HTML.
+  const periodo      = PERIODOS.find(p => p.key === periodoKey);
+  const eqTag        = _equipamentos.find(e => e.id === eqId)?.tag || eqId;
+  const periodoLabel = periodo?.label || periodoKey;
+  _modalContext = { eqId, eqTag, periodoKey, periodoLabel };
+  const prog    = (_programacoes[eqId] || {})[periodoKey];
+
+  $('modal-titulo').textContent       = `Registrar Manutenção — ${periodoLabel}`;
+  $('modal-eq-info').textContent      = eqTag;
+  $('modal-periodo-info').textContent = `Periodicidade: ${periodoLabel} (ciclo de ${periodo.duCiclo} dias úteis)`;
+  $('modal-data').value               = prog?.data    || hojeStr();
+  $('modal-tecnico').value            = prog?.tecnico || '';
+  $('modal-obs').value                = prog?.obs     || '';
+
+  // Mostrar aviso se dado veio de ficha PMOC
+  const fonteEl = $('modal-fonte-info');
+  if (prog?.fonte === 'pmoc') {
+    fonteEl.innerHTML = `📋 Data preenchida automaticamente a partir da Ficha PMOC mais recente (${fmtBR(prog.data)}). Altere para registrar uma data manual.`;
+    fonteEl.style.display = '';
+  } else {
+    fonteEl.style.display = 'none';
+  }
+
+  // Botão excluir: visível apenas se houver registro manual na tabela programacao_pmoc
+  const btnDel = $('btn-modal-delete');
+  if (prog && prog.fonte === 'manual') {
+    btnDel.style.display = '';
+    btnDel.textContent = '🗑️ Excluir registro';
+    btnDel.classList.remove('confirmar');
+    _deleteConfirmando = false;
+  } else {
+    btnDel.style.display = 'none';
+    _deleteConfirmando = false;
+  }
+
+  atualizarModalProxima();
+  $('modal-data').addEventListener('change', atualizarModalProxima);
+  $('modal-overlay').classList.add('open');
+
+  // Histórico de execuções (assíncrono, não bloqueia a abertura)
+  carregarHistoricoModal(eqId, periodoKey);
+}
+
+function atualizarModalProxima() {
+  if (!_modalContext) return;
+  const periodo = PERIODOS.find(p => p.key === _modalContext.periodoKey);
+  const data    = $('modal-data').value;
+  if (!data || !periodo) { $('modal-proxima-info').style.display = 'none'; return; }
+  $('modal-proxima-dt').textContent = fmtBR(addDiasUteis(data, periodo.duCiclo));
+  $('modal-proxima-info').style.display = '';
+}
+
+function fecharModal() {
+  $('modal-overlay').classList.remove('open');
+  _modalContext = null;
+  _deleteConfirmando = false;
+}
+
+let _deleteConfirmando = false;
+
+async function excluirRegistro() {
+  if (!_modalContext) return;
+  const { eqId, periodoKey, eqTag, periodoLabel } = _modalContext;
+
+  // Primeiro clique: pede confirmação
+  if (!_deleteConfirmando) {
+    _deleteConfirmando = true;
+    const btn = $('btn-modal-delete');
+    btn.textContent = '⚠️ Confirmar exclusão?';
+    btn.classList.add('confirmar');
+    return;
+  }
+
+  // Segundo clique: executa exclusão
+  const { error } = await db
+    .from('programacao_pmoc')
+    .delete()
+    .eq('equipamento_id', eqId)
+    .eq('periodo', periodoKey);
+
+  if (error) { toast('❌ Erro ao excluir: ' + error.message, true); return; }
+
+  // Remove do estado local
+  if (_programacoes[eqId]) {
+    delete _programacoes[eqId][periodoKey];
+    // Se não sobrou nenhum período, remove o equipamento do mapa
+    if (!Object.keys(_programacoes[eqId]).length) delete _programacoes[eqId];
+  }
+
+  fecharModal();
+  renderTabela();
+  toast(`🗑️ Registro ${periodoLabel} de ${eqTag} excluído.`);
+}
+
+async function salvarRegistro() {
+  if (!_modalContext) return;
+  const { eqId, periodoKey } = _modalContext;
+  const data    = $('modal-data').value;
+  const tecnico = $('modal-tecnico').value.trim();
+  const obs     = $('modal-obs').value.trim();
+
+  if (!data) { toast('⚠️ Informe a data de execução.', true); return; }
+
+  const { error } = await db
+    .from('programacao_pmoc')
+    .upsert({
+      equipamento_id: eqId,
+      periodo:        periodoKey,
+      ultima_data:    data,
+      tecnico:        tecnico || null,
+      observacao:     obs     || null,
+      atualizado_em:  new Date().toISOString(),
+    }, { onConflict: 'equipamento_id,periodo' });
+
+  if (error) { toast('❌ Erro: ' + error.message, true); return; }
+
+  // Alimenta o histórico de execuções (origem real). Não bloqueia o fluxo se
+  // a tabela historico_manutencoes ainda não existir (migração pendente).
+  try {
+    const { error: errHist } = await db.from('historico_manutencoes').upsert({
+      equipamento_id: eqId,
+      periodo:        periodoKey,
+      data_execucao:  data,
+      tecnico:        tecnico || null,
+      observacao:     obs     || null,
+      origem:         'real',
+    }, { onConflict: 'equipamento_id,periodo,data_execucao', ignoreDuplicates: true });
+    if (errHist) console.warn('Histórico não gravado:', errHist.message);
+  } catch (e) { console.warn('Histórico não gravado:', e); }
+
+  if (!_programacoes[eqId]) _programacoes[eqId] = {};
+  // Ao salvar manualmente, fonte passa a ser 'manual'
+  _programacoes[eqId][periodoKey] = { data, tecnico, obs, fonte: 'manual' };
+
+  fecharModal();
+  renderTabela();
+  toast('✅ Registro salvo com sucesso!');
+}
+
+// ── Histórico no modal de registro ────────────────────────────────────────
+async function carregarHistoricoModal(eqId, periodoKey) {
+  const wrap = $('modal-hist-wrap');
+  const list = $('modal-hist-list');
+  wrap.style.display = 'none';
+  list.innerHTML = '';
+  try {
+    const { data: hist, error } = await db
+      .from('historico_manutencoes')
+      .select('data_execucao, tecnico, origem')
+      .eq('equipamento_id', eqId)
+      .eq('periodo', periodoKey)
+      .order('data_execucao', { ascending: false })
+      .limit(30);
+    if (error || !hist || !hist.length) return;
+    // Garante que o modal ainda está no mesmo contexto (fetch assíncrono)
+    if (!_modalContext || _modalContext.eqId !== eqId || _modalContext.periodoKey !== periodoKey) return;
+    list.innerHTML = hist.map(h => `
+      <div class="hist-item">
+        <span>${fmtBR(h.data_execucao)}</span>
+        <span class="hist-tec">${esc(h.tecnico || '')}</span>
+        <span class="hist-badge ${h.origem === 'real' ? 'real' : 'estimada'}">${h.origem === 'real' ? '✓ Real' : '≈ Estimada'}</span>
+      </div>`).join('');
+    wrap.style.display = '';
+  } catch (e) { /* tabela ausente — segue sem histórico */ }
+}
+
+// ── Retroativas & Projeção ────────────────────────────────────────────────
+let _retroPlano = null;
+
+// Retrocede N dias úteis a partir de uma data ISO
+function subDiasUteis(dateStr, du) {
+  const d = new Date(dateStr + 'T00:00:00');
+  let count = 0;
+  while (count < du) {
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+// Datas retroativas estimadas: recua ciclo a ciclo até a data-limite
+function gerarRetroativas(refData, duCiclo, desdeData) {
+  const datas = [];
+  let d = refData, guard = 0;
+  while (guard++ < 400) {
+    d = subDiasUteis(d, duCiclo);
+    if (d < desdeData) break;
+    datas.push(d);
+  }
+  return datas.reverse();
+}
+
+// Projeções futuras: avança ciclo a ciclo até a data-limite
+function gerarFuturas(refData, duCiclo, ateData) {
+  const datas = [];
+  let d = refData, guard = 0;
+  while (guard++ < 400) {
+    d = addDiasUteis(d, duCiclo);
+    if (d > ateData) break;
+    datas.push(d);
+  }
+  return datas;
+}
+
+// Lista com os filtros de busca/categoria/bloco aplicados (sem filtro de status)
+function obterListaFiltrada() {
+  const busca = ($('f-busca')?.value || '').toLowerCase();
+  const cat   = $('f-cat')?.value   || '';
+  const bloco = ($('f-bloco')?.value || '').toLowerCase();
+  return _equipamentos.filter(eq => {
+    if (busca && !eq.tag.toLowerCase().includes(busca) && !(eq.produto||'').toLowerCase().includes(busca)) return false;
+    if (cat   && eq.categoria !== cat) return false;
+    if (bloco && !(eq.bloco||'').toLowerCase().includes(bloco)) return false;
+    return true;
+  });
+}
+
+function abrirModalRetro() {
+  const filtrados = obterListaFiltrada();
+  const sel = $('retro-escopo');
+  sel.innerHTML =
+    `<option value="__filtrados__">📋 Todos os equipamentos filtrados (${filtrados.length})</option>` +
+    filtrados.map(eq =>
+      `<option value="${eq.id}">${esc(eq.tag)} — ${esc(eq.produto || '')}</option>`).join('');
+
+  const ano = new Date().getFullYear();
+  $('retro-data').value  = hojeStr();
+  $('retro-desde').value = `${ano - 1}-01-01`;
+  $('retro-ate').value   = `${ano}-12-31`;
+  $('retro-tecnico').value = '';
+  $('retro-resumo').style.display = 'none';
+  $('retro-preview-wrap').style.display = 'none';
+  $('retro-preview-tbody').innerHTML = '';
+  _retroPlano = null;
+  $('retro-overlay').classList.add('open');
+}
+
+function fecharModalRetro() {
+  $('retro-overlay').classList.remove('open');
+  _retroPlano = null;
+}
+
+function retroPreview() {
+  const escopo  = $('retro-escopo').value;
+  const freq    = $('retro-freq').value;
+  const ref     = $('retro-data').value;
+  const desde   = $('retro-desde').value;
+  const ate     = $('retro-ate').value;
+  const tecnico = $('retro-tecnico').value.trim();
+
+  if (!ref)   { toast('⚠️ Informe a data da manutenção deste mês.', true); return; }
+  if (!desde) { toast('⚠️ Informe a data-limite das retroativas.', true); return; }
+  if (desde >= ref) { toast('⚠️ A data-limite retroativa deve ser anterior à referência.', true); return; }
+
+  const eqs = escopo === '__filtrados__'
+    ? obterListaFiltrada()
+    : _equipamentos.filter(e => e.id === escopo);
+
+  if (!eqs.length) { toast('⚠️ Nenhum equipamento no escopo selecionado.', true); return; }
+
+  const keys = FREQ_PARA_KEY[freq] || ['mensal'];
+  const porPeriodo = keys.map(k => {
+    const p = PERIODOS.find(pp => pp.key === k);
+    return {
+      key: k, label: p.label, duCiclo: p.duCiclo,
+      retro:   gerarRetroativas(ref, p.duCiclo, desde),
+      futuras: ate ? gerarFuturas(ref, p.duCiclo, ate) : [],
+    };
+  });
+
+  _retroPlano = { eqs, freq, ref, tecnico, porPeriodo };
+
+  const totalHist = eqs.length * porPeriodo.reduce((s, pp) => s + pp.retro.length + 1, 0);
+  $('retro-resumo').innerHTML =
+    `${eqs.length} equipamento(s) × frequência <strong>${freq}</strong> → ` +
+    `<strong>${totalHist}</strong> registros de histórico (estimadas + referência).`;
+  $('retro-resumo').style.display = '';
+
+  const fmtLista = (arr) => arr.length
+    ? `<div class="retro-datas">${arr.map(fmtBR).join(', ')}</div><span style="font-size:10px;color:var(--gray-400);">(${arr.length} data${arr.length > 1 ? 's' : ''})</span>`
+    : '<span style="font-size:10.5px;color:var(--gray-400);">—</span>';
+
+  $('retro-preview-tbody').innerHTML = porPeriodo.map(pp => `
+    <tr>
+      <td><strong>${pp.label}</strong></td>
+      <td>${pp.duCiclo}</td>
+      <td><span class="retro-pill-est">≈ Estimadas</span>${fmtLista(pp.retro)}</td>
+      <td><span class="retro-pill-real">✓ Real</span><div class="retro-datas">${fmtBR(_retroPlano.ref)}</div></td>
+      <td><span class="retro-pill-fut">➜ Projeção</span>${fmtLista(pp.futuras)}</td>
+    </tr>`).join('');
+  $('retro-preview-wrap').style.display = '';
+}
+
+async function retroSalvar() {
+  if (!_retroPlano) { toast('⚠️ Clique em Pré-visualizar antes de salvar.', true); return; }
+  const { eqs, ref, tecnico, porPeriodo } = _retroPlano;
+
+  // Monta linhas do histórico: retroativas estimadas + referência real
+  const rows = [];
+  eqs.forEach(eq => {
+    porPeriodo.forEach(pp => {
+      pp.retro.forEach(dt => rows.push({
+        equipamento_id: eq.id,
+        periodo:        pp.key,
+        data_execucao:  dt,
+        tecnico:        tecnico || null,
+        observacao:     `Data estimada retroativamente (referência ${fmtBR(ref)})`,
+        origem:         'estimada',
+      }));
+      rows.push({
+        equipamento_id: eq.id,
+        periodo:        pp.key,
+        data_execucao:  ref,
+        tecnico:        tecnico || null,
+        observacao:     null,
+        origem:         'real',
+      });
+    });
+  });
+
+  const btn = $('btn-retro-salvar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvando...';
+  const restaurarBtn = () => { btn.disabled = false; btn.textContent = '💾 Salvar registros'; };
+
+  // 1. Histórico em lotes de 500 (duplicatas ignoradas pela unique constraint)
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await db
+      .from('historico_manutencoes')
+      .upsert(rows.slice(i, i + 500), { onConflict: 'equipamento_id,periodo,data_execucao', ignoreDuplicates: true });
+    if (error) {
+      const dica = /historico_manutencoes/.test(error.message)
+        ? ' Execute a migração SQL (migration_historico_manutencoes.sql) no Supabase.' : '';
+      toast('❌ Erro ao salvar histórico: ' + error.message + dica, true);
+      restaurarBtn();
+      return;
+    }
+  }
+
+  // 2. programacao_pmoc — a referência vira a "última data" de cada periodicidade
+  const progRows = [];
+  eqs.forEach(eq => porPeriodo.forEach(pp => progRows.push({
+    equipamento_id: eq.id,
+    periodo:        pp.key,
+    ultima_data:    ref,
+    tecnico:        tecnico || null,
+    observacao:     'Registro em lote (Retroativas & Projeção)',
+    atualizado_em:  new Date().toISOString(),
+  })));
+  for (let i = 0; i < progRows.length; i += 500) {
+    const { error } = await db
+      .from('programacao_pmoc')
+      .upsert(progRows.slice(i, i + 500), { onConflict: 'equipamento_id,periodo' });
+    if (error) {
+      toast('❌ Histórico salvo, mas falhou ao atualizar programação: ' + error.message, true);
+      restaurarBtn();
+      return;
+    }
+  }
+
+  // 3. Atualiza estado local
+  eqs.forEach(eq => {
+    if (!_programacoes[eq.id]) _programacoes[eq.id] = {};
+    porPeriodo.forEach(pp => {
+      _programacoes[eq.id][pp.key] = { data: ref, tecnico: tecnico || '', obs: '', fonte: 'manual' };
+    });
+  });
+
+  restaurarBtn();
+  fecharModalRetro();
+  renderTabela();
+  toast(`✅ ${rows.length} registros de histórico salvos para ${eqs.length} equipamento(s).`);
+}
+
+function retroExportarXLS() {
+  if (!_retroPlano) { toast('⚠️ Clique em Pré-visualizar antes de exportar.', true); return; }
+  const { eqs, freq, ref, porPeriodo } = _retroPlano;
+
+  const linhas = [['TAG', 'Produto', 'Local', 'Periodicidade', 'Data', 'Tipo']];
+  eqs.forEach(eq => {
+    const local = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ');
+    porPeriodo.forEach(pp => {
+      pp.retro.forEach(dt   => linhas.push([eq.tag, eq.produto || '', local, pp.label, fmtBR(dt),  'Estimada (retroativa)']));
+      linhas.push([eq.tag, eq.produto || '', local, pp.label, fmtBR(ref), 'Referência (real)']);
+      pp.futuras.forEach(dt => linhas.push([eq.tag, eq.produto || '', local, pp.label, fmtBR(dt),  'Projeção futura']));
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(linhas);
+  ws['!cols'] = [{wch:14},{wch:24},{wch:30},{wch:12},{wch:12},{wch:22}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cronograma');
+  XLSX.writeFile(wb, `cronograma_manutencoes_${freq.toLowerCase()}_${hojeStr()}.xlsx`);
+  toast('📊 Cronograma exportado.');
+}
+
+// ── Carrega equipamentos + fichas PMOC + programações manuais ─────────────
+async function carregarProgramacao() {
+  $('prog-loading').style.display = '';
+  $('prog-table').style.display   = 'none';
+  $('prog-empty').style.display   = 'none';
+
+  // 1. Equipamentos
+  const { data: eqs, error: errEq } = await fetchAll(() => db
+    .from('equipamentos')
+    .select('id, tag, produto, marca, categoria, bloco, setor, sala, criticidade')
+    .order('tag', { ascending: true }));
+
+  if (errEq) {
+    $('prog-loading').textContent = '❌ Erro ao carregar equipamentos: ' + errEq.message;
+    return;
+  }
+  _equipamentos = eqs || [];
+
+  const eqIds = _equipamentos.map(e => e.id);
+  _programacoes = {};
+
+  if (!eqIds.length) {
+    $('prog-loading').style.display = 'none';
+    renderTabela();
+    return;
+  }
+
+  // 2. Fichas PMOC — pega a mais recente por equipamento+frequência
+  //    Junta meta_pmoc (JSONB) para ler data_inspecao e frequencia
+  const { data: fichas } = await fetchAllIn(() => db
+    .from('fichas_pmoc')
+    .select('id, equipamento_id, tecnico_nome, created_at, meta_pmoc, observacoes')
+    .order('created_at', { ascending: false }), 'equipamento_id', eqIds);
+
+  // Para cada equipamento, mapear a ficha mais recente por frequência
+  // e preencher as periodicidades correspondentes
+  const fichasPorEq = {}; // { eqId: { mensal: fichaObj, ... } }
+  (fichas || []).forEach(f => {
+    // Lê frequência via meta_pmoc (JSONB) ou fallback regex (legado)
+    let freq = 'Mensal';
+    let dataInsp = f.created_at ? f.created_at.split('T')[0] : null;
+
+    if (f.meta_pmoc && Object.keys(f.meta_pmoc).length > 0) {
+      freq     = f.meta_pmoc.frequencia   || 'Mensal';
+      dataInsp = f.meta_pmoc.data_inspecao || dataInsp;
+    } else {
+      const obs = f.observacoes || '';
+      const mFreq = obs.match(/\[Frequencia:\s*([^\]]+)\]/);
+      const mData = obs.match(/\[DataInspecao:\s*([^\]]+)\]/);
+      if (mFreq) freq     = mFreq[1];
+      if (mData) dataInsp = mData[1];
+    }
+
+    const keysAfetar = FREQ_PARA_KEY[freq] || ['mensal'];
+    if (!fichasPorEq[f.equipamento_id]) fichasPorEq[f.equipamento_id] = {};
+
+    keysAfetar.forEach(k => {
+      // Só preenche se ainda não tiver (a query já veio ordenada desc, então a 1ª é a mais recente)
+      if (!fichasPorEq[f.equipamento_id][k]) {
+        fichasPorEq[f.equipamento_id][k] = {
+          data:    dataInsp,
+          tecnico: f.tecnico_nome || '',
+          obs:     '',
+          fonte:   'pmoc',
+        };
+      }
+    });
+  });
+
+  // Aplica fichas como base inicial
+  Object.entries(fichasPorEq).forEach(([eqId, periodos]) => {
+    _programacoes[eqId] = { ...periodos };
+  });
+
+  // 3. Registros manuais da tabela programacao_pmoc — sobrescrevem fichas PMOC
+  const { data: progs } = await fetchAllIn(() => db
+    .from('programacao_pmoc')
+    .select('equipamento_id, periodo, ultima_data, tecnico, observacao'), 'equipamento_id', eqIds);
+
+  (progs || []).forEach(r => {
+    if (!_programacoes[r.equipamento_id]) _programacoes[r.equipamento_id] = {};
+    _programacoes[r.equipamento_id][r.periodo] = {
+      data:    r.ultima_data,
+      tecnico: r.tecnico   || '',
+      obs:     r.observacao || '',
+      fonte:   'manual',
+    };
+  });
+
+  // KPI fichas
+  $('kpi-fichas').textContent = (fichas || []).length;
+
+  $('prog-loading').style.display = 'none';
+  renderTabela();
+}
+
+// ── Exportar XLS ──────────────────────────────────────────────────────────
+function exportarXLS() {
+  const busca   = ($('f-busca')?.value  || '').toLowerCase();
+  const cat     = $('f-cat')?.value    || '';
+  const bloco   = ($('f-bloco')?.value  || '').toLowerCase();
+  const fStatus = $('f-status')?.value || '';
+
+  const lista = _equipamentos.filter(eq => {
+    if (busca && !eq.tag.toLowerCase().includes(busca) && !(eq.produto||'').toLowerCase().includes(busca)) return false;
+    if (cat   && eq.categoria !== cat) return false;
+    if (bloco && !(eq.bloco||'').toLowerCase().includes(bloco)) return false;
+    if (fStatus) {
+      const temStatus = PERIODOS.some(p => {
+        const prog = (_programacoes[eq.id] || {})[p.key];
+        const { status } = calcStatus(prog?.data, p.duCiclo, p.duAlerta);
+        return status === fStatus;
+      });
+      if (!temStatus) return false;
+    }
+    return true;
+  });
+
+  if (!lista.length) { toast('⚠️ Nenhum equipamento para exportar.', true); return; }
+
+  const LABELS_STATUS = { ok: 'Em Dia', warn: 'Alerta', late: 'Vencido', none: 'Sem Registro' };
+
+  // Aba 1: Programação
+  const linhas = [];
+  lista.forEach(eq => {
+    const local = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ');
+    const linha = {
+      'TAG':              eq.tag       || '',
+      'Produto / Modelo': eq.produto   || '',
+      'Categoria':        eq.categoria || '',
+      'Bloco':            eq.bloco     || '',
+      'Setor':            eq.setor     || '',
+      'Sala':             eq.sala      || '',
+    };
+    PERIODOS.forEach(p => {
+      const prog = (_programacoes[eq.id] || {})[p.key];
+      const { status, proxima } = calcStatus(prog?.data, p.duCiclo, p.duAlerta);
+      linha[`${p.label} — Última`]    = prog?.data ? fmtBR(prog.data) : '—';
+      linha[`${p.label} — Próxima`]   = proxima    ? fmtBR(proxima)   : '—';
+      linha[`${p.label} — Status`]    = LABELS_STATUS[status] || '—';
+      linha[`${p.label} — Fonte`]     = prog?.fonte === 'pmoc' ? 'Ficha PMOC' : prog?.fonte === 'manual' ? 'Manual' : '—';
+      linha[`${p.label} — Técnico`]   = prog?.tecnico || '—';
+    });
+    linhas.push(linha);
+  });
+
+  const ws1 = XLSX.utils.json_to_sheet(linhas);
+  ws1['!cols'] = [
+    {wch:14},{wch:24},{wch:10},{wch:20},{wch:18},{wch:16},
+    // 4 períodos × 5 colunas
+    ...Array(20).fill({wch:18}),
+  ];
+
+  // Aba 2: Resumo de status
+  const contadores = { ok:0, warn:0, late:0, none:0 };
+  lista.forEach(eq => {
+    PERIODOS.forEach(p => {
+      const prog = (_programacoes[eq.id] || {})[p.key];
+      const { status } = calcStatus(prog?.data, p.duCiclo, p.duAlerta);
+      contadores[status]++;
+    });
+  });
+  const resumo = [
+    ['Status', 'Quantidade', '% do Total'],
+    ['Em Dia',       contadores.ok,   0],
+    ['Alerta',       contadores.warn, 0],
+    ['Vencido',      contadores.late, 0],
+    ['Sem Registro', contadores.none, 0],
+    ['TOTAL', 0],
+    [],
+    ['Exportado em', new Date().toLocaleString('pt-BR')],
+    ['Equipamentos', lista.length],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(resumo);
+  const total = contadores.ok + contadores.warn + contadores.late + contadores.none;
+  ws2['C2'] = { t:'n', f:`B2/B6`, z:'0.0%' };
+  ws2['C3'] = { t:'n', f:`B3/B6`, z:'0.0%' };
+  ws2['C4'] = { t:'n', f:`B4/B6`, z:'0.0%' };
+  ws2['C5'] = { t:'n', f:`B5/B6`, z:'0.0%' };
+  ws2['B6'] = { t:'n', f:`SUM(B2:B5)` };
+  ws2['!cols'] = [{wch:18},{wch:14},{wch:14}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, 'Programação PMOC');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Resumo');
+  const hoje = hojeStr();
+  XLSX.writeFile(wb, `Univag_ProgramacaoPMOC_${hoje}.xlsx`);
+  toast('📊 XLS exportado com sucesso!');
+}
+
+// ── Impressão via popup (mesma técnica do app.js) — não usa window.print() direto ──
+function imprimirProgramacao() {
+  const busca   = ($('f-busca')?.value  || '').toLowerCase();
+  const cat     = $('f-cat')?.value    || '';
+  const bloco   = ($('f-bloco')?.value  || '').toLowerCase();
+
+  const lista = _equipamentos.filter(eq => {
+    if (busca && !eq.tag.toLowerCase().includes(busca) && !(eq.produto||'').toLowerCase().includes(busca)) return false;
+    if (cat   && eq.categoria !== cat) return false;
+    if (bloco && !(eq.bloco||'').toLowerCase().includes(bloco)) return false;
+    return true;
+  });
+
+  if (!lista.length) { toast('⚠️ Nenhum equipamento para imprimir.', true); return; }
+
+  const LABELS_STATUS = { ok:'Em Dia', warn:'Alerta', late:'Vencido', none:'Sem Registro' };
+  const CORES = { ok:'#d1fae5;color:#065f46', warn:'#fef3c7;color:#92400e', late:'#fee2e2;color:#991b1b', none:'#f1f5f9;color:#718096' };
+
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+  const linhas = lista.map(eq => {
+    const local = [eq.bloco, eq.setor, eq.sala].filter(Boolean).join(' › ');
+    const cells = PERIODOS.map(p => {
+      const prog = (_programacoes[eq.id] || {})[p.key];
+      const { status, proxima } = calcStatus(prog?.data, p.duCiclo, p.duAlerta);
+      const cor = CORES[status];
+      const fonteStr = prog?.fonte === 'pmoc' ? '<br><small style="color:#059669">📋 Ficha PMOC</small>' : prog?.fonte === 'manual' ? '<br><small style="color:#718096">✏️ Manual</small>' : '';
+      return `<td style="text-align:center;padding:6px 8px;font-size:11px;background:${cor};">
+        <strong>${LABELS_STATUS[status]}</strong>
+        ${prog?.data ? `<br><small>Últ: ${fmtBR(prog.data)}</small>` : ''}
+        ${proxima ? `<br><small>Próx: ${fmtBR(proxima)}</small>` : ''}
+        ${fonteStr}
+      </td>`;
+    }).join('');
+    return `<tr>
+      <td style="padding:6px 10px;font-size:12px;font-weight:700;color:#1e3a5f;border:1px solid #e2e8f0;">${esc(eq.tag)}<br><span style="font-weight:400;font-size:11px;color:#718096;">${esc(eq.produto||'')} ${local ? '— '+esc(local) : ''}</span></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const html = `
+    <div style="font-family:'Inter',Arial,sans-serif;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1e3a5f;padding-bottom:10px;margin-bottom:16px;">
+        <div>
+          <h2 style="margin:0;font-size:16px;color:#1e3a5f;">Programação de Manutenções PMOC</h2>
+          <p style="margin:0;font-size:11px;color:#718096;">Univag Centro Universitário — Gerado em ${dataHoje}</p>
+        </div>
+        <div style="font-size:11px;color:#718096;text-align:right;">
+          Equipamentos: <strong>${lista.length}</strong><br>
+          📋 = Ficha PMOC &nbsp; ✏️ = Registro Manual
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr>
+            <th style="background:#1e3a5f;color:#fff;padding:8px 10px;text-align:left;border:1px solid rgba(255,255,255,.2);">Equipamento</th>
+            <th style="background:#1e3a5f;color:#fff;padding:8px;text-align:center;border:1px solid rgba(255,255,255,.2);">🔧 Mensal<br><small style="font-weight:400;opacity:.8;">22 DU</small></th>
+            <th style="background:#1e3a5f;color:#fff;padding:8px;text-align:center;border:1px solid rgba(255,255,255,.2);">📅 Trimestral<br><small style="font-weight:400;opacity:.8;">65 DU</small></th>
+            <th style="background:#1e3a5f;color:#fff;padding:8px;text-align:center;border:1px solid rgba(255,255,255,.2);">📆 Semestral<br><small style="font-weight:400;opacity:.8;">130 DU</small></th>
+            <th style="background:#1e3a5f;color:#fff;padding:8px;text-align:center;border:1px solid rgba(255,255,255,.2);">📋 Anual<br><small style="font-weight:400;opacity:.8;">261 DU</small></th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <p style="font-size:10px;color:#a0aec0;margin-top:14px;">DU = Dias Úteis (segunda a sexta-feira). Documento gerado automaticamente pelo sistema Concredur.</p>
+    </div>`;
+
+  const win = window.open('', '_blank', 'width=1000,height=750');
+  if (!win) { alert('Permita pop-ups para imprimir.'); return; }
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Programação PMOC — Univag</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    @page{margin:12mm;size:A4 landscape}
+    body{font-family:'Inter',Arial,sans-serif;background:#fff;color:#1a202c;}
+    table td,table th{border:1px solid #e2e8f0;}
+    </style></head>
+    <body>${html}
+    <script>window.addEventListener('load',function(){setTimeout(function(){window.print();window.addEventListener('afterprint',function(){window.close();});},500);});<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+// ── Utilitários DOM ───────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+let _toastTimer = null;
+function toast(msg, err = false) {
+  const el = $('prog-toast');
+  el.textContent = msg;
+  el.style.background = err ? '#dc2626' : '#1e3a5f';
+  el.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Programação Anual ─────────────────────────────────────────────────────
+
+// Estado da configuração anual: { eqId: { freq, tecnico } }
+let _configAnual = {};
+// Cache de configuração salva no Supabase
+let _configAnualSalva = {};
+
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+// Retorna o 4º dia útil do ano informado
+function quartoDiaUtilDoAno(ano) {
+  const d = new Date(ano, 0, 1); // 1º Jan
+  let du = 0;
+  while (true) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) {
+      du++;
+      if (du === 4) return d.toISOString().split('T')[0];
+    }
+    d.setDate(d.getDate() + 1);
+  }
+}
+
+// Gera as datas de manutenção do ano para uma frequência a partir de uma data de início
+// Retorna array de { mes (0-11), data (ISO), tipo ('M'|'T'|'S'|'A') }
+function gerarDatasAno(dataInicio, freq, ano) {
+  const resultado = [];
+  const duCiclos = {
+    'Mensal':     [{ du: 22,  tipo: 'M' }],
+    'Trimestral': [{ du: 22,  tipo: 'M' }, { du: 65,  tipo: 'T' }],
+    'Semestral':  [{ du: 22,  tipo: 'M' }, { du: 65,  tipo: 'T' }, { du: 130, tipo: 'S' }],
+    'Anual':      [{ du: 22,  tipo: 'M' }, { du: 65,  tipo: 'T' }, { du: 130, tipo: 'S' }, { du: 261, tipo: 'A' }],
+  };
+
+  const ciclos = duCiclos[freq] || duCiclos['Mensal'];
+
+  ciclos.forEach(({ du, tipo }) => {
+    let cursor = dataInicio;
+    // Avança manutenções até estar dentro do ano
+    while (true) {
+      const proxima = addDiasUteis(cursor, du);
+      const anoProx = parseInt(proxima.split('-')[0]);
+      if (anoProx > ano) break;
+      if (anoProx === ano) {
+        const mes = parseInt(proxima.split('-')[1]) - 1;
+        resultado.push({ mes, data: proxima, tipo });
+      }
+      cursor = proxima;
+    }
+  });
+
+  // Agrupa por mês: { mes: { M: [...], T: [...], S: [...], A: [...] } }
+  const porMes = {};
+  for (let m = 0; m < 12; m++) porMes[m] = { M: [], T: [], S: [], A: [] };
+  resultado.forEach(({ mes, data, tipo }) => {
+    if (porMes[mes]) porMes[mes][tipo].push(data);
+  });
+
+  return porMes;
+}
+
+// Muda entre abas
+function mudarAba(aba, btn) {
+  document.querySelectorAll('.prog-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.prog-tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + aba).classList.add('active');
+
+  const tbStatus = document.getElementById('toolbar-status');
+  const tbAnual  = document.getElementById('toolbar-anual');
+  if (aba === 'anual') {
+    tbStatus.style.display = 'none';
+    tbAnual.style.display  = 'flex';
+    if (!document.getElementById('anual-ano').value) {
+      document.getElementById('anual-ano').value = new Date().getFullYear();
+      gerarProgramacaoAnual();
+    }
+  } else {
+    tbStatus.style.display = 'flex';
+    tbAnual.style.display  = 'none';
+  }
+}
+
+// Renderiza a tabela de programação anual
+function gerarProgramacaoAnual() {
+  const ano     = parseInt(document.getElementById('anual-ano').value) || new Date().getFullYear();
+  const agrupar = document.getElementById('anual-agrupar').value;
+  const catFilt = document.getElementById('anual-cat').value;
+
+  const inicio = quartoDiaUtilDoAno(ano);
+  document.getElementById('anual-inicio-txt').textContent = fmtBR(inicio);
+  document.getElementById('anual-inicio-display').style.display = '';
+
+  const tabela  = document.getElementById('anual-table');
+  const loading = document.getElementById('anual-loading');
+
+  let lista = _equipamentos.filter(eq => !catFilt || eq.categoria === catFilt);
+
+  if (!lista.length) {
+    loading.textContent = 'Nenhum equipamento encontrado.';
+    loading.style.display = '';
+    tabela.style.display = 'none';
+    return;
+  }
+
+  loading.style.display = 'none';
+  tabela.style.display = '';
+
+  // Cabeçalho
+  const thead = document.getElementById('anual-thead');
+  thead.innerHTML = `<tr>
+    <th class="th-eq">Equipamento</th>
+    <th class="th-config">Frequência</th>
+    <th class="th-config">Técnico</th>
+    ${MESES_PT.map(m => `<th class="th-mes">${m}</th>`).join('')}
+  </tr>`;
+
+  // Agrupar
+  const grupos = {};
+  lista.forEach(eq => {
+    let chave = '—';
+    if (agrupar === 'bloco')  chave = eq.bloco  || 'Sem bloco';
+    if (agrupar === 'setor')  chave = eq.setor  || 'Sem setor';
+    if (agrupar === 'nenhum') chave = '__todos__';
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(eq);
+  });
+
+  const tbody = document.getElementById('anual-tbody');
+  let html = '';
+
+  Object.entries(grupos).sort((a,b) => a[0].localeCompare(b[0])).forEach(([grupo, eqs]) => {
+    if (agrupar !== 'nenhum') {
+      html += `<tr class="anual-bloco-header"><td colspan="15">📍 ${esc(grupo)}</td></tr>`;
+    }
+
+    eqs.forEach(eq => {
+      const cfg  = _configAnual[eq.id] || {};
+      // Frequência: prioridade → config salva pelo usuário → ficha PMOC mais recente → Mensal
+      const freqPMOC = (() => {
+        const fichaEq = Object.entries(_programacoes[eq.id] || {});
+        if (fichaEq.length) {
+          // Inferir frequência pelo maior período com registro
+          const has = (k) => !!(_programacoes[eq.id]||{})[k];
+          if (has('anual'))      return 'Anual';
+          if (has('semestral'))  return 'Semestral';
+          if (has('trimestral')) return 'Trimestral';
+          return 'Mensal';
+        }
+        return 'Mensal';
+      })();
+      const freqAtual  = cfg.freq    || freqPMOC;
+      const tecAtual   = cfg.tecnico || '';
+
+      const porMes = gerarDatasAno(inicio, freqAtual, ano);
+
+      const celulas = Array.from({length:12}, (_, m) => {
+        const tipos = porMes[m];
+        const partes = [];
+        ['A','S','T','M'].forEach(tipo => {
+          if (tipos[tipo] && tipos[tipo].length > 0) {
+            tipos[tipo].forEach(dt => {
+              const [,, dd] = dt.split('-');
+              partes.push(`<span class="anual-pill ${tipo}">${tipo}<span class="anual-dt">${dd}/${(m+1).toString().padStart(2,'0')}</span></span>`);
+            });
+          }
+        });
+        if (!partes.length) return `<td class="anual-cell"><span class="anual-pill vazio">—</span></td>`;
+        return `<td class="anual-cell">${partes.join(' ')}</td>`;
+      }).join('');
+
+      html += `<tr>
+        <td class="td-eq">
+          <div class="anual-tag">${esc(eq.tag)}</div>
+          <div class="anual-sub">${esc(eq.produto||'')}${eq.produto&&(eq.bloco||eq.setor)?' — ':''}${esc(eq.bloco||eq.setor||'')}</div>
+        </td>
+        <td>
+          <select class="anual-select-freq" data-eqid="${esc(eq.id)}"
+            onchange="onFreqChange(this)">
+            ${['Mensal','Trimestral','Semestral','Anual'].map(f =>
+              `<option value="${f}"${freqAtual===f?' selected':''}>${f}</option>`
+            ).join('')}
+          </select>
+        </td>
+        <td>
+          <input type="text" class="anual-input-tec" data-eqid="${esc(eq.id)}"
+            value="${esc(tecAtual)}" placeholder="Técnico responsável"
+            onchange="onTecChange(this)">
+        </td>
+        ${celulas}
+      </tr>`;
+    });
+  });
+
+  tbody.innerHTML = html;
+}
+
+function onFreqChange(sel) {
+  const eqId = sel.dataset.eqid;
+  if (!_configAnual[eqId]) _configAnual[eqId] = {};
+  _configAnual[eqId].freq = sel.value;
+  gerarProgramacaoAnual();
+}
+
+function onTecChange(inp) {
+  const eqId = inp.dataset.eqid;
+  if (!_configAnual[eqId]) _configAnual[eqId] = {};
+  _configAnual[eqId].tecnico = inp.value.trim();
+}
+
+// Salvar configuração no Supabase (tabela programacao_pmoc_config ou localStorage como fallback)
+async function salvarConfiguracaoAnual() {
+  const ano = parseInt(document.getElementById('anual-ano').value) || new Date().getFullYear();
+  // Upsert para cada equipamento configurado
+  const registros = Object.entries(_configAnual).map(([eqId, cfg]) => ({
+    equipamento_id: eqId,
+    ano:            ano,
+    frequencia:     cfg.freq    || 'Mensal',
+    tecnico:        cfg.tecnico || null,
+    atualizado_em:  new Date().toISOString(),
+  }));
+
+  if (!registros.length) { toast('⚠️ Nenhuma configuração para salvar.', true); return; }
+
+  const { error } = await db
+    .from('programacao_pmoc_anual')
+    .upsert(registros, { onConflict: 'equipamento_id,ano' });
+
+  if (error) {
+    // Fallback: salvar no localStorage se a tabela não existir ainda
+    localStorage.setItem(`pmoc_anual_${ano}`, JSON.stringify(_configAnual));
+    toast(`✅ Configuração salva localmente (${registros.length} equipamentos).`);
+  } else {
+    toast(`✅ Configuração salva (${registros.length} equipamentos).`);
+  }
+  _configAnualSalva = JSON.parse(JSON.stringify(_configAnual));
+}
+
+// Carregar configuração salva
+async function carregarConfiguracaoAnual(ano) {
+  // Tenta Supabase primeiro
+  const { data, error } = await fetchAll(() => db
+    .from('programacao_pmoc_anual')
+    .select('equipamento_id, frequencia, tecnico')
+    .eq('ano', ano));
+
+  if (!error && data && data.length) {
+    data.forEach(r => {
+      _configAnual[r.equipamento_id] = { freq: r.frequencia, tecnico: r.tecnico || '' };
+    });
+    return;
+  }
+  // Fallback localStorage
+  try {
+    const local = localStorage.getItem(`pmoc_anual_${ano}`);
+    if (local) _configAnual = { ..._configAnual, ...JSON.parse(local) };
+  } catch(e) {}
+}
+
+// Exportar XLS Anual
+function exportarAnualXLS() {
+  const ano     = parseInt(document.getElementById('anual-ano').value) || new Date().getFullYear();
+  const catFilt = document.getElementById('anual-cat').value;
+  const inicio  = quartoDiaUtilDoAno(ano);
+  const lista   = _equipamentos.filter(eq => !catFilt || eq.categoria === catFilt);
+
+  if (!lista.length) { toast('⚠️ Nenhum equipamento para exportar.', true); return; }
+
+  const header = ['TAG', 'Produto', 'Categoria', 'Bloco', 'Setor', 'Frequência', 'Técnico',
+    ...MESES_PT];
+  const linhas = [header];
+
+  lista.forEach(eq => {
+    const cfg       = _configAnual[eq.id] || {};
+    const freqAtual = cfg.freq || 'Mensal';
+    const porMes    = gerarDatasAno(inicio, freqAtual, ano);
+    const mesesStr  = Array.from({length:12}, (_, m) => {
+      const tipos = porMes[m];
+      const partes = [];
+      ['A','S','T','M'].forEach(t => { if (tipos[t]?.length) partes.push(tipos[t].map(d => `${t}:${fmtBR(d)}`).join(', ')); });
+      return partes.join(' | ') || '—';
+    });
+    linhas.push([eq.tag, eq.produto||'', eq.categoria||'', eq.bloco||'', eq.setor||'',
+      freqAtual, cfg.tecnico||'', ...mesesStr]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(linhas);
+  ws['!cols'] = [{wch:14},{wch:22},{wch:10},{wch:18},{wch:16},{wch:12},{wch:20},
+    ...Array(12).fill({wch:22})];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `Programação ${ano}`);
+  XLSX.writeFile(wb, `Univag_ProgramacaoAnual_${ano}.xlsx`);
+  toast('📊 XLS Anual exportado!');
+}
+
+// Imprimir Anual
+function imprimirAnual() {
+  const ano     = parseInt(document.getElementById('anual-ano').value) || new Date().getFullYear();
+  const catFilt = document.getElementById('anual-cat').value;
+  const inicio  = quartoDiaUtilDoAno(ano);
+  const lista   = _equipamentos.filter(eq => !catFilt || eq.categoria === catFilt);
+  if (!lista.length) { toast('⚠️ Nenhum equipamento para imprimir.', true); return; }
+
+  const TIPO_COR = {
+    M: 'background:#dbeafe;color:#1d4ed8',
+    T: 'background:#ede9fe;color:#6d28d9',
+    S: 'background:#fce7f3;color:#9d174d',
+    A: 'background:#fef3c7;color:#92400e',
+  };
+
+  const linhas = lista.map(eq => {
+    const cfg       = _configAnual[eq.id] || {};
+    const freqAtual = cfg.freq || 'Mensal';
+    const porMes    = gerarDatasAno(inicio, freqAtual, ano);
+    const celulas   = Array.from({length:12}, (_, m) => {
+      const tipos = porMes[m];
+      const partes = [];
+      ['A','S','T','M'].forEach(tipo => {
+        if (tipos[tipo]?.length) {
+          tipos[tipo].forEach(dt => {
+            const [,,dd] = dt.split('-');
+            partes.push(`<span style="display:inline-block;padding:1px 4px;border-radius:8px;font-size:9px;font-weight:700;${TIPO_COR[tipo]}">${tipo}<br>${dd}/${(m+1).toString().padStart(2,'0')}</span>`);
+          });
+        }
+      });
+      return `<td style="text-align:center;padding:4px;font-size:10px;border:1px solid #e2e8f0;">${partes.join(' ') || '<span style="color:#94a3b8;">—</span>'}</td>`;
+    }).join('');
+
+    return `<tr>
+      <td style="padding:5px 8px;font-size:11px;font-weight:700;color:#1e3a5f;border:1px solid #e2e8f0;white-space:nowrap;">${esc(eq.tag)}<br><span style="font-weight:400;font-size:10px;color:#718096;">${esc(eq.produto||'')}</span></td>
+      <td style="padding:5px 8px;font-size:10px;border:1px solid #e2e8f0;">${freqAtual}</td>
+      <td style="padding:5px 8px;font-size:10px;border:1px solid #e2e8f0;">${esc(cfg.tecnico) || '—'}</td>
+      ${celulas}
+    </tr>`;
+  }).join('');
+
+  const html = `<div style="font-family:'Inter',Arial,sans-serif;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1e3a5f;padding-bottom:10px;margin-bottom:14px;">
+      <div>
+        <h2 style="margin:0;font-size:15px;color:#1e3a5f;">Programação Anual de Manutenções PMOC — ${ano}</h2>
+        <p style="margin:2px 0 0;font-size:10px;color:#718096;">Univag Centro Universitário — 4º dia útil: ${fmtBR(inicio)} — Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+      </div>
+      <div style="font-size:10px;color:#718096;text-align:right;">
+        Equipamentos: <strong>${lista.length}</strong><br>
+        <span style="display:inline-block;padding:1px 5px;background:#dbeafe;color:#1d4ed8;border-radius:8px;font-weight:700;">M</span> Mensal &nbsp;
+        <span style="display:inline-block;padding:1px 5px;background:#ede9fe;color:#6d28d9;border-radius:8px;font-weight:700;">T</span> Trimestral &nbsp;
+        <span style="display:inline-block;padding:1px 5px;background:#fce7f3;color:#9d174d;border-radius:8px;font-weight:700;">S</span> Semestral &nbsp;
+        <span style="display:inline-block;padding:1px 5px;background:#fef3c7;color:#92400e;border-radius:8px;font-weight:700;">A</span> Anual
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead>
+        <tr>
+          <th style="background:#1e3a5f;color:#fff;padding:6px 8px;text-align:left;border:1px solid rgba(255,255,255,.2);">Equipamento</th>
+          <th style="background:#1e3a5f;color:#fff;padding:6px 8px;text-align:center;border:1px solid rgba(255,255,255,.2);">Freq.</th>
+          <th style="background:#1e3a5f;color:#fff;padding:6px 8px;text-align:center;border:1px solid rgba(255,255,255,.2);">Técnico</th>
+          ${MESES_PT.map(m => `<th style="background:#1e3a5f;color:#fff;padding:6px 4px;text-align:center;border:1px solid rgba(255,255,255,.2);font-size:10px;">${m}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <p style="font-size:9px;color:#a0aec0;margin-top:12px;">DU = Dias Úteis (seg–sex). Início calculado no 4º dia útil do ano. Documento gerado automaticamente — Concredur/Univag.</p>
+  </div>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=800');
+  if (!win) { alert('Permita pop-ups para imprimir.'); return; }
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Programação Anual PMOC ${ano} — Univag</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    @page{margin:8mm;size:A4 landscape}
+    body{font-family:'Inter',Arial,sans-serif;background:#fff;color:#1a202c;}
+    table td,table th{border:1px solid #e2e8f0;}
+    </style></head>
+    <body>${html}
+    <script>window.addEventListener('load',function(){setTimeout(function(){window.print();window.addEventListener('afterprint',function(){window.close();});},500);});<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+// ── Auth + init ───────────────────────────────────────────────────────────
+(async () => {
+  // T2.3 — página autocontida (invariante 3): revela o conteúdo por conta própria.
+  const revelar = () => document.documentElement.classList.remove('sessao-pendente');
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) { location.href = 'index.html'; return; }
+  revelar();
+  marcarAmbienteNaoProdutivo();   // T1.1b
+  $('user-display-email').textContent = session.user.email;
+  $('btn-logout').addEventListener('click', async () => {
+    await db.auth.signOut(); location.href = 'index.html';
+  });
+  $('modal-data').value = hojeStr();
+  const anoAtual = new Date().getFullYear();
+  document.getElementById('anual-ano').value = anoAtual;
+  await carregarProgramacao();
+  // Carrega config anual do ano corrente em background
+  carregarConfiguracaoAnual(anoAtual).catch(() => {});
+})();
+</script>
+</body>
+</html>

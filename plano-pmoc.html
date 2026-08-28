@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Geração do documento Plano PMOC com validade legal — Concredur / Univag.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-univag.png" type="image/png">
+  <title>Concredur — Plano PMOC</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    .plano-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .plano-grid .full { grid-column: 1 / -1; }
+    .plano-field label { font-size: 12px; font-weight: 600; color: var(--gray-600); display: block; margin-bottom: 4px; }
+    .plano-field input, .plano-field select, .plano-field textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--gray-300);
+      border-radius: var(--radius); font-size: 13px; font-family: inherit; color: var(--gray-800);
+      background: #fff;
+    }
+    .plano-field textarea { resize: vertical; min-height: 64px; }
+    .plano-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: var(--shadow-sm); padding: 18px 20px; margin-bottom: 18px; }
+    .plano-card h3 {
+      font-size: 13px; font-weight: 700; color: var(--brand-navy); margin-bottom: 14px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--gray-200);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .plano-hint { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+    .plano-aviso {
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: var(--radius);
+      padding: 10px 14px; font-size: 12px; color: #3730a3; margin-bottom: 18px; line-height: 1.55;
+    }
+    .btn-toolbar { padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; border: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-toolbar.primary   { background: #4169e1; color: #fff; }
+    .btn-toolbar.primary:hover { background: var(--brand-navy); }
+    .btn-toolbar.success   { background: #059669; color: #fff; }
+    .btn-toolbar.success:hover { background: #047857; }
+    #plano-toast {
+      position: fixed; bottom: 28px; right: 24px; z-index: 2000;
+      background: var(--brand-navy); color: #fff; padding: 10px 18px; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    #plano-toast.show { opacity: 1; }
+    /* Destaque do campo que bloqueou a emissão (planoFocarPendencia) */
+    .pp-pendente {
+      border: 2px solid #c53030 !important;
+      background: #fff5f5 !important;
+      box-shadow: 0 0 0 3px rgba(197, 48, 48, .15) !important;
+    }
+  </style>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <img class="sidebar-logo-img" src="logo-univag.png" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+      <div class="user-logged-badge">
+        <span class="user-icon-dot">●</span>
+        <span id="user-display-email">...</span>
+      </div>
+    </div>
+    <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item active" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+    <div class="sidebar-footer">
+      <button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <h2>📘 Plano PMOC — Documento Estruturado</h2>
+      <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn-toolbar primary" onclick="salvarConfigPlano()">💾 Salvar Dados</button>
+        <button type="button" class="btn-toolbar" onclick="gerarMinutaPMOC()">👁️ Gerar Minuta (rascunho)</button>
+        <button type="button" class="btn-toolbar success" onclick="gerarDocumentoPMOC()">🖨️ Gerar Documento PMOC</button>
+      </div>
+    </div>
+
+    <div class="section-content">
+      <div class="plano-aviso">
+        Este módulo gera o <strong>Plano de Manutenção, Operação e Controle (PMOC)</strong> completo e estruturado
+        — capa, identificações, plano de atividades, cronograma anual, orientações e termo de responsabilidade —
+        conforme a <strong>Lei nº 13.589/2018</strong> e a <strong>Portaria MS nº 3.523/98</strong>.
+        Os dados preenchidos abaixo ficam salvos e são reutilizados nas próximas emissões.
+      </div>
+
+      <!-- Ressalva de criticidade — uso interno, nunca impressa no PMOC (auditoria, item S3) -->
+      <div id="plano-alerta-criticidade" class="no-print"
+           style="display:none;margin:0 0 16px;padding:12px 14px;border-left:4px solid #9b2c2c;
+                  background:#fff5f5;color:#742a2a;border-radius:6px;font-size:13px;line-height:1.55;"></div>
+
+      <!-- 1. Estabelecimento -->
+      <div class="plano-card">
+        <h3>🏛️ Identificação do Estabelecimento (Proprietário)</h3>
+        <div class="plano-grid">
+          <div class="plano-field full">
+            <label for="pp-razao">Razão Social / Nome do Estabelecimento *</label>
+            <input type="text" id="pp-razao" placeholder="Ex: Univag Centro Universitário">
+          </div>
+          <div class="plano-field">
+            <label for="pp-cnpj">CNPJ</label>
+            <input type="text" id="pp-cnpj" placeholder="00.000.000/0000-00">
+          </div>
+          <div class="plano-field">
+            <label for="pp-telefone">Telefone</label>
+            <input type="text" id="pp-telefone" placeholder="(65) 0000-0000">
+          </div>
+          <div class="plano-field full">
+            <label for="pp-endereco">Endereço Completo</label>
+            <input type="text" id="pp-endereco" placeholder="Av., nº, bairro, cidade — UF, CEP">
+          </div>
+          <div class="plano-field">
+            <label for="pp-resp-legal">Responsável Legal / Representante</label>
+            <input type="text" id="pp-resp-legal" placeholder="Nome do representante">
+          </div>
+          <div class="plano-field">
+            <label for="pp-resp-cargo">Cargo do Responsável Legal</label>
+            <input type="text" id="pp-resp-cargo" placeholder="Ex: Diretor Administrativo">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Responsável Técnico -->
+      <div class="plano-card">
+        <h3>🧑‍🔧 Responsável Técnico pela Assinatura do PMOC</h3>
+        <div class="plano-grid">
+          <div class="plano-field full">
+            <label for="pp-rt-nome">Nome Completo *</label>
+            <input type="text" id="pp-rt-nome" placeholder="Nome do responsável técnico">
+          </div>
+          <div class="plano-field">
+            <label for="pp-rt-titulo">Título Profissional</label>
+            <input type="text" id="pp-rt-titulo" placeholder="Ex: Engenheiro Mecânico / Técnico em Refrigeração">
+            <div class="plano-hint">Não incluir sufixos de ambiente (" - Teste", " - Dev"); a emissão é bloqueada se detectados.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-rt-conselho">Conselho de Classe</label>
+            <select id="pp-rt-conselho">
+              <option value="CREA">CREA</option>
+              <option value="CFT">CFT</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="plano-field">
+            <label for="pp-rt-registro">Nº de Registro no Conselho *</label>
+            <input type="text" id="pp-rt-registro" placeholder="Ex: CREA-MT 000000-D">
+          </div>
+          <div class="plano-field">
+            <label for="pp-rt-art">Nº ART / TRT</label>
+            <input type="text" id="pp-rt-art" placeholder="Anotação/Termo de Responsabilidade Técnica">
+            <div class="plano-hint">A ART/TRT vincula legalmente o profissional a este plano. Obrigatória para emissão final.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-rt-telefone">Telefone</label>
+            <input type="text" id="pp-rt-telefone" placeholder="(65) 00000-0000">
+          </div>
+          <div class="plano-field">
+            <label for="pp-rt-email">E-mail</label>
+            <input type="text" id="pp-rt-email" placeholder="email@exemplo.com">
+          </div>
+          <div class="plano-field full">
+            <label for="pp-rt-empresa">Empresa Executante da Manutenção *</label>
+            <input type="text" id="pp-rt-empresa" placeholder="Razão social / CNPJ da empresa mantenedora">
+            <div class="plano-hint">Obrigatória para emissão final — distingue o RT que assina da empresa/equipe que executa.</div>
+          </div>
+          <div class="plano-field full">
+            <label for="pp-rt-atribuicao">Atribuição Técnica Registrada (CREA/CAU/CFT)</label>
+            <input type="text" id="pp-rt-atribuicao" placeholder="Ex: Atribuição em Instalações de Climatização e Refrigeração (Resolução 218/1973, art. 10)">
+            <div class="plano-hint">Não presume habilitação apenas pelo título profissional — registre a atribuição específica do RT junto ao conselho.</div>
+          </div>
+          <div class="plano-field full">
+            <label for="pp-rt-certidao">Referência da Certidão de Atribuição (nº / link)</label>
+            <input type="text" id="pp-rt-certidao" placeholder="Nº da certidão ou link de consulta pública no CREA/CAU/CFT">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Monitoramento QAI -->
+      <div class="plano-card">
+        <h3>🌬️ Monitoramento da Qualidade do Ar Interior (QAI) — Anexo I</h3>
+        <div class="plano-hint" style="margin:-4px 0 12px;">Este bloco alimenta o <strong>Anexo I</strong> do
+        documento, que deixou de figurar no corpo do plano. O anexo integra o PMOC para todos os efeitos, mas
+        <strong>nenhum campo aqui bloqueia a emissão</strong>: o que não for preenchido é impresso como
+        “A definir”. Campos informados continuam validados — CNPJ do laboratório malformado, ou coincidente
+        com o do estabelecimento, segue impedindo a emissão (ABNT NBR 17037, 8.3).</div>
+        <div class="plano-grid">
+          <div class="plano-field full">
+            <label for="pp-qai-metodologia">Metodologia</label>
+            <textarea id="pp-qai-metodologia" placeholder="Ex: Medição de CO2/temperatura/UR/velocidade do ar com equipamento calibrado; contagem microbiológica por amostragem de ar comparando ambiente interno x externo, conforme ABNT NBR 17037."></textarea>
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-laboratorio">Laboratório Responsável</label>
+            <input type="text" id="pp-qai-laboratorio" placeholder="Razão social do laboratório acreditado">
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-qtd-amostras">Quantidade de Amostras</label>
+            <input type="text" id="pp-qai-qtd-amostras" placeholder="Ex: 2 amostras por ambiente (interno + externo)">
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-lab-cnpj" id="pp-lbl-lab-cnpj">CNPJ do Laboratório de QAI</label>
+            <input type="text" id="pp-qai-lab-cnpj" placeholder="00.000.000/0000-00">
+            <div class="plano-hint">A ABNT NBR 17037, 8.3, exige que as análises de QAI e sua responsabilidade
+            técnica sejam <strong>desvinculadas</strong> das atividades de limpeza, manutenção e comercialização
+            de produtos. O CNPJ informado não pode coincidir com o da empresa executante da manutenção.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-lab-acreditacao" id="pp-lbl-lab-acred">Acreditação do Laboratório (CGCRE/INMETRO)</label>
+            <input type="text" id="pp-qai-lab-acreditacao" placeholder="Ex: CRL 9999 — ABNT NBR ISO/IEC 17025">
+          </div>
+          <div class="plano-field full">
+            <label for="pp-qai-pontos-coleta">Pontos de Coleta</label>
+            <textarea id="pp-qai-pontos-coleta" placeholder="Ex: 1 ponto interno por setor climatizado + 1 ponto de referência externo, a favor do vento."></textarea>
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-inspecao-periodicidade">Periodicidade da Inspeção Visual (ISO 16000-40)</label>
+            <select id="pp-qai-inspecao-periodicidade">
+              <option value="mensal">Mensal</option>
+              <option value="trimestral" selected>Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+            </select>
+            <div class="plano-hint">Plano de inspeção visual do ambiente e do sistema de climatização, com
+            relatório técnico e fotográfico — ABNT NBR 17037, 6.7.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-questionario-periodicidade">Periodicidade do Questionário de Satisfação</label>
+            <select id="pp-qai-questionario-periodicidade">
+              <option value="semestral">Semestral</option>
+              <option value="anual" selected>Anual</option>
+            </select>
+            <div class="plano-hint">Avaliação de satisfação dos usuários sugerida pela ABNT NBR 16401-3.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-divulgacao-meio">Meio de Divulgação aos Ocupantes</label>
+            <input type="text" id="pp-qai-divulgacao-meio" list="pp-dl-divulgacao"
+                   placeholder="Onde os ocupantes leem os resultados da QAI?">
+            <datalist id="pp-dl-divulgacao">
+              <option value="Mural físico nas recepções dos setores climatizados"></option>
+              <option value="Mural físico nas recepções + intranet institucional"></option>
+              <option value="Intranet institucional, em área de acesso aberto aos ocupantes"></option>
+              <option value="Portal institucional e comunicado por e-mail aos ocupantes"></option>
+              <option value="Mural físico, intranet e comunicado às coordenações de curso"></option>
+            </datalist>
+            <div class="plano-hint">Obrigação expressa da ABNT NBR 17037, 8.1 e), e da Portaria MS nº 3.523/98:
+            é preciso declarar <strong>onde</strong> os ocupantes têm acesso aos procedimentos e resultados de
+            QAI. É <strong>declaração, não evidência</strong> — responde-se antes de existir qualquer laudo,
+            e por isso convém preencher desde já, ainda que o campo não bloqueie a emissão. O campo tem
+            sugestões: clique nele para ver as opções, ou escreva o meio efetivamente adotado.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-qai-divulgacao-periodicidade">Periodicidade da Divulgação</label>
+            <select id="pp-qai-divulgacao-periodicidade">
+              <option value="A cada campanha de amostragem" selected>A cada campanha de amostragem</option>
+              <option value="Semestral">Semestral</option>
+              <option value="Anual">Anual</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Parâmetros do Plano -->
+      <div class="plano-card">
+        <h3>⚙️ Parâmetros do Plano</h3>
+        <div class="plano-grid">
+          <div class="plano-field full">
+            <label for="pp-regime">Regime do Plano</label>
+            <select id="pp-regime" onchange="planoAtualizarRegime()">
+              <option value="implantacao" selected>Implantação — 1º ciclo (QAI ainda não executada)</option>
+              <option value="pleno">Regime pleno (QAI já em execução)</option>
+            </select>
+            <div class="plano-hint">Em <strong>implantação</strong>, o Anexo I acrescenta o item <strong>A.8</strong>
+            — cronograma do primeiro ciclo — declarando o compromisso, o critério de contratação e os prazos da
+            primeira campanha de QAI. A Lei 13.589/2018 e a Portaria MS 3.523/98 exigem a <em>existência do plano</em>,
+            não a execução prévia da amostragem. Em <strong>regime pleno</strong>, o item A.8 é suprimido e o anexo
+            passa a descrever a rotina semestral já vigente. Em nenhum dos dois regimes a falta de dados de QAI
+            impede a emissão do documento.</div>
+          </div>
+          <div class="plano-field" id="pp-wrap-prazo-lab">
+            <label for="pp-impl-prazo-lab">Prazo para contratação do laboratório (dias)</label>
+            <input type="number" id="pp-impl-prazo-lab" min="1" max="720" value="90">
+          </div>
+          <div class="plano-field" id="pp-wrap-prazo-campanha">
+            <label for="pp-impl-prazo-campanha">Prazo para a 1ª campanha de QAI (dias)</label>
+            <input type="number" id="pp-impl-prazo-campanha" min="1" max="720" value="180">
+          </div>
+          <div class="plano-field">
+            <label for="pp-ano">Ano de Vigência</label>
+            <input type="number" id="pp-ano" min="2020" max="2100">
+          </div>
+          <div class="plano-field">
+            <label for="pp-mes-inicio">Mês de Início do Ciclo</label>
+            <select id="pp-mes-inicio"></select>
+            <div class="plano-hint">Define os meses das rotinas trimestrais, semestrais e anuais no cronograma.</div>
+          </div>
+          <div class="plano-field">
+            <label for="pp-local-emissao">Local de Emissão</label>
+            <input type="text" id="pp-local-emissao" placeholder="Ex: Várzea Grande — MT">
+          </div>
+          <div class="plano-field">
+            <label for="pp-data-emissao">Data de Emissão</label>
+            <input type="date" id="pp-data-emissao">
+          </div>
+          <div class="plano-field full">
+            <label style="display:flex;align-items:flex-start;gap:8px;font-weight:600;">
+              <input type="checkbox" id="pp-incluir-carga" style="margin-top:3px;width:auto;">
+              <span>Incluir a tabela “Carga Instalada por Ambiente” na Seção 4</span>
+            </label>
+            <div class="plano-hint">Desmarcado por padrão. A tabela repete, agregada por sala, a capacidade
+            que a Seção 4 já apresenta ativo a ativo, e não é exigida por nenhuma das normas de referência.
+            No parque atual ela acrescenta cerca de <strong>cinco páginas</strong> ao documento. O detalhamento
+            de carga por ambiente permanece disponível na Central de Impressões.</div>
+          </div>
+          <div class="plano-field full">
+            <label style="display:flex;align-items:flex-start;gap:8px;font-weight:600;">
+              <input type="checkbox" id="pp-incluir-54" style="margin-top:3px;width:auto;">
+              <span>Incluir a seção “5.4 Adequação da Capacidade Instalada” no PMOC</span>
+            </label>
+            <div class="plano-hint">Desmarcado por padrão. A comparação entre capacidade instalada e carga
+            térmica é matéria de <strong>projeto</strong> (ABNT NBR 16401-1) e não integra o conteúdo exigido
+            para o PMOC pela Lei 13.589/2018 nem pela Portaria MS 3.523/98. O relatório permanece disponível,
+            em maior detalhe, na Central de Impressões.</div>
+          </div>
+          <div class="plano-field full">
+            <label style="display:flex;align-items:flex-start;gap:8px;font-weight:600;">
+              <input type="checkbox" id="pp-incluir-qai" style="margin-top:3px;width:auto;" checked>
+              <span>Incluir o “Anexo I — Monitoramento da Qualidade do Ar Interior (QAI)” no PMOC</span>
+            </label>
+            <div class="plano-hint"><strong>Marcado por padrão — e a recomendação técnica é mantê-lo marcado.</strong>
+            Diferentemente do POP e da tabela de carga, o conteúdo deste anexo <em>é</em> matéria normativa: a
+            Lei 13.589/2018, art. 3º, parágrafo único, remete o PMOC à ABNT NBR 17037, que fixa os parâmetros,
+            os critérios de aceitação e a periodicidade semestral do monitoramento. Ao desmarcar, o PMOC deixa
+            de conter esses elementos e passa a <strong>remeter a um Plano de Monitoramento de QAI apartado</strong>,
+            que precisa existir de fato e estar disponível à autoridade sanitária — a remissão é impressa
+            automaticamente na Seção 6, e as não conformidades de recirculação passam a apontar para esse
+            documento externo em vez do item A.4. Desmarque apenas se o plano apartado já existir.</div>
+          </div>
+          <div class="plano-field full">
+            <label style="display:flex;align-items:flex-start;gap:8px;font-weight:600;">
+              <input type="checkbox" id="pp-incluir-pop" style="margin-top:3px;width:auto;">
+              <span>Incluir o Anexo “POP-PMOC-001 — Guia de Execução” no corpo do PMOC</span>
+            </label>
+            <div class="plano-hint">Desmarcado por padrão. O Procedimento Operacional Padrão é documento do
+            <strong>sistema de gestão da manutenção</strong> e não integra o conteúdo do PMOC exigido pela
+            Lei 13.589/2018 nem pela Portaria MS 3.523/98. Com a opção desmarcada, o PMOC apenas
+            <strong>referencia o POP por código e revisão</strong>, e o guia permanece emitível em separado
+            pela Central de Impressões. Manter o anexo embutido converte 79 itens de procedimento interno em
+            obrigação auto-imposta e fiscalizável.</div>
+          </div>
+          <div class="plano-field full">
+            <label for="pp-obs">Observações Gerais (impressas na seção de orientações)</label>
+            <textarea id="pp-obs" placeholder="Particularidades da instituição, restrições de horário para execução, etc."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="plano-toast"></div>
+
+<script src="app.js"></script>
+<script>
+// =====================================================================
+//  PLANO PMOC — Documento estruturado
+//  Reutiliza do app.js: db, $, escapeHTML, LOGO_ETIQUETA,
+//  CHECKLIST_PMOC_DEFS e CHECKLIST_PERIODICIDADE_INFO (fonte única).
+// =====================================================================
+
+const PLANO_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                     'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const PLANO_MESES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+const PLANO_CAT_LABEL = {
+  AC:   'Ar Condicionado',
+  BEB:  'Bebedouro',
+  CLIM: 'Climatizador Evaporativo',
+  VEN:  'Ventilador / Exaustor',
+  OUT:  'Outros Equipamentos',
+};
+
+const PLANO_PERIODO_LABEL = {
+  mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
+};
+
+// Normaliza variações de categoria (ex: 'CLM' legado → 'CLIM')
+function planoNormCat(c) {
+  if (!c) return 'OUT';
+  if (c === 'CLM') return 'CLIM';
+  return PLANO_CAT_LABEL[c] ? c : 'OUT';
+}
+
+// ── Saneamento e validação de campos críticos (bugs #2, #3, #4, #5, #6, #15) ──
+
+// Remove sufixos de ambiente de desenvolvimento/teste (" - Teste", " - Dev", "(teste)", etc.)
+// antes de qualquer geração de documento em produção.
+function planoSanearTexto(v) {
+  if (!v) return v;
+  return v.replace(/\s*[-–—(]\s*(teste|test|dev|desenvolvimento|homolog(a[cç][aã]o)?|sandbox)\s*\)?\s*$/i, '').trim();
+}
+
+// Reduz um documento (CNPJ/CPF) aos dígitos, para comparação insensível à máscara.
+function planoSoDigitos(v) {
+  return String(v || '').replace(/\D/g, '');
+}
+
+// Detecta se algum termo de ambiente de teste/dev restou no texto (case-insensitive).
+function planoContemTermoTeste(v) {
+  if (!v) return false;
+  return /\b(teste|test|dev|homolog|sandbox)\b/i.test(v);
+}
+
+// Evita duplicar a sigla do conselho quando o nº de registro já vem prefixado
+// (ex.: conselho="CREA" + registro="CREA-MT 044726" → "CREA-MT 044726", não "CREA CREA-MT 044726").
+function planoFormatRegistro(conselho, registro) {
+  const reg = (registro || '').trim();
+  const cons = (conselho || '').trim();
+  if (!reg) return cons;
+  if (!cons) return reg;
+  const jaContemConselho = new RegExp('^' + cons.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(reg);
+  return jaContemConselho ? reg : `${cons} ${reg}`;
+}
+
+// Validação de nº de ART/TRT: exige preenchimento e rejeita sequências
+// claramente fora do padrão real (ex.: 18+ dígitos corridos sem separação).
+function planoValidarART(art) {
+  const v = (art || '').trim();
+  if (!v) return { ok: false, motivo: 'Nº de ART/TRT não informado.' };
+  const somenteDigitos = v.replace(/\D/g, '');
+  if (somenteDigitos.length > 15) {
+    return { ok: false, motivo: 'Nº de ART/TRT fora do padrão (excesso de dígitos). Confira o número junto ao CREA/CAU/CFT.' };
+  }
+  if (somenteDigitos.length < 5) {
+    return { ok: false, motivo: 'Nº de ART/TRT incompleto.' };
+  }
+  return { ok: true };
+}
+
+// Validação consolidada de todos os campos críticos antes da emissão final (item 15).
+// Retorna { ok, pendentes[], campos[] } — pendentes traz as descrições e campos os IDs
+// correspondentes, para que a emissão bloqueada leve o usuário direto ao campo faltante
+// em vez de apenas exibir a mensagem.
+function planoValidarCamposCriticos(cfg) {
+  const pendentes = [];
+  const campos = [];
+  const falta = (msg, id) => { pendentes.push(msg); if (id) campos.push(id); };
+
+  if (!cfg.razao)      falta('Razão social do estabelecimento', 'pp-razao');
+  if (!cfg.rt_nome)    falta('Nome do responsável técnico', 'pp-rt-nome');
+
+  if (!cfg.rt_titulo) {
+    falta('Título profissional do responsável técnico', 'pp-rt-titulo');
+  } else if (planoContemTermoTeste(cfg.rt_titulo)) {
+    falta('Título profissional contém termo de ambiente de teste/desenvolvimento ("' + cfg.rt_titulo + '") — corrija antes de emitir', 'pp-rt-titulo');
+  }
+
+  if (!cfg.rt_registro) falta('Nº de registro no conselho de classe', 'pp-rt-registro');
+
+  const artCheck = planoValidarART(cfg.rt_art);
+  if (!artCheck.ok) falta(artCheck.motivo, 'pp-rt-art');
+
+  if (!cfg.rt_empresa) falta('Empresa executante da manutenção', 'pp-rt-empresa');
+
+  // ── QAI: conteúdo do ANEXO I — não trava a emissão do plano ──────────
+  //
+  // DECISÃO DO RESPONSÁVEL TÉCNICO. O detalhamento da qualidade do ar interior foi
+  // transferido do corpo do plano para o ANEXO I. O anexo integra o PMOC para todos os
+  // efeitos — parâmetros, periodicidades e o item A.4 permanecem exigíveis —, mas a
+  // AUSÊNCIA dos dados operacionais da campanha (laboratório, CNPJ, acreditação, pontos
+  // de coleta, meio de divulgação) NÃO impede a emissão do documento.
+  //
+  // Fundamento: o PMOC é um PLANO. A Lei 13.589/2018 e a Portaria MS 3.523/98 exigem a
+  // sua existência e o seu conteúdo mínimo, não a execução prévia da campanha de QAI nem
+  // a contratação prévia do laboratório. Campos vazios são impressos no Anexo I como
+  // "A definir", preservando a rastreabilidade sem bloquear o ciclo de manutenção.
+  //
+  // O que PERMANECE bloqueante, em qualquer regime: dado INFORMADO e inválido. Declarar
+  // laboratório com CNPJ malformado, ou vinculado ao próprio estabelecimento, é vício pior
+  // do que declarar laboratório a contratar — a ABNT NBR 17037, 8.3, exige que as análises
+  // e a respectiva responsabilidade técnica sejam desvinculadas da manutenção.
+  const emImplantacao = cfg.regime === 'implantacao';
+
+  if (cfg.qai_lab_cnpj) {
+    if (planoSoDigitos(cfg.qai_lab_cnpj).length !== 14) {
+      falta('CNPJ do laboratório de QAI inválido — informe 14 dígitos ou deixe o campo em branco', 'pp-qai-lab-cnpj');
+    } else if (planoSoDigitos(cfg.qai_lab_cnpj) === planoSoDigitos(cfg.cnpj)) {
+      falta('CNPJ do laboratório de QAI coincide com o do estabelecimento — a NBR 17037, 8.3, exige desvinculação das análises em relação às atividades de manutenção', 'pp-qai-lab-cnpj');
+    }
+  }
+  if (emImplantacao) {
+    if (cfg.impl_prazo_lab > 720 || cfg.impl_prazo_campanha > 720) {
+      falta('Prazos de implantação da QAI limitados a 720 dias', 'pp-impl-prazo-lab');
+    } else if (cfg.impl_prazo_campanha < cfg.impl_prazo_lab) {
+      falta('O prazo da 1ª campanha de QAI não pode ser anterior ao prazo de contratação do laboratório', 'pp-impl-prazo-campanha');
+    }
+  }
+
+  if (!(cfg.mes_inicio >= 0 && cfg.mes_inicio <= 11)) falta('Mês de início do ciclo', 'pp-mes-inicio');
+  if (!(cfg.ano >= 2020 && cfg.ano <= 2100)) falta('Ano de vigência', 'pp-ano');
+
+  return { ok: pendentes.length === 0, pendentes, campos };
+}
+
+// Leva o usuário ao primeiro campo pendente: rola até ele, destaca e dá foco.
+// Emissão bloqueada sem indicar onde corrigir é beco sem saída.
+function planoFocarPendencia(campos) {
+  document.querySelectorAll('.pp-pendente').forEach(el => el.classList.remove('pp-pendente'));
+  if (!campos || !campos.length) return;
+  campos.forEach(id => { const el = $(id); if (el) el.classList.add('pp-pendente'); });
+  const primeiro = $(campos[0]);
+  if (!primeiro) return;
+  primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { try { primeiro.focus({ preventScroll: true }); } catch (e) { primeiro.focus(); } }, 350);
+}
+
+let _planoToastTimer = null;
+// Ressalva de classificação de criticidade (auditoria NBR 17037, item S3).
+// Renderizada exclusivamente na interface do gestor — nunca no PMOC emitido, para não
+// converter uma fragilidade metodológica interna em declaração oponível pela fiscalização.
+function planoAlertaCriticidade(pctMaior, faixaDominante) {
+  const host = $('plano-alerta-criticidade');
+  if (!host) return;
+  if (pctMaior === null || pctMaior === undefined) {
+    host.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
+  host.style.display = 'block';
+  host.innerHTML = `
+    <strong>⚠️ Ressalva de classificação de criticidade (uso interno).</strong>
+    ${(100 * pctMaior).toFixed(1)}% dos ativos estão classificados na faixa
+    <strong>${escapeHTML(String(faixaDominante))}</strong>. Uma variável que assume praticamente um único
+    valor em toda a população não discrimina: o plano perde critério objetivo de priorização de atendimento
+    e de dimensionamento de estoque de peças. Recomenda-se reaplicar o fluxograma de criticidade
+    (impacto da interrupção, risco à segurança, criticidade operacional e existência de reserva) ativo por
+    ativo. Distribuição de referência: 15 a 25% em Alta, 40 a 50% em Média e 30 a 40% em Baixa.
+    <br><span style="font-size:11px;opacity:.85;">Este aviso é interno e <strong>não é impresso</strong>
+    no PMOC.</span>`;
+}
+
+// Mostra os prazos de implantação apenas no regime correspondente, e sinaliza no painel
+// que a identificação do laboratório é opcional nesse estágio.
+function planoAtualizarRegime() {
+  const impl = $('pp-regime') && $('pp-regime').value === 'implantacao';
+  ['pp-wrap-prazo-lab', 'pp-wrap-prazo-campanha'].forEach(id => {
+    const el = $(id);
+    if (el) el.style.display = impl ? '' : 'none';
+  });
+  const marcar = (id, texto) => {
+    const el = $(id);
+    if (el) el.textContent = texto;
+  };
+  marcar('pp-lbl-lab-cnpj', impl ? 'CNPJ do Laboratório de QAI (opcional — 1º ciclo)'
+                                 : 'CNPJ do Laboratório de QAI (opcional)');
+  marcar('pp-lbl-lab-acred', impl ? 'Acreditação do Laboratório (opcional — 1º ciclo)'
+                                  : 'Acreditação do Laboratório (CGCRE/INMETRO — opcional)');
+}
+
+function planoToast(msg, err = false) {
+  const el = $('plano-toast');
+  el.textContent = msg;
+  el.style.background = err ? '#dc2626' : '#1e3a5f';
+  el.classList.add('show');
+  if (_planoToastTimer) clearTimeout(_planoToastTimer);
+  _planoToastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Configuração (tabela pmoc_plano_config, linha única id=1) ─────────────
+function planoColetarConfig() {
+  return {
+    razao:         $('pp-razao').value.trim(),
+    cnpj:          $('pp-cnpj').value.trim(),
+    telefone:      $('pp-telefone').value.trim(),
+    endereco:      $('pp-endereco').value.trim(),
+    resp_legal:    $('pp-resp-legal').value.trim(),
+    resp_cargo:    $('pp-resp-cargo').value.trim(),
+    rt_nome:       $('pp-rt-nome').value.trim(),
+    rt_titulo:     planoSanearTexto($('pp-rt-titulo').value.trim()),
+    rt_conselho:   $('pp-rt-conselho').value,
+    rt_registro:   $('pp-rt-registro').value.trim(),
+    rt_art:        $('pp-rt-art').value.trim(),
+    rt_telefone:   $('pp-rt-telefone').value.trim(),
+    rt_email:      $('pp-rt-email').value.trim(),
+    rt_empresa:    $('pp-rt-empresa').value.trim(),
+    rt_atribuicao: $('pp-rt-atribuicao').value.trim(),
+    rt_certidao:   $('pp-rt-certidao').value.trim(),
+    qai_metodologia:    $('pp-qai-metodologia').value.trim(),
+    qai_laboratorio:    $('pp-qai-laboratorio').value.trim(),
+    qai_qtd_amostras:   $('pp-qai-qtd-amostras').value.trim(),
+    qai_pontos_coleta:  $('pp-qai-pontos-coleta').value.trim(),
+    regime:                    $('pp-regime').value,
+    impl_prazo_lab:            parseInt($('pp-impl-prazo-lab').value, 10) || 90,
+    impl_prazo_campanha:       parseInt($('pp-impl-prazo-campanha').value, 10) || 180,
+    qai_lab_cnpj:              $('pp-qai-lab-cnpj').value.trim(),
+    qai_lab_acreditacao:       $('pp-qai-lab-acreditacao').value.trim(),
+    qai_inspecao_periodicidade:    $('pp-qai-inspecao-periodicidade').value,
+    qai_questionario_periodicidade: $('pp-qai-questionario-periodicidade').value,
+    qai_divulgacao_meio:           $('pp-qai-divulgacao-meio').value.trim(),
+    qai_divulgacao_periodicidade:  $('pp-qai-divulgacao-periodicidade').value,
+    incluir_qai:   !!$('pp-incluir-qai').checked,
+    incluir_carga: !!$('pp-incluir-carga').checked,
+    incluir_54:    !!$('pp-incluir-54').checked,
+    incluir_pop:   !!$('pp-incluir-pop').checked,
+    ano:           parseInt($('pp-ano').value, 10) || new Date().getFullYear(),
+    mes_inicio:    parseInt($('pp-mes-inicio').value, 10) || 0,
+    local_emissao: $('pp-local-emissao').value.trim(),
+    data_emissao:  $('pp-data-emissao').value || hoje(),
+    obs:           $('pp-obs').value.trim(),
+  };
+}
+
+function planoAplicarConfig(cfg) {
+  if (!cfg) return;
+  const setVal = (id, v) => { if (v !== undefined && v !== null) $(id).value = v; };
+  setVal('pp-razao', cfg.razao);           setVal('pp-cnpj', cfg.cnpj);
+  setVal('pp-telefone', cfg.telefone);     setVal('pp-endereco', cfg.endereco);
+  setVal('pp-resp-legal', cfg.resp_legal); setVal('pp-resp-cargo', cfg.resp_cargo);
+  setVal('pp-rt-nome', cfg.rt_nome);       setVal('pp-rt-titulo', cfg.rt_titulo);
+  setVal('pp-rt-conselho', cfg.rt_conselho); setVal('pp-rt-registro', cfg.rt_registro);
+  setVal('pp-rt-art', cfg.rt_art);         setVal('pp-rt-telefone', cfg.rt_telefone);
+  setVal('pp-rt-email', cfg.rt_email);     setVal('pp-rt-empresa', cfg.rt_empresa);
+  setVal('pp-rt-atribuicao', cfg.rt_atribuicao); setVal('pp-rt-certidao', cfg.rt_certidao);
+  setVal('pp-qai-metodologia', cfg.qai_metodologia); setVal('pp-qai-laboratorio', cfg.qai_laboratorio);
+  setVal('pp-qai-qtd-amostras', cfg.qai_qtd_amostras); setVal('pp-qai-pontos-coleta', cfg.qai_pontos_coleta);
+  setVal('pp-regime', cfg.regime);
+  setVal('pp-impl-prazo-lab', cfg.impl_prazo_lab);
+  setVal('pp-impl-prazo-campanha', cfg.impl_prazo_campanha);
+  setVal('pp-qai-lab-cnpj', cfg.qai_lab_cnpj);
+  setVal('pp-qai-lab-acreditacao', cfg.qai_lab_acreditacao);
+  setVal('pp-qai-inspecao-periodicidade', cfg.qai_inspecao_periodicidade);
+  setVal('pp-qai-questionario-periodicidade', cfg.qai_questionario_periodicidade);
+  setVal('pp-qai-divulgacao-meio', cfg.qai_divulgacao_meio);
+  setVal('pp-qai-divulgacao-periodicidade', cfg.qai_divulgacao_periodicidade);
+  // Configurações gravadas antes da criação deste campo não têm 'incluir_qai'.
+  // O default é INCLUIR: a ausência do dado nunca pode suprimir conteúdo normativo.
+  $('pp-incluir-qai').checked = (cfg.incluir_qai !== false);
+  if (cfg.incluir_carga !== undefined) $('pp-incluir-carga').checked = !!cfg.incluir_carga;
+  if (cfg.incluir_54  !== undefined) $('pp-incluir-54').checked  = !!cfg.incluir_54;
+  if (cfg.incluir_pop !== undefined) $('pp-incluir-pop').checked = !!cfg.incluir_pop;
+  setVal('pp-ano', cfg.ano);               setVal('pp-mes-inicio', cfg.mes_inicio);
+  setVal('pp-local-emissao', cfg.local_emissao);
+  setVal('pp-data-emissao', cfg.data_emissao);
+  setVal('pp-obs', cfg.obs);
+}
+
+async function salvarConfigPlano() {
+  const cfg = planoColetarConfig();
+  if (!cfg.razao)       { planoToast('⚠️ Informe a razão social do estabelecimento.', true); return; }
+  if (!cfg.rt_nome)     { planoToast('⚠️ Informe o nome do responsável técnico.', true); return; }
+  if (!cfg.rt_registro) { planoToast('⚠️ Informe o nº de registro no conselho de classe.', true); return; }
+
+  const { error } = await db.from('pmoc_plano_config').upsert({
+    id: 1,
+    dados: cfg,
+    atualizado_em: new Date().toISOString(),
+  });
+  if (error) {
+    const dica = /pmoc_plano_config/.test(error.message)
+      ? ' Execute a migração SQL (migration_pmoc_plano_config.sql) no Supabase.' : '';
+    planoToast('❌ Erro ao salvar: ' + error.message + dica, true);
+    return;
+  }
+  planoToast('✅ Dados do plano salvos com sucesso!');
+}
+
+async function carregarConfigPlano() {
+  try {
+    const { data, error } = await db
+      .from('pmoc_plano_config')
+      .select('dados')
+      .eq('id', 1)
+      .maybeSingle();
+    if (!error && data && data.dados) planoAplicarConfig(data.dados);
+  } catch (e) { console.warn('Config do plano não carregada:', e); }
+}
+
+// ── Blocos ────────────────────────────────────────────────────────────────
+// Carregado à parte de _planoEqs porque o cadastro de equipamentos só conhece os
+// blocos que POSSUEM ativos. Para declarar honestamente o escopo do PMOC é preciso
+// conhecer também os blocos registrados na estrutura de locais que NÃO possuem
+// nenhum ativo cadastrado — hipótese em que o documento estaria omitindo parte do
+// estabelecimento sem sinalizar (Lei nº 13.589/2018, que exige o plano para a
+// totalidade do estabelecimento, não para parte dele).
+let _planoBlocos = [];
+
+async function carregarBlocosPlano() {
+  const { data, error } = await db
+    .from('blocos')
+    .select('id, nome, instituicoes(nome), setores(id, salas(id))')
+    .order('nome', { ascending: true });
+  if (error) { _planoBlocos = []; return; }
+  _planoBlocos = (data || []).map(b => ({
+    nome: b.nome,
+    instituicao: b.instituicoes?.nome || '—',
+    setores: (b.setores || []).length,
+    salas: (b.setores || []).reduce((acc, st) => acc + ((st.salas || []).length), 0),
+  }));
+}
+
+// ── Salas ─────────────────────────────────────────────────────────────────
+// Necessário para os itens 5.3 (renovação de ar exterior em setores assistenciais)
+// e 5.4 (adequação da capacidade instalada), introduzidos pela auditoria 2026.
+// O cadastro de equipamentos traz apenas o nome denormalizado da sala; a carga
+// térmica calculada, a área e a ocupação prevista só existem na tabela `salas`.
+let _planoSalas = [];
+
+async function carregarSalasPlano() {
+  const { data, error } = await db
+    .from('salas')
+    .select('id, nome, area_m2, pessoas_previstas, carga_termica_btu, tipo_ambiente, exige_exaustao, setores(nome, blocos(nome))')
+    .order('nome', { ascending: true });
+  if (error) { _planoSalas = []; return; }
+  _planoSalas = (data || []).map(s => ({
+    id:      s.id,
+    nome:    s.nome,
+    area:    parseFloat(s.area_m2) || 0,
+    pessoas: parseInt(s.pessoas_previstas, 10) || 0,
+    carga:   parseFloat(s.carga_termica_btu) || 0,
+    setor:   s.setores?.nome || '—',
+    bloco:   s.setores?.blocos?.nome || '—',
+    // Campos do cadastro de Locais que governam a exigência de exaustão. Consumidos
+    // pelo item 5.1 via obterExigenciaExaustaoSala()/analisarConformidadeExaustao()
+    // (app.js) — fonte única da regra, compartilhada com o Dashboard e a Central de
+    // Impressões. Sem eles o memorial voltaria a inferir a exigência apenas pela
+    // presença de ativos VEN, acusando não conformidade em setores que a dispensam.
+    tipo_ambiente:   s.tipo_ambiente || null,
+    exige_exaustao:  s.exige_exaustao || null,
+  }));
+}
+
+// ── Heurística de fallback para salas SEM Tipo de Ambiente cadastrado ─────────────
+// Só é aplicada quando salaTipoEhAssistencial() devolve null. O cadastro sempre prevalece.
+//
+// AUDITORIA 2026 — a expressão única anterior era testada contra "setor + sala" e
+// produzia falsos positivos sistemáticos, porque o nome do SETOR contamina todas as
+// salas que ele contém. Em clínica-escola, "CLINICA INTEGRADA › ODONTOLOGIA" fazia com
+// que a copa, o depósito e a sala de reunião do setor fossem classificados como
+// ambientes assistenciais. O termo genérico "laborat[óo]ri" agravava o problema:
+// laboratório de informática, de prótese e de vida diária eram tratados como
+// laboratório de análises clínicas.
+//
+// A heurística passa a distinguir dois níveis de evidência:
+//   FORTE  — o nome da própria SALA descreve a atividade assistencial. Decide sozinho.
+//   FRACO  — apenas o nome do SETOR indica a especialidade. Classifica a sala somente
+//            se o nome dela não a identificar como área de apoio, ensino ou simulação.
+const PLANO_RE_ASSISTENCIAL_SALA = /(consult[óo]rio|ambulat[óo]ri|cl[ií]nic|esteriliza|expurgo|curativo|sutura|procedimento|inala[çc]|coleta|triagem|acolhimento|radiolog|raio[\s-]?x|imagenolog|tomografi|necrot[ée]ri|anatomia|microbiolog|patolog|histolog|bioqu[íi]mic|pr[óo]tese|dispensa[çc][ãa]o|farmacot[ée]cnic|manipula[çc][ãa]o|laborat[óo]rio\s+(de\s+)?(an[áa]lises|cl[íi]nic|qu[íi]mic|biolog|microbiolog|patolog|histolog|bioqu[íi]mic|pr[óo]tese))/i;
+
+const PLANO_RE_ASSISTENCIAL_SETOR = /(odonto|medicin|fisioterap|fonoaudio|psicolog|terapia ocupacional|enfermag|cl[ií]nic|ambulat[óo]ri|biomedic|farm[áa]c|nutri[çc]|est[ée]tic)/i;
+
+// Retrocompatibilidade: alguns trechos legados ainda referenciam a expressão única.
+const PLANO_RE_ASSISTENCIAL = new RegExp(
+  `${PLANO_RE_ASSISTENCIAL_SALA.source}|${PLANO_RE_ASSISTENCIAL_SETOR.source}`, 'i');
+
+// Exclusão de áreas administrativas, de apoio, de ensino teórico e de simulação.
+// Necessária porque a detecção por SETOR alcança todas as salas do setor: sem esta
+// exclusão, uma copa ou um almoxarifado pertencente a "Coord. das Clínicas" seria
+// classificado como ambiente assistencial. Sobreclassificar em documento com ART
+// enfraquece a credibilidade dos achados que de fato exigem tratamento de ar.
+const PLANO_RE_APOIO = /(almoxarifado|arquivo|dep[óo]sito|copa|cozinha|\bcoord|recep[çc]|sala dos professores|manuten[çc]|sala de ti|inform[áa]tica|prontu[áa]rio|apoio acad[êe]mico|sala de espera|conviv[êe]ncia|secretaria|sanit[áa]rio|banheiro|corredor|vestu[áa]rio|roupa limpa|sala de aula|audit[óo]rio|biblioteca|sala de estudo|reuni[ãa]o|vida di[áa]ria|simula[çc]|habilidades|brinquedoteca|guarda[\s-]?volume)/i;
+
+// Aplica a heurística de fallback. Devolve true|false.
+function planoSalaAssistencialPorNome(sala) {
+  const nome  = String(sala.nome || '');
+  const setor = String(sala.setor || '');
+  if (PLANO_RE_ASSISTENCIAL_SALA.test(nome)) return true;   // evidência forte
+  if (PLANO_RE_APOIO.test(nome)) return false;              // apoio/ensino/simulação
+  // Evidência fraca: o setor indica a especialidade. Não se aplica quando o próprio
+  // setor é de apoio — "Coord. das Clínicas" casa com "clínica" pela nomenclatura, mas
+  // é área administrativa; sem esta verificação, uma sala genérica nele contida seria
+  // classificada como assistencial.
+  if (PLANO_RE_APOIO.test(setor)) return false;
+  return PLANO_RE_ASSISTENCIAL_SETOR.test(setor);
+}
+
+// Piso legal de renovação de ar exterior — Portaria MS nº 3.523/1998.
+const PLANO_AR_EXTERIOR_MIN_M3H_PESSOA = 27;
+
+// Piso de adequação térmica adotado para classificação "Adequada".
+// AUDITORIA 2026 — deixou de ser um literal local. O valor agora vem de
+// ADEQUACAO_TERMICA_PISO (app.js), a mesma constante usada pelo Relatório de Divergência
+// de Capacidade, para que documento oficial e relatório interno nunca divirjam.
+// O fallback 0.96 cobre apenas a hipótese de app.js não ter carregado.
+const PLANO_ADEQUACAO_MINIMA = (typeof ADEQUACAO_TERMICA_PISO === 'number') ? ADEQUACAO_TERMICA_PISO : 0.96;
+
+// ── Equipamentos ──────────────────────────────────────────────────────────
+let _planoEqs = [];
+
+async function carregarEquipamentosPlano() {
+  const { data, error } = await db
+    .from('equipamentos')
+    .select('id, tag, produto, marca, categoria, potencia, bloco, setor, sala, sala_id, criticidade, nr_serie, patrimonio, extras_tecnico')
+    .order('tag', { ascending: true });
+  if (error) { planoToast('❌ Erro ao carregar equipamentos: ' + error.message, true); return; }
+  _planoEqs = data || [];
+}
+
+// ── Cronograma: meses ativos de cada periodicidade a partir do mês inicial ─
+function planoMesesAtivos(periodoKey, mesInicio) {
+  const passo = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 }[periodoKey] || 1;
+  const meses = new Set();
+  for (let m = mesInicio; m < mesInicio + 12; m += passo) meses.add(m % 12);
+  return meses;
+}
+
+// ── Geração do documento ──────────────────────────────────────────────────
+// Gera a MINUTA: mesmo documento, sem gate de validação, marcado de forma inequívoca como
+// rascunho sem validade. Serve para conferir estrutura, textos e cálculos antes de existirem
+// os dados que só a contratação do laboratório e o primeiro ciclo vão trazer.
+function gerarMinutaPMOC() {
+  return gerarDocumentoPMOC(true);
+}
+
+function gerarDocumentoPMOC(modoMinuta = false) {
+  const cfg = planoColetarConfig();
+
+  // Bloqueio de emissão com campos críticos ausentes/ inválidos (item 15),
+  // incluindo empresa executante obrigatória (item 7) e validação de ART (item 5)
+  // e de termos de ambiente de teste no título profissional (item 3).
+  //
+  // Em modo MINUTA o bloqueio não se aplica: o gate existe para impedir que um documento
+  // incompleto seja EMITIDO e ASSINADO, não para impedir que seja lido em desenvolvimento.
+  // A minuta sai com marca d'água, aviso na capa, relação das pendências e sem campos de
+  // assinatura — não há como confundi-la com o documento válido.
+  const validacao = planoValidarCamposCriticos(cfg);
+  if (!validacao.ok && !modoMinuta) {
+    planoToast('⚠️ Não é possível emitir o PMOC. Pendências: ' + validacao.pendentes.join(' · '), true);
+    planoFocarPendencia(validacao.campos);
+    return;
+  }
+  if (modoMinuta) {
+    planoFocarPendencia([]);
+    planoToast(validacao.ok
+      ? 'ℹ️ Minuta gerada. Nenhuma pendência — pode emitir o documento válido.'
+      : `ℹ️ Minuta gerada com ${validacao.pendentes.length} pendência(s). Sem validade para fiscalização.`);
+  }
+  if (!_planoEqs.length) { planoToast('⚠️ Nenhum equipamento cadastrado para compor o plano.', true); return; }
+
+  const emissaoBR = fmtDate(cfg.data_emissao);
+
+  // ── Regime do plano (implantação x pleno) ──
+  // Em implantação, o documento declara compromisso e prazos em lugar de afirmar execução
+  // que ainda não ocorreu. Declarar o regime é mais defensável perante a fiscalização do que
+  // omitir: o plano assume expressamente o marco zero e o cronograma de adimplemento.
+  const emImplantacao = cfg.regime === 'implantacao';
+  const baseImpl = cfg.data_emissao ? new Date(cfg.data_emissao + 'T00:00:00') : new Date();
+  const dataMaisDias = (dias) => {
+    const d = new Date(baseImpl.getTime());
+    d.setDate(d.getDate() + (parseInt(dias, 10) || 0));
+    return d.toLocaleDateString('pt-BR');
+  };
+  // ── Anexo I (QAI): opcional, com default seguro ──
+  // Config legada (sem o campo) resolve para INCLUIR. Quando o anexo é suprimido, as
+  // remissões do corpo deixam de apontar para o item A.4 — que não existiria no
+  // documento — e passam a apontar para o plano apartado de QAI, preservando o
+  // encadeamento lógico da NC de recirculação. Ponteiro órfão em documento assinado é
+  // vício formal: nenhuma remissão pode sobreviver à supressão do seu destino.
+  const incluiQai   = cfg.incluir_qai !== false;
+  const refQaiPlano = incluiQai ? 'Anexo I' : 'Plano de Monitoramento de QAI, apartado deste PMOC';
+  const refQaiA4    = incluiQai ? 'Anexo I, item A.4'
+                                : 'Plano de Ação e Contingência do Plano de Monitoramento de QAI, apartado deste PMOC';
+  const refQaiCurta = incluiQai ? 'Anexo I, A.4' : 'Plano de QAI apartado';
+
+  const prazoLabBR      = dataMaisDias(cfg.impl_prazo_lab);
+  const prazoCampanhaBR = dataMaisDias(cfg.impl_prazo_campanha);
+  const catsPresentes = [...new Set(_planoEqs.map(e => planoNormCat(e.categoria)))]
+    .sort((a, b) => Object.keys(PLANO_CAT_LABEL).indexOf(a) - Object.keys(PLANO_CAT_LABEL).indexOf(b));
+
+  // ── Capa ──
+  const capa = `
+    <div class="capa">
+      <div class="capa-logo-wrap"><img src="${LOGO_ETIQUETA}" alt="Logo"></div>
+      <div class="capa-titulo">PLANO DE MANUTENÇÃO,<br>OPERAÇÃO E CONTROLE</div>
+      <div class="capa-sub">PMOC — Sistemas de Climatização e Refrigeração</div>
+      <div class="capa-legal">
+        <span>Lei Federal nº 13.589/2018</span><span>Portaria MS nº 3.523/98</span>
+        <span>ABNT NBR 17037</span><span>ABNT NBR 16401</span>
+        <span>ABNT NBR 13971</span><span>RDC ANVISA nº 886/2024</span>
+      </div>
+      <div class="capa-box">
+        <div class="capa-box-header">Dados do Plano</div>
+        <div class="capa-box-body">
+          <div class="capa-item"><span>Estabelecimento</span><strong>${escapeHTML(cfg.razao)}</strong></div>
+          ${cfg.cnpj ? `<div class="capa-item half"><span>CNPJ</span><strong>${escapeHTML(cfg.cnpj)}</strong></div>` : ''}
+          <div class="capa-item half"><span>Vigência</span><strong>Ano de ${cfg.ano}</strong></div>
+          <div class="capa-item half"><span>Regime</span><strong>${emImplantacao ? 'Implantação — 1º ciclo' : 'Regime pleno'}</strong></div>
+          <div class="capa-item"><span>Responsável Técnico</span><strong>${escapeHTML(cfg.rt_nome)}</strong></div>
+          <div class="capa-item half"><span>Registro</span><strong>${escapeHTML(planoFormatRegistro(cfg.rt_conselho, cfg.rt_registro))}</strong></div>
+          ${cfg.rt_art ? `<div class="capa-item half"><span>ART/TRT</span><strong>${escapeHTML(cfg.rt_art)}</strong></div>` : ''}
+        </div>
+      </div>
+      <div class="capa-emissao">${escapeHTML(cfg.local_emissao || '')}${cfg.local_emissao ? ', ' : ''}${emissaoBR}</div>
+      ${modoMinuta ? `<div class="minuta-capa-aviso">
+        <strong>MINUTA — DOCUMENTO SEM VALIDADE</strong>
+        Rascunho gerado para conferência técnica durante o desenvolvimento do plano.
+        Não constitui PMOC emitido, não está assinado e <strong>não é válido para apresentação
+        à fiscalização sanitária</strong>. As pendências de preenchimento estão relacionadas ao final.
+      </div>` : ''}
+    </div>`;
+
+  // ── 1. Identificação do estabelecimento + DELIMITAÇÃO DE ESCOPO ──
+  //
+  // NOTA TÉCNICA (auditoria 2026): a capa e esta seção identificam o ESTABELECIMENTO
+  // (razão social + CNPJ) e o documento é assinado sob ART. Sem declaração expressa de
+  // escopo, o PMOC afirma implicitamente cobrir a totalidade do parque do estabelecimento.
+  // Caso o cadastro contemple apenas parte dos blocos, essa afirmação implícita é
+  // inexata. A tabela abaixo é gerada automaticamente e torna o escopo explícito,
+  // sinalizando blocos registrados na estrutura de locais sem nenhum ativo cadastrado.
+  const blocosComAtivos = {};
+  _planoEqs.forEach(e => {
+    const b = e.bloco || '(sem bloco)';
+    if (!blocosComAtivos[b]) blocosComAtivos[b] = { total: 0, ac: 0, ven: 0 };
+    blocosComAtivos[b].total++;
+    const c = planoNormCat(e.categoria);
+    if (c === 'AC')  blocosComAtivos[b].ac++;
+    if (c === 'VEN') blocosComAtivos[b].ven++;
+  });
+
+  const nomesBlocos = [...new Set([
+    ..._planoBlocos.map(b => b.nome),
+    ...Object.keys(blocosComAtivos),
+  ])].sort((a, b) => a.localeCompare(b));
+
+  let blocosSemCadastro = 0;
+  const linhasEscopo = nomesBlocos.map(nome => {
+    const est = _planoBlocos.find(b => b.nome === nome);
+    const at  = blocosComAtivos[nome] || { total: 0, ac: 0, ven: 0 };
+    const semCadastro = at.total === 0;
+    if (semCadastro) blocosSemCadastro++;
+    return `<tr${semCadastro ? ' style="background:#fff5f5;"' : ''}>
+      <td>${escapeHTML(nome)}</td>
+      <td style="text-align:center;">${est ? est.setores : '—'}</td>
+      <td style="text-align:center;">${est ? est.salas : '—'}</td>
+      <td style="text-align:center;">${at.ac}</td>
+      <td style="text-align:center;">${at.ven}</td>
+      <td style="text-align:center;">${at.total}</td>
+      <td>${semCadastro
+        ? '<strong style="color:#9b2c2c;">NÃO COBERTO — sem ativos cadastrados</strong>'
+        : 'Coberto por este plano'}</td>
+    </tr>`;
+  }).join('');
+
+  const alertaEscopo = blocosSemCadastro > 0
+    ? `<p class="texto" style="font-size:9px;color:#9b2c2c;border-left:3px solid #9b2c2c;padding-left:8px;">
+       <strong>RESSALVA DE ESCOPO.</strong> ${blocosSemCadastro === 1 ? 'Há 1 bloco registrado' : `Há ${blocosSemCadastro} blocos registrados`}
+       na estrutura de locais do estabelecimento sem nenhum ativo cadastrado. Enquanto essa condição
+       persistir, <strong>este plano não abrange a totalidade do estabelecimento</strong>. A Lei nº 13.589/2018
+       exige a elaboração e execução do PMOC para o estabelecimento, não para parte dele. Providências
+       obrigatórias: (a) confirmar em campo se os blocos assinalados possuem ambientes climatizados;
+       (b) havendo climatização, realizar o cadastro e reemitir este plano; (c) não havendo, registrar
+       formalmente a inexistência para fins de comprovação perante a autoridade sanitária.</p>`
+    : `<p class="texto" style="font-size:9px;color:#4a5568;">Todos os blocos registrados na estrutura de
+       locais do estabelecimento possuem ativos cadastrados e estão cobertos por este plano.</p>`;
+
+  const sec1 = `
+    <div class="sec">
+      <div class="sec-titulo">1. IDENTIFICAÇÃO DO ESTABELECIMENTO (PROPRIETÁRIO)</div>
+      <table class="tb-ident">
+        <tr><td class="lbl">Razão Social</td><td>${escapeHTML(cfg.razao)}</td>
+            <td class="lbl">CNPJ</td><td>${escapeHTML(cfg.cnpj || '—')}</td></tr>
+        <tr><td class="lbl">Endereço</td><td colspan="3">${escapeHTML(cfg.endereco || '—')}</td></tr>
+        <tr><td class="lbl">Telefone</td><td>${escapeHTML(cfg.telefone || '—')}</td>
+            <td class="lbl">Responsável Legal</td><td>${escapeHTML(cfg.resp_legal || '—')}${cfg.resp_cargo ? ' — ' + escapeHTML(cfg.resp_cargo) : ''}</td></tr>
+      </table>
+
+      <div class="cat-titulo">1.1 Delimitação do Escopo</div>
+      <p class="texto">Relação dos blocos registrados na estrutura de locais do estabelecimento e sua
+      cobertura por este plano, apurada a partir do cadastro de ativos vigente na data de emissão.</p>
+      <table class="tb-lista">
+        <thead><tr>
+          <th>Bloco</th><th style="width:9%;">Setores</th><th style="width:9%;">Salas</th>
+          <th style="width:9%;">Ativos AC</th><th style="width:9%;">Ativos VEN</th>
+          <th style="width:9%;">Total</th><th style="width:28%;">Situação</th>
+        </tr></thead>
+        <tbody>${linhasEscopo || '<tr><td colspan="7">Nenhum bloco registrado.</td></tr>'}</tbody>
+      </table>
+      ${alertaEscopo}
+    </div>`;
+
+  // ── 2. Responsável técnico ──
+  const sec2 = `
+    <div class="sec">
+      <div class="sec-titulo">2. IDENTIFICAÇÃO DO RESPONSÁVEL TÉCNICO</div>
+      <table class="tb-ident">
+        <tr><td class="lbl">Nome</td><td>${escapeHTML(cfg.rt_nome)}</td>
+            <td class="lbl">Título Profissional</td><td>${escapeHTML(cfg.rt_titulo || '—')}</td></tr>
+        <tr><td class="lbl">Registro no Conselho</td><td>${escapeHTML(planoFormatRegistro(cfg.rt_conselho, cfg.rt_registro))}</td>
+            <td class="lbl">Nº ART / TRT</td><td>${escapeHTML(cfg.rt_art || '—')}</td></tr>
+        <tr><td class="lbl">Telefone</td><td>${escapeHTML(cfg.rt_telefone || '—')}</td>
+            <td class="lbl">E-mail</td><td>${escapeHTML(cfg.rt_email || '—')}</td></tr>
+        <tr><td class="lbl">Empresa Executante</td><td colspan="3">${escapeHTML(cfg.rt_empresa || '—')}</td></tr>
+        ${cfg.rt_atribuicao ? `<tr><td class="lbl">Atribuição Técnica</td><td colspan="3">${escapeHTML(cfg.rt_atribuicao)}${cfg.rt_certidao ? ' — Certidão: ' + escapeHTML(cfg.rt_certidao) : ''}</td></tr>` : ''}
+      </table>
+    </div>`;
+
+  // ── 3. Objetivo e base legal ──
+  // NOTA TÉCNICA (auditoria 2026): a redação anterior declarava cobrir os sistemas
+  // "instalados no estabelecimento identificado na Seção 1". Como a Seção 1 identifica a
+  // pessoa jurídica por CNPJ e endereço, a frase afirmava cobertura da totalidade do
+  // estabelecimento — afirmação inexata sempre que o cadastro contemple apenas parte dos
+  // blocos. A abrangência passou a ser declarada por remissão expressa ao item 1.1.
+  const sec3 = `
+    <div class="sec">
+      <div class="sec-titulo">3. OBJETIVO, ABRANGÊNCIA E BASE LEGAL</div>
+      <p class="texto">Este Plano de Manutenção, Operação e Controle (PMOC) estabelece as rotinas de manutenção
+      preventiva e de controle dos sistemas de climatização, refrigeração e ventilação relacionados na
+      Seção 4, com o objetivo de garantir a qualidade do ar de interiores, a preservação da saúde dos
+      ocupantes e a integridade e eficiência dos equipamentos.</p>
+      <p class="texto"><strong>Abrangência.</strong> A abrangência física deste plano é a declarada no
+      <strong>item 1.1 — Delimitação do Escopo</strong>, que relaciona os blocos do estabelecimento cobertos
+      e, quando existentes, os não cobertos. Ambientes climatizados não relacionados na Seção 4 não estão
+      abrangidos por este plano e demandam inclusão no cadastro e reemissão do documento.</p>
+      <p class="texto">As atividades e periodicidades são as definidas na Seção 6 e o cronograma o da Seção 7,
+      em atendimento à <strong>Lei Federal nº 13.589/2018</strong>, à <strong>Portaria MS nº 3.523/98</strong>,
+      às normas técnicas <strong>ABNT NBR 17037</strong> (que substituiu a revogada RE ANVISA nº 09/2003),
+      <strong>ABNT NBR 16401</strong>, <strong>ABNT NBR 13971</strong>, <strong>ABNT NBR 7256</strong> e correlatas.</p>
+      <p class="texto"><strong>Vínculo com a manutenção programada.</strong> A ABNT NBR 17037, item 4.2, vincula
+      expressamente o PMOC ao plano de manutenção programada da <strong>ABNT NBR 13971 — Sistemas de refrigeração,
+      condicionamento de ar, ventilação e aquecimento: manutenção programada</strong>. As rotinas e periodicidades
+      da Seção 6 observam essa norma naquilo que não for expressamente disciplinado pela Portaria MS nº 3.523/98.</p>
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Distinção de origem das exigências.</strong> Ao longo deste documento, os requisitos decorrentes
+      diretamente de lei, portaria ou norma técnica são apresentados com a respectiva <strong>referência
+      normativa</strong> na própria tabela. Os requisitos identificados como <strong>definição interna do
+      responsável técnico</strong> — patamares de escalonamento, prazos de resposta e protocolos internos — vêm
+      expressamente rotulados como tal e não constituem literalidade de norma.</p>
+      <p class="texto">A execução das atividades é registrada nas fichas de manutenção (laudos PMOC) do sistema
+      de gestão, que ficam disponíveis para verificação pela fiscalização, acompanhadas das respectivas
+      evidências e assinaturas dos executantes.</p>
+    </div>`;
+
+  // ── 4. Relação de equipamentos, agrupada por bloco › setor ──
+  const grupos = {};
+  _planoEqs.forEach(eq => {
+    const chave = [(eq.bloco || 'Sem bloco'), (eq.setor || 'Sem setor')].join(' › ');
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(eq);
+  });
+
+  const resumoCat = catsPresentes.map(c => {
+    const n = _planoEqs.filter(e => planoNormCat(e.categoria) === c).length;
+    return `<td style="text-align:center;"><strong>${n}</strong><br><span style="font-size:8px;">${PLANO_CAT_LABEL[c]}</span></td>`;
+  }).join('');
+
+  let linhasEq = '';
+  Object.entries(grupos).sort((a, b) => a[0].localeCompare(b[0])).forEach(([grupo, eqs]) => {
+    linhasEq += `<tr class="tr-grupo"><td colspan="7">📍 ${escapeHTML(grupo)}</td></tr>`;
+    eqs.forEach(eq => {
+      linhasEq += `<tr>
+        <td><strong>${escapeHTML(eq.tag)}</strong></td>
+        <td>${escapeHTML(eq.produto || '—')}</td>
+        <td>${escapeHTML(PLANO_CAT_LABEL[planoNormCat(eq.categoria)])}</td>
+        <td>${escapeHTML(eq.marca || '—')}</td>
+        <td>${escapeHTML(eq.potencia || '—')}</td>
+        <td>${escapeHTML(eq.sala || '—')}</td>
+        <td style="text-align:center;">${escapeHTML(eq.criticidade || '—')}</td>
+      </tr>`;
+    });
+  });
+
+  // Carga instalada por ambiente, agrupada por Bloco › Setor (apenas capacidade instalada,
+  // sem comparação com carga prevista/situação — conforme preferência do RT).
+  const instaladaPorGrupoSala = {};
+  _planoEqs.forEach(eq => {
+    if (planoNormCat(eq.categoria) !== 'AC') return;
+    const grupo = [(eq.bloco || 'Sem bloco'), (eq.setor || 'Sem setor')].join(' › ');
+    const salaNome = eq.sala || 'Sem sala definida';
+    instaladaPorGrupoSala[grupo] = instaladaPorGrupoSala[grupo] || {};
+    instaladaPorGrupoSala[grupo][salaNome] = (instaladaPorGrupoSala[grupo][salaNome] || 0) + parseCapacidadeBTU(eq.potencia);
+  });
+  let linhasAdeq = '';
+  Object.entries(instaladaPorGrupoSala).sort((a, b) => a[0].localeCompare(b[0])).forEach(([grupo, salas]) => {
+    linhasAdeq += `<tr class="tr-grupo"><td colspan="2">📍 ${escapeHTML(grupo)}</td></tr>`;
+    Object.entries(salas).sort((a, b) => a[0].localeCompare(b[0])).forEach(([salaNome, total]) => {
+      linhasAdeq += `<tr><td>${escapeHTML(salaNome)}</td><td style="text-align:right;">${Math.round(total).toLocaleString('pt-BR')}</td></tr>`;
+    });
+  });
+  // AUDITORIA NBR 17037 / RDC 886, item S4. A tabela "Carga Instalada por Ambiente" duplica,
+  // por sala, a capacidade já relacionada ativo a ativo na própria Seção 4, e nenhuma norma de
+  // referência a exige. No parque atual ela ocupa cerca de cinco páginas do documento. Passa a
+  // ser opcional; o relatório detalhado permanece disponível na Central de Impressões.
+  const secAdequacao = (cfg.incluir_carga && linhasAdeq) ? `
+    <div class="cat-titulo">Carga Instalada por Ambiente</div>
+    <table class="tb-lista">
+      <thead><tr><th>Sala/Ambiente</th><th style="width:130px;">Instalada (BTU/h)</th></tr></thead>
+      <tbody>${linhasAdeq}</tbody>
+    </table>` : '';
+
+  // ── Painel de distribuição de criticidade ──
+  // A matriz de criticidade só é útil se discriminar. Quando uma única classe concentra
+  // praticamente todo o parque, a variável não carrega informação e o plano deixa de
+  // oferecer critério de priorização de atendimento e de estoque de peças.
+  //
+  // AUDITORIA NBR 17037 / RDC 886 (item S3): a matriz de criticidade NÃO é conteúdo
+  // exigido do PMOC por nenhuma das normas de referência. Manter no documento oficial a
+  // "ressalva de classificação" — com a distribuição de referência 15-25 / 40-50 / 30-40 —
+  // faz o próprio PMOC denunciar à fiscalização a fragilidade metodológica da classificação.
+  // A ressalva passou a ser emitida APENAS na tela do sistema, para o gestor
+  // (ver planoAlertaCriticidade). O documento conserva somente a tabela descritiva.
+  const critContagem = {};
+  _planoEqs.forEach(e => {
+    const c = (e.criticidade || 'Não informada').trim();
+    critContagem[c] = (critContagem[c] || 0) + 1;
+  });
+  const critTotal = _planoEqs.length || 1;
+  const critOrdenado = Object.entries(critContagem).sort((a, b) => b[1] - a[1]);
+  const critMaiorPct = critOrdenado.length ? (critOrdenado[0][1] / critTotal) : 0;
+  const critDegenerada = critOrdenado.length > 0 && critMaiorPct >= 0.90;
+
+  const linhasCrit = critOrdenado.map(([nome, n]) => `
+    <tr><td>${escapeHTML(nome)}</td>
+        <td style="text-align:center;">${n}</td>
+        <td style="text-align:center;">${(100 * n / critTotal).toFixed(1)}%</td></tr>`).join('');
+
+  const painelCrit = `
+    <div class="cat-titulo">Distribuição de Criticidade</div>
+    <table class="tb-lista">
+      <thead><tr><th>Criticidade</th><th style="width:100px;">Ativos</th><th style="width:100px;">Participação</th></tr></thead>
+      <tbody>${linhasCrit || '<tr><td colspan="3">Sem ativos cadastrados.</td></tr>'}</tbody>
+    </table>
+    `;
+
+  // Ressalva de classificação — exibida somente na tela do gestor, nunca no documento emitido.
+  if (critDegenerada) {
+    planoAlertaCriticidade(critMaiorPct, critOrdenado.length ? critOrdenado[0][0] : '—');
+  } else {
+    planoAlertaCriticidade(null);
+  }
+
+  const sec4 = `
+    <div class="sec">
+      <div class="sec-titulo">4. RELAÇÃO DE AMBIENTES E EQUIPAMENTOS CLIMATIZADOS</div>
+      <table class="tb-resumo"><tr>
+        <td style="text-align:center;"><strong>${_planoEqs.length}</strong><br><span style="font-size:8px;">Total de Ativos</span></td>
+        ${resumoCat}
+      </tr></table>
+      <table class="tb-lista">
+        <thead><tr>
+          <th>TAG</th><th>Equipamento</th><th>Categoria</th><th>Marca</th>
+          <th>Capacidade</th><th>Sala/Ambiente</th><th>Crit.</th>
+        </tr></thead>
+        <tbody>${linhasEq}</tbody>
+      </table>
+      ${painelCrit}
+      ${secAdequacao}
+    </div>`;
+
+  // ── 5. Memorial descritivo do sistema (item 12) — gerado a partir do parque cadastrado ──
+  // Descreve, por bloco/setor, a TIPOLOGIA CONSTRUTIVA dos sistemas de climatização, seus
+  // componentes de tratamento e distribuição de ar, e a existência de renovação de ar exterior.
+  //
+  // NOTA TÉCNICA (auditoria 2026): a classificação binária anterior ("centralizado" x "splits
+  // individuais") era tecnicamente incorreta — enquadrava unidades Cassete e unidades comerciais
+  // de maior porte como sistemas sem componentes de distribuição de ar, o que dispensava
+  // indevidamente as rotinas da série DUT. A classificação passou a ser tipológica, vinculante
+  // para a Seção 6.
+  const AC_TIPOLOGIA_MEMORIAL = {
+    'VRF':                                          'Fluxo de refrigerante variável (VRF/VRV) — sistema de maior porte com distribuição por plenum/duto e automação centralizada',
+    'Split Duto':                                   'Expansão direta dutada — rede de dutos, plenum de insuflamento e bocas de ar remotas',
+    'Self-Contained':                               'Self-contained — sistema compacto com plenum e rede de dutos',
+    'Split Cassete':                                'Cassete embutido em forro — caixa de plenum de retorno, difusor multidirecional e flange de ar exterior',
+    'Água Gelada (Chiller)':                        'Expansão indireta por água gelada (chiller) — circuito de água e unidades tratadoras de ar',
+    'Torre de Resfriamento/Condensador Evaporativo':'Sistema com água aberta (torre de resfriamento / condensador evaporativo)',
+    'Split Hi-Wall':                                'Expansão direta de ambiente único (hi-wall) — insuflamento e retorno diretos no gabinete, sem plenum',
+    'Split Piso-Teto':                              'Expansão direta de ambiente único (piso-teto) — insuflamento e retorno diretos no gabinete, sem plenum',
+    'Janela':                                       'Condicionador de janela — unidade compacta de ambiente único',
+    'Portátil':                                     'Condicionador portátil — unidade móvel de ambiente único',
+  };
+
+  // Índice de salas por grupo "bloco › setor", com a MESMA chave usada em `grupos`.
+  // Permite que a linha de exaustão do memorial seja resolvida pelo cadastro de Locais
+  // (Tipo de Ambiente + campo "Exaustão mecânica" da Sala) em vez de ser inferida pela
+  // simples presença de um ativo VEN no setor.
+  const salasPorGrupoMemorial = {};
+  _planoSalas.forEach(s => {
+    const bl = (s.bloco && s.bloco !== '—') ? s.bloco : 'Sem bloco';
+    const st = (s.setor && s.setor !== '—') ? s.setor : 'Sem setor';
+    const chave = [bl, st].join(' › ');
+    (salasPorGrupoMemorial[chave] = salasPorGrupoMemorial[chave] || []).push(s);
+  });
+
+  let memorialCorpo = '';
+  Object.entries(grupos).sort((a, b) => a[0].localeCompare(b[0])).forEach(([grupo, eqs]) => {
+    const eqsACGrupo = eqs.filter(e => planoNormCat(e.categoria) === 'AC');
+    const instalacoesGrupo = eqsACGrupo.map(e => parseExtras(e.extras_tecnico)['instalacao-ac']).filter(Boolean);
+    const tiposUnicos = [...new Set(instalacoesGrupo)];
+    const possuiPlenum = instalacoesGrupo.some(v => AC_INSTALACOES_COM_PLENUM.includes(v));
+    const possuiRenovacaoAr = eqs.some(e => planoNormCat(e.categoria) === 'VEN');
+    const categoriasGrupo = [...new Set(eqs.map(e => PLANO_CAT_LABEL[planoNormCat(e.categoria)]))];
+
+    // ── Exigência de exaustão do setor (auditoria 2026) ────────────────────────
+    // A regra NÃO é mais "setor sem ativo VEN = não conformidade". A exigência é
+    // declarada ambiente a ambiente no cadastro de Locais e resolvida por
+    // obterExigenciaExaustaoSala() (app.js): o campo "Exaustão mecânica" da Sala
+    // prevalece; na sua ausência, herda-se a regra do Tipo de Ambiente. Setores
+    // integralmente compostos por ambientes que dispensam exaustão dedicada deixam de
+    // ser apontados como não conformes — apontamento que, sendo indevido, enfraquecia
+    // os achados legítimos em documento com ART.
+    const salasGrupo = salasPorGrupoMemorial[grupo] || [];
+    const analisesExaustao = (typeof analisarConformidadeExaustao === 'function')
+      ? analisarConformidadeExaustao(salasGrupo, eqs) : [];
+    const exaExigem     = analisesExaustao.filter(a => a.exigencia.exige === true);
+    const exaPendentes  = exaExigem.filter(a => a.qtd === 0);
+    const exaIndefinidos = analisesExaustao.filter(a => a.exigencia.exige === null);
+
+    const tipologias = tiposUnicos.length
+      ? tiposUnicos.map(t => `<li>${escapeHTML(AC_TIPOLOGIA_MEMORIAL[t] || t)}</li>`).join('')
+      : '<li>Não informado / sem equipamento AC cadastrado</li>';
+
+    const nomesSalas = (lista, max = 4) => {
+      const nomes = lista.map(a => a.sala.nome);
+      return nomes.length > max
+        ? escapeHTML(nomes.slice(0, max).join(', ')) + ` e mais ${nomes.length - max}`
+        : escapeHTML(nomes.join(', '));
+    };
+
+    let rotulaRenovacao;
+    if (!salasGrupo.length) {
+      // Setor com ativos porém sem nenhuma sala cadastrada em Locais: não há base
+      // cadastral para afirmar exigência nem dispensa.
+      rotulaRenovacao = possuiRenovacaoAr
+        ? 'Ativos de ventilação/exaustão presentes — verificar vazão efetiva no item DUT-05'
+        : '<strong style="color:#975a16;">Não avaliada — setor sem ambientes cadastrados em Locais</strong>';
+    } else if (exaPendentes.length) {
+      rotulaRenovacao = `<strong style="color:#9b2c2c;">AUSENTE — não conformidade de projeto`
+        + ` (${nomesSalas(exaPendentes)})</strong>`
+        + ` <span style="font-size:8px;">Submeter ao Plano de Contingência — ${refQaiPlano}.</span>`;
+    } else if (exaExigem.length) {
+      rotulaRenovacao = `Presente nos ${exaExigem.length} ambiente(s) que a exigem — verificar vazão efetiva no item DUT-05`;
+    } else if (exaIndefinidos.length) {
+      rotulaRenovacao = possuiRenovacaoAr
+        ? 'Ativos de ventilação/exaustão presentes — verificar vazão efetiva no item DUT-05'
+        : `<strong style="color:#975a16;">Não avaliada — ${exaIndefinidos.length} ambiente(s) sem Tipo de Ambiente cadastrado</strong>`;
+    } else {
+      rotulaRenovacao = 'Não exigida — nenhum ambiente do setor demanda exaustão mecânica dedicada'
+        + (possuiRenovacaoAr ? ' (ativos de ventilação instalados — manter rotinas VEN)' : '');
+    }
+
+    memorialCorpo += `
+      <div class="bloco-memorial">
+      <div class="cat-titulo">📍 ${escapeHTML(grupo)}</div>
+      <table class="tb-ident">
+        <tr><td class="lbl">Sistemas Presentes</td><td colspan="3">${escapeHTML(categoriasGrupo.join(', ') || '—')}</td></tr>
+        <tr><td class="lbl">Tipologia Construtiva</td><td colspan="3"><ul style="margin:0;padding-left:14px;">${tipologias}</ul></td></tr>
+        <tr><td class="lbl">Componentes de Distribuição de Ar</td>
+            <td>${possuiPlenum ? 'Presentes (plenum, dutos e/ou bocas de ar remotas) — rotinas DUT-01 a DUT-05 aplicáveis' : 'Ausentes — insuflamento e retorno diretos no gabinete'}</td>
+            <td class="lbl">Exaustão Mecânica Dedicada</td><td>${rotulaRenovacao}</td></tr>
+      </table>
+      </div>`;
+  });
+
+  // ── 5.3 Renovação de ar exterior em setores assistenciais (auditoria 2026) ──
+  // Clínicas-escola prestam assistência à saúde e enquadram-se como EAS (RDC ANVISA
+  // nº 50/2002), atraindo a ABNT NBR 7256:2021. A Portaria MS nº 3.523/98 fixa piso de
+  // 27 m³/h por pessoa e ressalva exigência superior em ambientes de saúde. Ambiente
+  // assistencial climatizado SEM nenhum ativo de ventilação/exaustão cadastrado opera em
+  // recirculação total — condição em que a reprovação em CO₂ é determinística.
+  const venPorSala = {};
+  _planoEqs.forEach(e => {
+    if (planoNormCat(e.categoria) !== 'VEN' || !e.sala_id) return;
+    venPorSala[e.sala_id] = (venPorSala[e.sala_id] || 0) + 1;
+  });
+  const acPorSala = {};
+  _planoEqs.forEach(e => {
+    if (planoNormCat(e.categoria) !== 'AC' || !e.sala_id) return;
+    acPorSala[e.sala_id] = acPorSala[e.sala_id] || { qtd: 0, btu: 0 };
+    acPorSala[e.sala_id].qtd++;
+    acPorSala[e.sala_id].btu += parseCapacidadeBTU(e.potencia);
+  });
+
+  // ── Seleção das salas assistenciais ───────────────────────────────────────
+  // Hierarquia de decisão, do mais forte para o mais fraco:
+  //   1º  Campo "Exaustão mecânica" da Sala = "Não" — declaração expressa do responsável
+  //       técnico de que o ambiente não demanda tratamento de ar dedicado. Exclui.
+  //   2º  Tipo de Ambiente cadastrado — salaTipoEhAssistencial() (app.js).
+  //   3º  Heurística por nome de setor/sala — fallback para cadastros sem Tipo de Ambiente.
+  //
+  // A heurística por nome sozinha produzia falsos positivos: "LABORATÓRIO DE VIDA DIÁRIA"
+  // — ambiente simulado de terapia ocupacional composto por cozinha, sala e quarto de
+  // treino — casava com o termo "laboratório" e era classificado como laboratório de
+  // análises clínicas, atraindo indevidamente a ABNT NBR 7256.
+  const excluidasPorCadastro = [];
+  const porHeuristica = [];
+  const salasAssistenciais = _planoSalas.filter(s => {
+    if ((acPorSala[s.id]?.qtd || 0) === 0) return false;
+
+    if (String(s.exige_exaustao || '').toLowerCase() === 'nao') { excluidasPorCadastro.push(s); return false; }
+
+    const porTipo = (typeof salaTipoEhAssistencial === 'function') ? salaTipoEhAssistencial(s) : null;
+    if (porTipo !== null) return porTipo;
+
+    const heur = planoSalaAssistencialPorNome(s);
+    if (heur) porHeuristica.push(s);
+    return heur;
+  });
+  const semRenovacao = salasAssistenciais.filter(s => !(venPorSala[s.id] > 0));
+
+  let sec53 = '';
+  if (salasAssistenciais.length) {
+    // ── Agrupamento por setor (auditoria 2026) ────────────────────────────────
+    // A listagem plana ordenada por capacidade instalada misturava ambientes de
+    // setores distintos, dificultando o encaminhamento: o tratamento das não
+    // conformidades de renovação de ar é feito por setor (uma tomada de ar exterior
+    // ou um sistema de exaustão atende o conjunto de salas contíguas), não ambiente a
+    // ambiente. Os setores são ordenados por quantidade de não conformidades — do mais
+    // crítico para o menos —, e os ambientes dentro de cada setor por capacidade
+    // instalada decrescente, que é o melhor indicador disponível de porte do ambiente.
+    const gruposAssist = {};
+    salasAssistenciais.forEach(s => {
+      const bl = (s.bloco && s.bloco !== '—') ? s.bloco : 'Sem bloco';
+      const st = (s.setor && s.setor !== '—') ? s.setor : 'Sem setor';
+      const chave = `${bl} › ${st}`;
+      (gruposAssist[chave] = gruposAssist[chave] || []).push(s);
+    });
+
+    const ordemGrupos = Object.entries(gruposAssist).map(([chave, salas]) => {
+      const nc = salas.filter(s => !(venPorSala[s.id] > 0)).length;
+      const btu = salas.reduce((acc, s) => acc + (acPorSala[s.id]?.btu || 0), 0);
+      return { chave, salas, nc, btu };
+    }).sort((a, b) => (b.nc - a.nc) || a.chave.localeCompare(b.chave));
+
+    const linhas = ordemGrupos.map(g => {
+      const cabecalho = `
+        <tr style="background:#eef2ff;break-after:avoid;page-break-after:avoid;">
+          <td colspan="6" style="font-weight:700;color:#1e3a5f;">
+            ${escapeHTML(g.chave)}
+            <span style="font-weight:400;font-size:8px;color:#4a5568;">
+              — ${g.salas.length} ambiente(s) · ${Math.round(g.btu).toLocaleString('pt-BR')} BTU/h instalados
+              ${g.nc ? `· <strong style="color:#9b2c2c;">${g.nc} sem renovação</strong>` : '· sem pendência de renovação'}
+            </span>
+          </td>
+        </tr>`;
+
+      const corpo = g.salas
+        .slice()
+        .sort((a, b) => (acPorSala[b.id].btu - acPorSala[a.id].btu))
+        .map(s => {
+          const ven = venPorSala[s.id] || 0;
+          const arMin = s.pessoas * PLANO_AR_EXTERIOR_MIN_M3H_PESSOA;
+          return `<tr${ven === 0 ? ' style="background:#fff5f5;"' : ''}>
+            <td style="padding-left:14px;">${escapeHTML(s.nome)}</td>
+            <td style="text-align:center;">${s.pessoas || '—'}</td>
+            <td style="text-align:right;">${Math.round(acPorSala[s.id].btu).toLocaleString('pt-BR')}</td>
+            <td style="text-align:center;">${ven}</td>
+            <td style="text-align:right;">${arMin ? arMin.toLocaleString('pt-BR') : '<em>ocupação não informada</em>'}</td>
+            <td>${ven === 0
+              ? `<strong style="color:#9b2c2c;">NC — recirculação total (${refQaiCurta})</strong>`
+              : 'Verificar vazão efetiva em DUT-05'}</td>
+          </tr>`;
+        }).join('');
+
+      return cabecalho + corpo;
+    }).join('');
+
+    sec53 = `
+      <div class="cat-titulo">5.3 Renovação de Ar Exterior e Exaustão — Setores Assistenciais</div>
+      <p class="texto">Os setores abaixo prestam assistência à saúde e enquadram-se como Estabelecimento
+      Assistencial de Saúde nos termos da <strong>RDC ANVISA nº 50/2002</strong>, aplicando-se-lhes,
+      cumulativamente à ABNT NBR 16401, a <strong>ABNT NBR 7256:2021</strong>. Fica estabelecida a
+      <strong>obrigatoriedade de suprimento de ar exterior filtrado</strong> — e de exaustão mecânica
+      dedicada nos ambientes geradores de aerossol, de manipulação de saneantes e de material contaminado.
+      A vazão mínima observa o piso de <strong>${PLANO_AR_EXTERIOR_MIN_M3H_PESSOA} m³/h por pessoa</strong>
+      (Portaria MS nº 3.523/98), prevalecendo valor superior quando resultante do dimensionamento pela
+      <strong>ABNT NBR 16401-3, Nível 2</strong>. Filtragem mínima do ar exterior: classe <strong>G4 seguida
+      de M5 conforme ABNT NBR 16101</strong>, ou classe equivalente segundo a ABNT NBR ISO 16890, elevada
+      conforme a classificação de risco do ambiente pela NBR 7256.</p>
+      <p class="texto" style="font-size:9px;color:#4a5568;"><strong>Interpretação do responsável técnico.</strong>
+      Nenhuma norma enuncia literalmente a vedação a seguir; ela decorre da leitura conjunta da
+      <strong>ABNT NBR 7256</strong> com a <strong>Portaria MS nº 3.523/98</strong> e é assumida como
+      posicionamento do RT: é <strong>tecnicamente inadmissível</strong> atender ambiente assistencial de
+      ocupação permanente exclusivamente por sistema de expansão direta em recirculação total, sem admissão de
+      ar exterior. <strong>Critério de composição:</strong> a relação
+      abaixo decorre do <em>Tipo de Ambiente</em> declarado no cadastro de Locais; para ambientes ainda sem
+      tipo cadastrado, aplica-se subsidiariamente a triagem pela nomenclatura de setores e salas, e áreas
+      administrativas ou de apoio são excluídas pelo mesmo critério. Ambientes com declaração expressa de
+      dispensa no cadastro são excluídos da relação e contabilizados ao final da tabela. Trata-se de
+      <strong>triagem preliminar</strong>: a classificação definitiva de cada ambiente, inclusive quanto à
+      exigência de pressurização diferencial e de exaustão dedicada, compete ao responsável técnico à luz da
+      RDC ANVISA nº 50/2002 e da ABNT NBR 7256.</p>
+      <table class="tb-lista">
+        <thead><tr>
+          <th>Ambiente</th><th style="width:8%;">Ocup.</th>
+          <th style="width:13%;">Instalado (BTU/h)</th><th style="width:9%;">Ativos VEN</th>
+          <th style="width:14%;">Ar ext. mín. (m³/h)</th><th style="width:24%;">Situação</th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <p class="texto" style="font-size:8px;color:#718096;">Relação agrupada por Bloco › Setor. Os setores
+      são apresentados em ordem decrescente de não conformidades de renovação de ar e, dentro de cada setor,
+      os ambientes em ordem decrescente de capacidade instalada.
+      ${excluidasPorCadastro.length ? `<br><strong>Exclusões declaradas:</strong> ${excluidasPorCadastro.length}
+      ambiente(s) climatizado(s) foram excluídos desta relação por declaração expressa de dispensa no cadastro
+      de Locais (campo "Exaustão mecânica" = Não), sob responsabilidade do responsável técnico:
+      ${escapeHTML(excluidasPorCadastro.map(s => `${s.setor} › ${s.nome}`).sort().join('; '))}.` : ''}
+      ${porHeuristica.length ? `<br><strong style="color:#975a16;">Classificação provisória:</strong>
+      ${porHeuristica.length} de ${salasAssistenciais.length} ambientes desta relação foram classificados pela
+      triagem por nomenclatura, por não possuírem <em>Tipo de Ambiente</em> no cadastro de Locais. A
+      classificação desses ambientes é <strong>provisória</strong> e deve ser confirmada pelo responsável
+      técnico: ${escapeHTML(porHeuristica.map(s => `${s.setor} › ${s.nome}`).sort().join('; '))}.` : ''}</p>
+      ${semRenovacao.length ? `<p class="texto" style="font-size:9px;color:#9b2c2c;border-left:3px solid #9b2c2c;padding-left:8px;">
+        <strong>NÃO CONFORMIDADE DE PROJETO.</strong> ${semRenovacao.length} de ${salasAssistenciais.length}
+        ambientes assistenciais não possuem nenhum ativo de ventilação ou exaustão cadastrado, operando em
+        recirculação total. Cada um deles constitui não conformidade de projeto — <strong>não hipótese de
+        inaplicabilidade</strong> —, sujeita ao Plano de Ação e Contingência do ${refQaiA4}, com abertura de
+        Ordem de Serviço de adequação. Ressalva: a ausência de registro no cadastro não comprova a
+        inexistência física de exaustão; a confirmação depende de levantamento de campo com registro
+        fotográfico e anemometria, executado pela rotina <strong>[DUT-05]</strong>.</p>` : ''}`;
+  }
+
+  // ── 5.4 Adequação da capacidade instalada (auditoria 2026) ──
+  // OPCIONAL, desmarcada por padrão. A adequação entre capacidade instalada e carga térmica
+  // é matéria de PROJETO (ABNT NBR 16401-1) e não consta do conteúdo mínimo do PMOC exigido
+  // pela Lei 13.589/2018, pela Portaria MS 3.523/98 ou pela norma de qualidade do ar em
+  // vigor. Publicá-la em documento com ART, a partir de carga térmica estimada por método
+  // simplificado, expõe o responsável técnico sem obrigação legal que o justifique. O
+  // relatório de divergência de capacidade continua disponível na Central de Impressões,
+  // que é o instrumento de gestão interna adequado para o tema.
+  const incluir54 = !!($('pp-incluir-54') && $('pp-incluir-54').checked);
+
+  const salasSub = !incluir54 ? [] : _planoSalas
+    .filter(s => s.carga > 0 && (acPorSala[s.id]?.btu || 0) > 0)
+    .map(s => ({ ...s, inst: acPorSala[s.id].btu, pct: acPorSala[s.id].btu / s.carga }))
+    .filter(s => s.pct < PLANO_ADEQUACAO_MINIMA)
+    .sort((a, b) => a.pct - b.pct);
+
+  const totalComCarga = _planoSalas.filter(s => s.carga > 0 && (acPorSala[s.id]?.btu || 0) > 0).length;
+
+  const sec54 = salasSub.length ? `
+    <div class="cat-titulo">5.4 Adequação da Capacidade Instalada</div>
+    <p class="texto">Ambientes cuja capacidade instalada é inferior a
+    <strong>${(PLANO_ADEQUACAO_MINIMA * 100).toFixed(0)}%</strong> da carga térmica calculada.
+    A operação permanente em demanda máxima compromete o conforto térmico, impede o sistema de atingir o
+    setpoint em condição de pico e <strong>acelera a degradação do equipamento</strong>, com redução da vida
+    útil e aumento da frequência de intervenções corretivas.</p>
+    <table class="tb-lista">
+      <thead><tr>
+        <th>Setor</th><th>Ambiente</th><th style="width:13%;">Carga calc. (BTU/h)</th>
+        <th style="width:13%;">Instalado (BTU/h)</th><th style="width:10%;">Adequação</th>
+        <th style="width:13%;">Déficit (BTU/h)</th>
+      </tr></thead>
+      <tbody>${salasSub.map(s => `<tr>
+        <td>${escapeHTML(s.setor)}</td>
+        <td>${escapeHTML(s.nome)}</td>
+        <td style="text-align:right;">${Math.round(s.carga).toLocaleString('pt-BR')}</td>
+        <td style="text-align:right;">${Math.round(s.inst).toLocaleString('pt-BR')}</td>
+        <td style="text-align:center;${s.pct < 0.80 ? 'color:#9b2c2c;font-weight:bold;' : ''}">${(s.pct * 100).toFixed(1)}%</td>
+        <td style="text-align:right;">${Math.round(s.carga - s.inst).toLocaleString('pt-BR')}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <p class="texto" style="font-size:9px;color:#718096;">${salasSub.length} de ${totalComCarga} ambientes
+    com carga térmica calculada estão abaixo do piso de adequação
+    (${(100 * salasSub.length / (totalComCarga || 1)).toFixed(1)}%). Ambientes com área ou ocupação não
+    informadas no cadastro de locais têm carga térmica calculada sem o componente de envoltória e foram
+    excluídos desta apuração — a correção desses registros é condição para a validade do indicador.</p>` : '';
+
+  const sec5Memorial = `
+    <div class="sec">
+      <div class="sec-titulo">5. MEMORIAL DESCRITIVO DO SISTEMA</div>
+      <p class="texto">Descrição, por ambiente/setor, da tipologia construtiva dos sistemas de climatização
+      instalados, de seus componentes de tratamento e distribuição de ar e da existência de renovação de ar
+      exterior ou exaustão, conforme o cadastro de equipamentos vigente. <strong>A classificação tipológica
+      aqui estabelecida é vinculante para a determinação de aplicabilidade das atividades da Seção 6.</strong></p>
+      <div class="cat-titulo">5.1 Tipologia Construtiva por Setor</div>
+      <p class="texto" style="font-size:9px;color:#4a5568;">A exigência de <strong>exaustão mecânica
+      dedicada</strong> indicada em cada setor não decorre da simples presença ou ausência de ativos de
+      ventilação: é determinada ambiente a ambiente pelo cadastro de Locais — campo <em>Tipo de Ambiente</em>
+      e, quando declarado, o campo <em>Exaustão mecânica</em> da Sala, que prevalece sobre a regra do tipo.
+      Ambientes que, por sua destinação, não geram aerossóis, vapores, gases ou material contaminado não
+      demandam exaustão dedicada e não são apontados como não conformes. A <strong>renovação de ar
+      exterior</strong>, obrigação distinta e de alcance mais amplo, é tratada no item 5.3 e verificada em
+      campo pela rotina <strong>[DUT-05]</strong>.</p>
+      ${memorialCorpo || '<p class="texto">Nenhum equipamento cadastrado para compor o memorial descritivo.</p>'}
+      <div class="cat-titulo">5.2 Regime de Aplicabilidade das Rotinas</div>
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      A marcação <strong>NA (Não Aplicável)</strong> somente é admitida quando o componente objeto da rotina
+      <strong>inexiste fisicamente</strong> no ativo inspecionado, com justificativa registrada em campo.
+      É vedado: (a) atribuir NA por decorrência automática do campo cadastral de tipo de instalação, sem
+      verificação em campo; (b) atribuir NA ao item DUT-05 em ambiente de ocupação permanente desprovido de
+      tomada de ar exterior — hipótese que constitui <strong>NC por deficiência de projeto</strong>, com
+      abertura obrigatória de Ordem de Serviço de adequação.</p>
+      ${sec53}
+      ${sec54}
+    </div>`;
+
+  // ── 6. Plano de atividades (fonte única: CHECKLIST_PMOC_DEFS do app.js) ──
+  // Item 8: atividades condicionadas ao tipo de sistema instalado (CHECKLIST_ITEM_CONDICIONAL,
+  // definido em app.js) são ocultadas/marcadas conforme o parque de equipamentos AC cadastrado.
+  const eqsAC = _planoEqs.filter(e => planoNormCat(e.categoria) === 'AC');
+  const instalacoesAC = eqsAC.map(e => parseExtras(e.extras_tecnico)['instalacao-ac']).filter(Boolean);
+  const temAguaAberta  = instalacoesAC.some(v => AC_INSTALACOES_AGUA_ABERTA.includes(v));
+  const temPorteMaior  = instalacoesAC.some(v => AC_INSTALACOES_PORTE_MAIOR.includes(v));
+  const temPlenum      = instalacoesAC.some(v => AC_INSTALACOES_COM_PLENUM.includes(v));
+
+  let sec5Corpo = '';
+  catsPresentes.forEach(cat => {
+    const defs = CHECKLIST_PMOC_DEFS[cat] || CHECKLIST_PMOC_DEFS.OUT;
+    let linhas = '';
+    CHECKLIST_PERIODICIDADE_INFO.forEach(p => {
+      const itens = defs[p.key] || [];
+      if (!itens.length) return;
+      linhas += `<tr class="tr-periodo"><td colspan="3">${PLANO_PERIODO_LABEL[p.key]}</td></tr>`;
+      itens.forEach(([key, label]) => {
+        const condicional = cat === 'AC' ? CHECKLIST_ITEM_CONDICIONAL[key] : undefined;
+        const avaliacao = `<div class="avaliacao-opcoes"><span>C</span><span>NC</span><span>NA</span></div>`;
+        if (condicional === 'agua_aberta' && !temAguaAberta) {
+          linhas += `<tr style="color:#a0aec0;"><td>${escapeHTML(label)} <em>(não aplicável — nenhum sistema de água aberto cadastrado: torre de resfriamento, condensador evaporativo ou água gelada)</em></td><td style="text-align:center;width:82px;">N/A</td><td style="text-align:center;width:76px;">—</td></tr>`;
+        } else if (condicional === 'plenum' && !temPlenum) {
+          linhas += `<tr style="color:#a0aec0;"><td>${escapeHTML(label)} <em>(não aplicável — nenhum equipamento com plenum, rede de dutos ou bocas de ar remotas cadastrado)</em></td><td style="text-align:center;width:82px;">N/A</td><td style="text-align:center;width:76px;">—</td></tr>`;
+        } else if (condicional === 'plenum') {
+          linhas += `<tr><td>${escapeHTML(label)}</td><td style="text-align:center;width:82px;">${PLANO_PERIODO_LABEL[p.key]}</td><td style="width:76px;">${avaliacao}</td></tr>`;
+        } else if (condicional === 'porte_maior' && !temPorteMaior) {
+          linhas += `<tr style="color:#a0aec0;"><td>${escapeHTML(label)} <em>(não aplicável — nenhum equipamento com transmissão por correias/polias cadastrado)</em></td><td style="text-align:center;width:82px;">N/A</td><td style="text-align:center;width:76px;">—</td></tr>`;
+        } else if (condicional === 'porte_maior') {
+          linhas += `<tr><td>${escapeHTML(label)} <em>(quando aplicável)</em></td><td style="text-align:center;width:82px;">${PLANO_PERIODO_LABEL[p.key]}</td><td style="width:76px;">${avaliacao}</td></tr>`;
+        } else {
+          linhas += `<tr><td>${escapeHTML(label)}</td><td style="text-align:center;width:82px;">${PLANO_PERIODO_LABEL[p.key]}</td><td style="width:76px;">${avaliacao}</td></tr>`;
+        }
+      });
+    });
+    const nEq = _planoEqs.filter(e => planoNormCat(e.categoria) === cat).length;
+    sec5Corpo += `
+      <div class="cat-titulo">${escapeHTML(PLANO_CAT_LABEL[cat])} — ${nEq} equipamento(s)</div>
+      <table class="tb-lista tb-atividades">
+        <thead><tr><th>Atividade de Manutenção e Controle</th><th style="width:82px;">Periodicidade</th><th style="width:76px;">Avaliação</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>`;
+  });
+
+  // Remissão ao POP quando o anexo não é embutido — mantém a rastreabilidade documental
+  // exigida pela Portaria MS 3.523/98 sem incorporar o procedimento ao acervo do PMOC.
+  const remissaoPop = cfg.incluir_pop ? '' : `
+    <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+    <strong>Procedimento de execução.</strong> O método de execução de cada item de verificação e os
+    critérios objetivos de classificação C / NC / NA constam do documento
+    <strong>POP-PMOC-001 — Guia de Execução dos Itens de Verificação</strong>, rev. ${cfg.ano}, mantido pelo
+    sistema de gestão da manutenção sob controle de revisão e disponível à autoridade sanitária mediante
+    solicitação. O POP é documento do sistema de gestão e não integra o acervo normativo deste PMOC.</p>`;
+
+  // Remissão ao plano de QAI quando o Anexo I não é embutido. O monitoramento da qualidade
+  // do ar é conteúdo normativo (Lei 13.589/2018, art. 3º, parágrafo único, c/c ABNT NBR
+  // 17037): suprimi-lo do PMOC sem declarar onde ele reside deixaria o documento sem um
+  // elemento exigido. A remissão preserva a rastreabilidade e explicita a obrigação.
+  const remissaoQai = incluiQai ? '' : `
+    <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+    <strong>Monitoramento da qualidade do ar interior.</strong> Os parâmetros, os critérios de aceitação, as
+    condições de validade da amostragem, o plano de ação e contingência e o programa de gestão de que trata a
+    <strong>ABNT NBR 17037:2023 (Versão Corrigida 2:2024)</strong> constam do <strong>Plano de Monitoramento de
+    Qualidade do Ar Interior</strong> do estabelecimento, documento apartado deste PMOC, mantido sob controle de
+    revisão e disponível à autoridade sanitária. Mantém-se a periodicidade <strong>no mínimo semestral</strong>
+    das campanhas de amostragem e a exigência de laboratório acreditado conforme a ABNT NBR ISO/IEC 17025,
+    tecnicamente desvinculado das atividades de manutenção (NBR 17037, 8.3). A remissão não afasta a
+    exigibilidade: o monitoramento é obrigação decorrente da Lei nº 13.589/2018, art. 3º, parágrafo único, e
+    da Portaria MS nº 3.523/1998, e o item BIO-05 do checklist desta seção verifica a existência dos laudos
+    correspondentes.</p>`;
+
+  const sec5 = `
+    <div class="sec">
+      <div class="sec-titulo">6. PLANO DE ATIVIDADES DE MANUTENÇÃO E CONTROLE</div>
+      <p class="texto">As atividades abaixo são cumulativas por periodicidade: nas execuções trimestrais são
+      realizadas também as rotinas mensais; nas semestrais, as mensais e trimestrais; e assim sucessivamente.
+      A execução é registrada por equipamento na respectiva ficha de manutenção (laudo PMOC), que traz o
+      critério de avaliação de cada item: <strong>C</strong> — Conforme (atende integralmente); <strong>NC</strong>
+      — Não Conforme (requer ação corretiva/Ordem de Serviço); <strong>NA</strong> — Não Aplicável ao equipamento
+      ou sistema em questão.</p>
+      ${sec5Corpo}
+      ${remissaoQai}
+      ${remissaoPop}
+    </div>`;
+
+  // ── ANEXO I — Monitoramento da Qualidade do Ar Interior (QAI) ──
+  // Opcional por escolha expressa do RT. Suprimido, o corpo mantém a remissão ao plano
+  // apartado (ver 'remissaoQai', Seção 6) e nenhuma referência fica órfã.
+  const secQai = !incluiQai ? '' : `
+    <div class="sec sec-anexo">
+      <div class="anexo-etiqueta">ANEXO I · QAI</div>
+      <div class="sec-titulo">MONITORAMENTO DA QUALIDADE DO AR INTERIOR (QAI)</div>
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Natureza deste anexo.</strong> O monitoramento da qualidade do ar interior é atividade de
+      periodicidade própria, executada por laboratório acreditado e tecnicamente desvinculada das rotinas de
+      manutenção da Seção 6. Por essa razão o seu detalhamento é apresentado em anexo, e não no corpo do plano.
+      O anexo <strong>integra este PMOC para todos os efeitos</strong>, por força do art. 3º, parágrafo único,
+      da Lei nº 13.589/2018 e da ABNT NBR 17037: a forma de apresentação não reduz, não condiciona e não
+      posterga a exigibilidade dos parâmetros, das periodicidades e das providências aqui estabelecidos.</p>
+      <p class="texto">Independentemente da manutenção dos equipamentos descrita na Seção 6, o estabelecimento
+      deve manter monitoramento periódico da qualidade do ar interior (QAI), com <strong>periodicidade
+      semestral</strong>, contemplando a medição de CO₂, temperatura, umidade relativa, velocidade do ar e material
+      particulado, além da contagem microbiológica do ar (fungos e bactérias), comparando ambiente interno e externo,
+      conforme <strong>ABNT NBR 17037:2023 (Versão Corrigida 2:2024)</strong>.</p>
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Atualização da base normativa.</strong> A Resolução RE ANVISA nº 09/2003 foi <strong>revogada</strong>
+      pela Resolução RDC ANVISA nº 886, de 10 de julho de 2024 (art. 3º, inciso XI), publicada no DOU de 12/07/2024,
+      com vigência a partir da publicação. A referência técnica para os padrões de qualidade do ar interior passou
+      a ser a <strong>ABNT NBR 17037</strong>, por força do art. 3º, parágrafo único, da Lei nº 13.589/2018. Os
+      valores adiante já refletem a norma vigente. A Portaria MS nº 3.523/1998 <strong>permanece em vigor</strong>,
+      por não ser ato da ANVISA e não integrar o rol revogado.</p>
+      <table class="tb-ident">
+        <tr><td class="lbl">Metodologia</td><td colspan="3">${escapeHTML(cfg.qai_metodologia || 'A definir na contratação da campanha')}</td></tr>
+        <tr><td class="lbl">Laboratório Responsável</td><td>${escapeHTML(cfg.qai_laboratorio || (emImplantacao ? 'A contratar — prazo em A.8' : 'A contratar'))}</td>
+            <td class="lbl">CNPJ do Laboratório</td><td>${escapeHTML(cfg.qai_lab_cnpj || 'A definir na contratação')}</td></tr>
+        <tr><td class="lbl">Acreditação</td><td>${escapeHTML(cfg.qai_lab_acreditacao || 'Acreditação CGCRE/INMETRO — requisito de habilitação na contratação')}</td>
+            <td class="lbl">Qtd. de Amostras</td><td>${escapeHTML(cfg.qai_qtd_amostras || 'Conforme Tabela 3 da ABNT NBR 17037 (item A.2)')}</td></tr>
+        <tr><td class="lbl">Pontos de Coleta</td><td colspan="3">${escapeHTML(cfg.qai_pontos_coleta || 'A definir no plano de amostragem, observado o item A.2')}</td></tr>
+      </table>
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Desvinculação técnica das análises (ABNT NBR 17037, 8.3).</strong> A norma determina que as
+      análises laboratoriais de QAI e a respectiva responsabilidade técnica sejam <strong>desvinculadas das
+      atividades de limpeza, manutenção e comercialização de produtos</strong>. Declara-se, para todos os fins,
+      que as análises objeto desta seção ${emImplantacao ? '<strong>serão obrigatoriamente contratadas</strong>' : '<strong>são contratadas</strong>'}
+      de laboratório acreditado <strong>independente da empresa executante da manutenção</strong> —
+      ${escapeHTML(cfg.rt_empresa || '—')} — vedada coincidência de titularidade, de quadro societário ou de
+      responsabilidade técnica entre ambos.${emImplantacao ? ' Esta vedação constitui <strong>requisito de habilitação</strong> do processo de contratação, cujo prazo consta do item A.8.' : ''} A acreditação do laboratório junto à CGCRE/INMETRO, conforme ABNT NBR ISO/IEC 17025, é condição
+      de validade dos laudos que integram este acervo.</p>
+      <div class="cat-titulo">A.1 Parâmetros Obrigatórios e Critérios de Aceitação</div>
+      <table class="tb-lista">
+        <thead><tr><th>Parâmetro</th><th style="width:44%;">Valor Máximo Aceitável (VMA) / Faixa</th><th style="width:13%;">Periodicidade mínima</th><th style="width:18%;">Referência</th></tr></thead>
+        <tbody>
+          <tr><td>Dióxido de carbono (CO₂)</td><td><strong>Diferencial interno-externo ≤ 700 ppm.</strong> O padrão é a diferença entre a concentração no ambiente e a medida no ar exterior no mesmo período — não um valor absoluto. Com ar exterior típico de 400 ppm, o interior pode legitimamente alcançar valores acima de 1.100 ppm</td><td><strong>Semestral</strong></td><td>NBR 17037, 5.2.1 · 7.2</td></tr>
+          <tr><td>Material particulado PM₁₀</td><td><strong>≤ 50 µg/m³</strong> (concentração <strong>média em 24 h</strong>)</td><td>Semestral</td><td>NBR 17037, 5.2.2</td></tr>
+          <tr><td>Material particulado PM₂,₅</td><td><strong>≤ 25 µg/m³</strong> (concentração <strong>média em 24 h</strong>)</td><td>Semestral</td><td>NBR 17037, 5.2.2</td></tr>
+          <tr><td>Contagem fúngica</td><td><strong>≤ 750 UFC/m³</strong> <em>e</em> relação Interior/Exterior (I/E) ≤ 1,5</td><td><strong>Semestral</strong></td><td>NBR 17037, 5.1 · 7.1.1 d)</td></tr>
+          <tr><td>Bactérias mesófilas (contagem total)</td><td><strong>≤ 500 UFC/m³</strong>, ressalvados valores fixados em regulamento específico. Análise indicada em ambientes de característica epidemiológica diferenciada, entre os quais os estabelecimentos assistenciais de saúde</td><td><strong>Semestral</strong></td><td>NBR 17037, 5.1 · 7.1.1 d)</td></tr>
+          <tr><td>Fungos patogênicos e toxigênicos</td><td>Identificados, devem ser <strong>avaliados quanto ao risco</strong>, considerando o perfil de ocupação e os fatores ambientais. A norma não estabelece reprovação automática: a decisão compete ao responsável técnico</td><td>Por ocorrência</td><td>NBR 17037, 6.5</td></tr>
+          <tr><td>Temperatura de bulbo seco</td><td>21 °C a 26 °C</td><td>Semestral</td><td>NBR 17037, 5.2.3</td></tr>
+          <tr><td>Umidade relativa</td><td>35 % a 65 % (faixa recomendável)</td><td>Semestral</td><td>NBR 17037, 5.2.3</td></tr>
+          <tr><td>Velocidade do ar na zona de ocupação</td><td><strong>≤ 0,20 m/s</strong></td><td>Semestral</td><td>NBR 17037, 5.2.3</td></tr>
+          <tr><td>Contaminação microbiológica em bandeja e serpentina</td><td>Sem VMA pré-determinado — avaliação pelo <strong>histórico de análises do local</strong> com presença de água</td><td>Semestral</td><td>NBR 17037, 5.1</td></tr>
+          <tr><td>Taxa de renovação de ar exterior</td><td><strong>≥ 27 m³/h·pessoa</strong>, ou valor superior resultante da NBR 16401-3 Nível 2 em setores assistenciais</td><td>Anual</td><td>Portaria MS nº 3.523/98 · NBR 16401-3</td></tr>
+          <tr><td>Diferencial de pressão em filtros</td><td>Conforme especificação do fabricante; troca obrigatória ao atingir o valor final</td><td>Mensal</td><td>NBR 16401-1</td></tr>
+        </tbody>
+      </table>
+      <p class="texto" style="font-size:9px;color:#718096;"><strong>Periodicidade.</strong> A ABNT NBR 17037
+      (7.1.1 d) e 7.2) fixa periodicidade <strong>no mínimo semestral</strong> para bioaerossóis e para CO₂. A
+      redução dessa frequência para o CO₂ só é admitida, em casos específicos, em locais com densidade de
+      ocupação superior a 0,5 pessoa/m². Não se adota, neste plano, qualquer redução: mantém-se a periodicidade
+      semestral para todos os parâmetros de campanha.</p>
+
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Critério de material particulado (NBR 17037, 5.2.2).</strong> Os limites de PM₁₀ e PM₂,₅ são
+      <strong>concentrações médias em 24 horas</strong>. Medição instantânea acima do limite
+      <strong>não configura, por si só, não conformidade</strong>: caracteriza-se como resultado de
+      <strong>investigação</strong>, determinando nova campanha de medição em regime de 24 h e diagnóstico das
+      fontes (obra em curso, tráfego externo, ressuspensão por limpeza a seco, filtragem colmatada ou
+      subdimensionada). Somente a média de 24 h acima do VMA gera não conformidade e aciona o plano de ação.</p>
+
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Nota técnica.</strong> O CO₂ não é, isoladamente, poluente de risco nas concentrações em análise:
+      é <strong>indicador substituto (proxy) da taxa de renovação de ar exterior</strong>. Diferencial acima de
+      700 ppm sobre o ar exterior indica, por relação direta, insuficiência de ar exterior — e, por consequência,
+      acúmulo proporcional dos demais bioefluentes e contaminantes do ambiente. Por essa razão, a reprovação em CO₂
+      <strong>não é corrigível por higienização de equipamento</strong>: exige intervenção sobre a infraestrutura de
+      renovação. <strong>Atenção ao método:</strong> por ser um critério diferencial, toda campanha exige amostra
+      simultânea de ar exterior — laudo sem medição externa é inconclusivo para este parâmetro. Registre-se que a
+      ABNT NBR 17037 (5.2.1) trata o CO₂ como <strong>indicador de odores corporais</strong> decorrentes da
+      ocupação, e não como indicador de poluição química do ambiente.</p>
+
+      <div class="cat-titulo">A.2 Condições de Validade da Amostragem</div>
+      <p class="texto">A amostragem deve ser realizada <strong>em regime de ocupação normal</strong>, com o sistema
+      em operação há no mínimo 2 horas, por laboratório acreditado conforme a <strong>ABNT NBR ISO/IEC 17025</strong>
+      e com instrumentos calibrados. <strong>Amostragem em ambiente desocupado é inválida para o parâmetro CO₂.</strong>
+      Os laudos integram o acervo do PMOC pelo prazo mínimo de 3 (três) anos — <strong>prazo fixado como critério
+      interno do responsável técnico</strong>, não decorrente de norma expressa — e devem estar disponíveis à autoridade
+      sanitária. Ambientes com NC registrada em campanha anterior sofrem <strong>reamostragem em até 30 dias</strong>
+      após a ação corretiva.</p>
+      <p class="texto">Exige-se, no mínimo, <strong>uma amostra de ar exterior por campanha</strong>, colhida fora da
+      estrutura predial a 1,5 m do nível da rua, próxima à entrada de ar exterior do sistema e afastada de fontes
+      poluentes (depósito de resíduos, tráfego, jardins com terra, obras). Os pontos internos são distribuídos
+      uniformemente, coletados a 1,5 m do piso, no centro do ambiente e nas áreas de maior ocupação, com registro
+      fotográfico de cada local. As unidades funcionais de característica epidemiológica diferenciada — entre elas os
+      <strong>serviços de saúde</strong> — são avaliadas com amostras tomadas isolada e adicionalmente.</p>
+      <table class="tb-lista">
+        <thead><tr><th style="width:50%;">Área construída climatizada (m²)</th><th>Número mínimo de amostras de ar interior</th></tr></thead>
+        <tbody>
+          <tr><td>Até 1.000</td><td>1</td></tr>
+          <tr><td>1.000 a 2.000</td><td>3</td></tr>
+          <tr><td>2.000 a 3.000</td><td>5</td></tr>
+          <tr><td>3.000 a 5.000</td><td>8</td></tr>
+          <tr><td>5.000 a 10.000</td><td>12</td></tr>
+          <tr><td>10.000 a 15.000</td><td>15</td></tr>
+          <tr><td>15.000 a 20.000</td><td>18</td></tr>
+          <tr><td>20.000 a 30.000</td><td>21</td></tr>
+          <tr><td>Acima de 30.000</td><td>25</td></tr>
+        </tbody>
+      </table>
+      <p class="texto" style="font-size:9px;color:#718096;">Quantitativo mínimo por edificação e razão social, conforme
+      ABNT NBR 17037, Tabela 3 — acrescido das amostras isoladas das unidades de característica epidemiológica
+      diferenciada. Instrumentos e periodicidades de calibração seguem o Anexo A (normativo) da mesma norma:
+      calibração <strong>semestral</strong> para amostragem microbiológica e <strong>anual</strong> para CO₂ (NDIR),
+      material particulado (dispersão laser), temperatura, umidade relativa e velocidade do ar.</p>
+
+      <div class="cat-titulo">A.3 Plano de Ação e Contingência — Escalonamento por Severidade (CO₂)</div>
+      <p class="texto" style="font-size:9px;color:#4a5568;">Os níveis abaixo são expressos como <strong>diferencial
+      (Δ) sobre a concentração medida no ar exterior na mesma campanha</strong>, em conformidade com o critério da
+      ABNT NBR 17037, 5.2.1. O VMA normativo é Δ ≤ 700 ppm; os patamares N1 e N3 são definição interna do responsável
+      técnico para escalonar a resposta, não constituindo parâmetro normativo.</p>
+      <table class="tb-lista">
+        <thead><tr><th style="width:14%;">Nível</th><th style="width:22%;">Faixa medida (Δ sobre o ar exterior)</th><th style="width:12%;">Prazo</th><th>Ação determinada</th></tr></thead>
+        <tbody>
+          <tr><td><strong>N1 — Atenção</strong></td><td>Δ de 500 a 700 ppm <em>(dentro do VMA, em aproximação)</em></td><td>15 dias</td><td>Ajuste operacional: abertura de dampers de ar exterior, revisão de setpoints e horários de operação, verificação de obstrução da tomada de ar. Reamostragem na campanha seguinte.</td></tr>
+          <tr><td><strong>N2 — Não Conformidade</strong></td><td>Δ &gt; 700 e ≤ 1.000 ppm</td><td>30 dias</td><td>Diagnóstico de causa raiz. Causa <em>operacional</em> (damper fechado, tomada obstruída, filtro colmatado): correção imediata e reamostragem em 30 dias. Causa <em>estrutural</em>: aplica-se o item A.4.</td></tr>
+          <tr><td><strong>N3 — NC Grave</strong></td><td>Δ &gt; 1.000 ppm, <em>ou</em> qualquer Δ &gt; 700 ppm em setor assistencial</td><td>Imediato</td><td>Aplicação imediata do item A.4, sem prazo de diagnóstico prévio.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="cat-titulo">A.4 Determinação Vinculante — Reprovação por Ausência de Infraestrutura de Renovação</div>
+      <p class="texto">Constatada a reprovação do laudo de CO₂ e <strong>identificada como causa a inexistência de
+      infraestrutura prévia de renovação de ar exterior</strong> no ambiente, fica determinado que o ambiente será
+      submetido, <strong>obrigatória e alternativamente</strong>, a uma das duas providências abaixo. <strong>Não é
+      admitida a manutenção do status quo, a reamostragem sucessiva sem intervenção, nem a justificativa por
+      indisponibilidade orçamentária.</strong></p>
+      <table class="tb-lista">
+        <thead><tr><th style="width:32%;">Providência</th><th>Conteúdo e prazos</th></tr></thead>
+        <tbody>
+          <tr><td><strong>(i) ADEQUAÇÃO MECÂNICA IMEDIATA</strong></td><td>Implantação de sistema de suprimento de ar exterior filtrado — e de exaustão, quando exigida — dimensionado conforme ABNT NBR 16401-3 (Nível 2 para setores assistenciais), observado o piso legal de 27 m³/h·pessoa, com filtragem de classe mínima <strong>G4 seguida de M5 conforme ABNT NBR 16101</strong>, ou classe
+      equivalente segundo a ABNT NBR ISO 16890, comando intertravado ao funcionamento da climatização e balanceamento comprovado por anemometria. <strong>Prazos:</strong> projeto executivo em 30 dias · execução em 90 dias · laudo de comprovação por reamostragem em até 15 dias após o comissionamento.</td></tr>
+          <tr><td><strong>(ii) INTERDIÇÃO DE USO INTENSIVO</strong><br><em>(medida paliativa temporária)</em></td><td>Enquanto não concluída a adequação (i), restrição formal de uso com comunicado afixado e registro no acervo do PMOC, compreendendo cumulativamente: <strong>redução da densidade de ocupação</strong> ao máximo que mantenha o diferencial de CO₂ abaixo de 700 ppm sobre o ar exterior, determinado por medição em regime; <strong>limitação do tempo de permanência contínua</strong>, com intervalos obrigatórios de ventilação natural forçada (portas e janelas abertas, climatização desligada) de no mínimo 15 minutos a cada 2 horas de uso; e <strong>vedação de uso para atividades de ocupação máxima</strong> (turmas completas, atendimento simultâneo, eventos).</td></tr>
+        </tbody>
+      </table>
+      <p class="texto" style="font-size:9px;color:#9b2c2c;border-left:3px solid #9b2c2c;padding-left:8px;">
+      <strong>Vedação expressa.</strong> A medida (ii) <strong>não substitui</strong> a medida (i) e <strong>não pode
+      ser adotada em caráter permanente</strong>. Decorridos <strong>180 dias</strong> da primeira reprovação sem
+      conclusão da adequação mecânica, o ambiente fica <strong>interditado para uso assistencial</strong>, cabendo ao
+      responsável técnico registrar formalmente a recomendação de interdição à direção do estabelecimento —
+      comunicação que, uma vez emitida, transfere à administração a responsabilidade pela manutenção do uso.</p>
+
+      <div class="cat-titulo">A.5 Contingência para Reprovação Microbiológica</div>
+      <p class="texto"><strong>Contagem fúngica &gt; 750 UFC/m³ ou relação I/E &gt; 1,5:</strong> higienização e
+      desinfecção completa do sistema (serpentina, bandeja e dreno, <strong>plenum e bocas de ar</strong>, rede de dutos
+      quando existente), substituição integral dos elementos filtrantes e reamostragem em até 30 dias.
+      <strong>Identificação de fungo patogênico ou toxigênico:</strong> a ABNT NBR 17037 (6.5) não impõe reprovação automática — determina avaliação do risco à luz do perfil de ocupação e dos fatores ambientais. Fica estabelecido, por decisão do responsável técnico e em razão do caráter assistencial dos ambientes, o seguinte protocolo interno: suspensão do uso do ambiente, higienização com produto saneante regularizado na ANVISA, investigação da causa-raiz (fonte de umidade, infiltração ou material poroso contaminado) e liberação <strong>condicionada a laudo de reamostragem aprovado</strong>. Adicionalmente, <strong>contagem bacteriana &gt; 500 UFC/m³</strong> em ambiente assistencial enseja o mesmo ciclo de higienização e reamostragem.</p>
+
+      <div class="cat-titulo">A.6 Programa de Gestão da Qualidade do Ar Interior (ISO 16000-40)</div>
+      <p class="texto">Em <strong>complemento</strong> às análises laboratoriais de que tratam os itens
+      anteriores, a <strong>ABNT NBR 17037, 6.7</strong>, determina a elaboração de programa de gestão da
+      qualidade do ar interior conforme a <strong>ISO 16000-40</strong>. O programa integra este PMOC e é
+      executado sob responsabilidade técnica de profissional habilitado na área de qualidade do ar de
+      interiores, compreendendo os elementos abaixo.</p>
+      <table class="tb-lista">
+        <thead><tr><th style="width:32%;">Elemento do programa</th><th style="width:16%;">Periodicidade</th><th>Conteúdo e evidência</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Plano de inspeção visual</strong></td><td><strong>${escapeHTML(PLANO_PERIODO_LABEL[cfg.qai_inspecao_periodicidade] || 'Trimestral')}</strong></td><td>Inspeção do ambiente ocupado e do sistema de climatização — tomada de ar exterior, filtros, serpentina, bandeja e dreno, plenum, bocas de insuflamento e retorno, rede de dutos quando existente, isolamento térmico e indícios de umidade, infiltração ou proliferação microbiana em materiais porosos.</td></tr>
+          <tr><td><strong>Relatório técnico e fotográfico</strong></td><td>A cada inspeção</td><td>Registro descritivo e fotográfico de cada ponto inspecionado, com identificação do ambiente, data, executante e classificação do achado. Integra o acervo do PMOC.</td></tr>
+          <tr><td><strong>Questionário de satisfação dos usuários</strong></td><td><strong>${escapeHTML((cfg.qai_questionario_periodicidade || 'anual').replace(/^./, c => c.toUpperCase()))}</strong></td><td>Avaliação da percepção dos ocupantes quanto a conforto térmico, odores, qualidade percebida do ar e sintomatologia associada ao ambiente, no modelo sugerido pela <strong>ABNT NBR 16401-3</strong>. O resultado é analisado em conjunto com os laudos da campanha.</td></tr>
+          <tr><td><strong>Plano de ação</strong></td><td>Por não conformidade</td><td>Eliminação, controle ou mitigação de cada não conformidade identificada nas análises, na inspeção visual ou no questionário, com causa raiz, ação determinada, responsável, prazo e evidência de conclusão, vinculado a Ordem de Serviço no sistema de gestão.</td></tr>
+          <tr><td><strong>Responsabilidade técnica</strong></td><td>Permanente</td><td>Execução e supervisão do programa por responsável técnico habilitado na área de qualidade do ar de interiores, nos termos da ABNT NBR 17037, 6.7.</td></tr>
+        </tbody>
+      </table>
+      ${emImplantacao ? `<p class="texto" style="font-size:9px;color:#4a5568;">Em regime de implantação, a
+      primeira execução de cada elemento deste programa observa o cronograma do <strong>item A.8</strong>. A
+      inspeção visual e o relatório fotográfico <strong>independem de contratação de laboratório</strong> e são
+      exigíveis desde o primeiro ciclo.</p>` : ''}
+      <p class="texto" style="font-size:9px;color:#718096;">A inspeção visual e o questionário <strong>não
+      substituem</strong> a amostragem laboratorial: são instrumentos complementares de detecção precoce, que
+      podem antecipar campanha extraordinária quando indicarem degradação da qualidade do ar.</p>
+
+      <div class="cat-titulo">A.7 Divulgação aos Ocupantes</div>
+      <p class="texto">Constitui obrigação expressa da <strong>ABNT NBR 17037, 8.1 e)</strong>, e da
+      <strong>Portaria MS nº 3.523/1998</strong>, a divulgação aos ocupantes dos procedimentos e dos resultados
+      das atividades de avaliação, correção e manutenção da qualidade do ar interior.</p>
+      <table class="tb-ident">
+        <tr><td class="lbl">Meio de divulgação</td><td colspan="3">${escapeHTML(cfg.qai_divulgacao_meio || 'A definir pelo estabelecimento — obrigação exigível desde a emissão')}</td></tr>
+        <tr><td class="lbl">Periodicidade</td><td>${escapeHTML(cfg.qai_divulgacao_periodicidade || '—')}</td>
+            <td class="lbl">Responsável</td><td>${escapeHTML(cfg.resp_legal || 'Responsável Legal')} — ${escapeHTML(cfg.resp_cargo || 'Representante do Estabelecimento')}</td></tr>
+      </table>
+      <p class="texto">São objeto de divulgação, no mínimo: a existência e a vigência deste PMOC; o nome e o
+      registro do responsável técnico; os resultados de cada campanha de amostragem de QAI, com indicação dos
+      parâmetros conformes e não conformes; as ações corretivas determinadas e seus prazos; e o canal para
+      comunicação de queixas relacionadas à qualidade do ar.${emImplantacao ? ' Enquanto não concluída a primeira campanha, a divulgação compreende a existência e a vigência deste PMOC, o cronograma de implantação do item A.8 e o canal de queixas.' : ''} A evidência da divulgação — registro fotográfico do
+      mural, comprovante de publicação ou de envio — integra o acervo documental do PMOC.</p>
+
+
+      ${emImplantacao ? `
+      <div class="cat-titulo">A.8 Regime de Implantação — Cronograma do Primeiro Ciclo</div>
+      <p class="texto">Este PMOC é emitido em <strong>regime de implantação</strong>: trata-se do primeiro ciclo
+      do plano no estabelecimento, e as campanhas de amostragem de qualidade do ar interior
+      <strong>ainda não foram executadas</strong>. O registro expresso desta condição é deliberado — a
+      <strong>Lei nº 13.589/2018</strong> e a <strong>Portaria MS nº 3.523/1998</strong> exigem a existência do
+      plano e seu conteúdo mínimo, não a execução prévia da amostragem. O plano assume, portanto, o marco zero e
+      o cronograma de adimplemento abaixo, cujos prazos são contados da data de emissão
+      (${emissaoBR}) e constituem <strong>obrigação assumida pelo estabelecimento</strong>.</p>
+      <table class="tb-lista">
+        <thead><tr><th style="width:38%;">Marco de implantação</th><th style="width:14%;">Prazo</th><th style="width:14%;">Data-limite</th><th>Evidência de cumprimento</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Contratação do laboratório de QAI</strong><br><em>acreditado e desvinculado da manutenção (item 8.3 da NBR 17037)</em></td><td>${escapeHTML(String(cfg.impl_prazo_lab))} dias</td><td><strong>${prazoLabBR}</strong></td><td>Contrato ou empenho, com comprovação de acreditação CGCRE/INMETRO e declaração de independência em relação à executante.</td></tr>
+          <tr><td><strong>1ª campanha de amostragem de QAI</strong><br><em>bioaerossóis, CO₂, material particulado e parâmetros físicos</em></td><td>${escapeHTML(String(cfg.impl_prazo_campanha))} dias</td><td><strong>${prazoCampanhaBR}</strong></td><td>Laudos por ponto amostrado, com amostra externa simultânea e registro fotográfico dos pontos (itens A.1 e A.2).</td></tr>
+          <tr><td><strong>1ª inspeção visual do programa de gestão</strong><br><em>ISO 16000-40 (item A.6)</em></td><td>${escapeHTML(String(Math.min(parseInt(cfg.impl_prazo_lab, 10) || 90, 90)))} dias</td><td><strong>${dataMaisDias(Math.min(parseInt(cfg.impl_prazo_lab, 10) || 90, 90))}</strong></td><td>Relatório técnico e fotográfico. Independe de contratação de laboratório e antecede a primeira campanha.</td></tr>
+          <tr><td><strong>1ª aplicação do questionário de satisfação</strong><br><em>modelo da NBR 16401-3 (item A.6)</em></td><td>${escapeHTML(String(cfg.impl_prazo_campanha))} dias</td><td><strong>${prazoCampanhaBR}</strong></td><td>Formulários respondidos e consolidação dos resultados, analisados em conjunto com os laudos da campanha.</td></tr>
+          <tr><td><strong>1ª divulgação aos ocupantes</strong><br><em>item A.7</em></td><td>30 dias após a 1ª campanha</td><td><strong>${dataMaisDias((parseInt(cfg.impl_prazo_campanha, 10) || 180) + 30)}</strong></td><td>Registro fotográfico do mural, comprovante de publicação ou de envio.</td></tr>
+          <tr><td><strong>Entrada em regime pleno</strong></td><td colspan="2" style="text-align:center;">Concluídos os marcos acima</td><td>Reemissão deste PMOC em <strong>regime pleno</strong>, com identificação completa do laboratório e incorporação dos laudos ao acervo.</td></tr>
+        </tbody>
+      </table>
+      <p class="texto" style="font-size:9px;color:#4a5568;border-left:3px solid #1e3a5f;padding-left:8px;">
+      <strong>Alcance do regime de implantação.</strong> O regime alcança <strong>exclusivamente</strong> os
+      marcos acima, que dependem de contratação de terceiro ou de decurso de prazo. <strong>Não alcança</strong>,
+      e não suspende, as rotinas de manutenção da Seção 6, o cronograma da Seção 7 nem os deveres de registro e
+      de guarda documental: estes são exigíveis desde a emissão. Também não afasta o item A.4 — constatada
+      ausência de infraestrutura de renovação de ar exterior em ambiente assistencial, a providência ali
+      determinada é devida independentemente do estágio de implantação da amostragem.</p>
+      <p class="texto" style="font-size:9px;color:#718096;">Os prazos deste item são
+      <strong>definição interna do responsável técnico</strong>, fixados em razão do estágio de implantação, e
+      não decorrem de prazo normativo expresso. A periodicidade de regime, uma vez concluído o primeiro ciclo, é
+      a do item A.1 — no mínimo semestral.</p>
+      ` : ''}
+
+      <p class="texto" style="font-size:9px;color:#718096;">Toda ação decorrente deste anexo gera <strong>Ordem de
+      Serviço</strong> vinculada ao ambiente e ao ativo, com prazo, responsável e evidência de conclusão, integrando o
+      cômputo dos indicadores de desempenho. Parâmetros específicos de ambientes críticos (salas limpas, centros
+      cirúrgicos) são tratados em documentação complementar, conforme ABNT NBR 7256.</p>
+    </div>`;
+
+  // ── 7. Cronograma anual ──
+  const mesInicio = cfg.mes_inicio;
+  let linhasCron = '';
+  catsPresentes.forEach(cat => {
+    const defs = CHECKLIST_PMOC_DEFS[cat] || CHECKLIST_PMOC_DEFS.OUT;
+    const periodosCat = CHECKLIST_PERIODICIDADE_INFO.filter(p => (defs[p.key] || []).length);
+    periodosCat.forEach((p, idx) => {
+      const ativos = planoMesesAtivos(p.key, mesInicio);
+      const cels = Array.from({ length: 12 }, (_, m) =>
+        `<td class="cron-cel ${ativos.has(m) ? 'on-' + p.freqLetra : ''}">${ativos.has(m) ? p.freqLetra : ''}</td>`
+      ).join('');
+      linhasCron += `<tr>
+        ${idx === 0 ? `<td rowspan="${periodosCat.length}" class="cron-cat">${escapeHTML(PLANO_CAT_LABEL[cat])}</td>` : ''}
+        <td>${PLANO_PERIODO_LABEL[p.key]}</td>${cels}
+      </tr>`;
+    });
+  });
+
+  const sec6 = `
+    <div class="sec">
+      <div class="sec-titulo">7. CRONOGRAMA ANUAL DE EXECUÇÃO — ${cfg.ano}</div>
+      <p class="texto">Ciclo iniciado em <strong>${PLANO_MESES[mesInicio]}/${cfg.ano}</strong>. As datas efetivas
+      de execução dentro de cada mês seguem a programação operacional do sistema (aba Programação PMOC),
+      calculada em dias úteis.</p>
+      <table class="tb-cron">
+        <thead><tr><th>Categoria</th><th>Rotina</th>${PLANO_MESES_CURTO.map(m => `<th>${m}</th>`).join('')}</tr></thead>
+        <tbody>${linhasCron}</tbody>
+      </table>
+      <div class="cron-legenda">
+        <span><span class="pill on-M">M</span> Mensal</span>
+        <span><span class="pill on-T">T</span> Trimestral</span>
+        <span><span class="pill on-S">S</span> Semestral</span>
+        <span><span class="pill on-A">A</span> Anual</span>
+      </div>
+    </div>`;
+
+  // ── 7. Orientações ──
+  const orientacoes = [
+    'Todas as execuções devem ser registradas na ficha de manutenção (laudo PMOC) do respectivo equipamento, com identificação do executante, data e evidências fotográficas quando aplicável.',
+    'Utilizar exclusivamente produtos saneantes desinfetantes regularizados junto à ANVISA, respeitando diluições e instruções dos fabricantes.',
+    'Filtros de ar substituídos e resíduos da limpeza devem ser acondicionados e descartados de forma a evitar a dispersão de particulados nos ambientes ocupados.',
+    'Não conformidades identificadas durante as rotinas devem gerar Ordem de Serviço corretiva, com prazo de tratamento compatível com a criticidade do equipamento.',
+    'Os executantes devem utilizar os EPIs adequados às atividades (proteção respiratória, luvas, óculos), especialmente em higienizações químicas e serviços em altura.',
+    'Este PMOC e os registros de execução devem permanecer disponíveis no estabelecimento para apresentação à fiscalização sanitária, conforme Portaria MS nº 3.523/98.',
+    'O plano deve ser revisado sempre que houver inclusão, substituição ou desativação de equipamentos, alteração de uso dos ambientes ou mudança do responsável técnico.',
+  ];
+  const sec7 = `
+    <div class="sec">
+      <div class="sec-titulo">8. ORIENTAÇÕES E RECOMENDAÇÕES GERAIS</div>
+      <ol class="lista-orient">${orientacoes.map(o => `<li>${o}</li>`).join('')}</ol>
+      ${cfg.obs ? `<p class="texto"><strong>Observações específicas do estabelecimento:</strong> ${escapeHTML(cfg.obs)}</p>` : ''}
+    </div>`;
+
+  // ── SEÇÃO 10 (INDICADORES DE DESEMPENHO) — SUPRIMIDA DO PMOC ──
+  //
+  // AUDITORIA NBR 17037 / RDC 886, item S1. MTBF, MTTR, disponibilidade, cumprimento do
+  // plano, backlog, retrabalho, relação preventiva/corretiva e índice de adequação térmica
+  // NÃO são conteúdo de PMOC: nenhuma das normas de referência (Lei 13.589/2018,
+  // Portaria MS 3.523/98, RDC ANVISA 886/2024, ABNT NBR 17037) exige indicadores de
+  // engenharia de manutenção dentro do plano. São matéria da ABNT NBR 5462 e de boas
+  // práticas de gestão.
+  //
+  // Ao permanecerem no documento oficial, as metas ali fixadas (MTBF ≥ x, disponibilidade
+  // ≥ 98 %, backlog ≤ 1,0 etc.) convertem-se em OBRIGAÇÃO AUTO-IMPOSTA e passam a ser
+  // exigíveis pela autoridade sanitária como descumprimento do próprio PMOC.
+  //
+  // O conteúdo foi migrado integralmente para 'relatorio-indicadores.html', relatório
+  // gerencial autônomo emitido pelo mesmo sistema, fora do acervo normativo do PMOC.
+  const secKpi = '';
+
+  // ── 9. Termo de responsabilidade e assinaturas ──
+  const sec8 = `
+    <div class="sec sec-termo">
+      <div class="sec-titulo">9. TERMO DE RESPONSABILIDADE TÉCNICA</div>
+      <p class="texto">Declaro, na qualidade de responsável técnico, que o presente Plano de Manutenção,
+      Operação e Controle foi elaborado em conformidade com a legislação e as normas técnicas vigentes,
+      responsabilizando-me pela sua implantação, acompanhamento e atualização durante o período de vigência.</p>
+      ${modoMinuta ? `<div class="minuta-sem-assinatura">
+        <strong>Campos de assinatura suprimidos nesta minuta.</strong> O termo de responsabilidade técnica
+        só é firmado no documento emitido, após o saneamento das pendências relacionadas adiante. Assinar
+        uma minuta vincularia o responsável técnico a um plano incompleto.
+      </div>` : `
+      <div class="assinaturas">
+        <div class="ass-bloco">
+          <div class="ass-linha"></div>
+          <div class="ass-nome">${escapeHTML(cfg.rt_nome)}</div>
+          <div class="ass-info">${escapeHTML(cfg.rt_titulo || 'Responsável Técnico')}</div>
+          <div class="ass-info">${escapeHTML(planoFormatRegistro(cfg.rt_conselho, cfg.rt_registro))}${cfg.rt_art ? ' · ART/TRT ' + escapeHTML(cfg.rt_art) : ''}</div>
+        </div>
+        <div class="ass-bloco">
+          <div class="ass-linha"></div>
+          <div class="ass-nome">${escapeHTML(cfg.resp_legal || 'Responsável Legal')}</div>
+          <div class="ass-info">${escapeHTML(cfg.resp_cargo || 'Representante do Estabelecimento')}</div>
+          <div class="ass-info">${escapeHTML(cfg.razao)}</div>
+        </div>
+      </div>
+      <div class="ass-local">${escapeHTML(cfg.local_emissao || '')}${cfg.local_emissao ? ', ' : ''}${emissaoBR}</div>`}
+    </div>`;
+
+  // Relação das pendências, ao final da minuta: o que falta preencher e por que a norma exige.
+  const secPendencias = (modoMinuta && !validacao.ok) ? `
+    <div class="sec sec-minuta-pend">
+      <div class="sec-titulo" style="background:#9b2c2c;">MINUTA · PENDÊNCIAS DE PREENCHIMENTO</div>
+      <p class="texto">Relação dos campos que impedem a emissão do documento válido. Enquanto qualquer item
+      permanecer nesta lista, o botão <strong>Gerar Documento PMOC</strong> não emite — apenas a minuta.</p>
+      <table class="tb-lista">
+        <thead><tr><th style="width:44px;">#</th><th>Pendência</th></tr></thead>
+        <tbody>${validacao.pendentes.map((pd, i) =>
+          `<tr><td style="text-align:center;">${i + 1}</td><td>${escapeHTML(pd)}</td></tr>`).join('')}</tbody>
+      </table>
+      <p class="texto" style="font-size:9px;color:#718096;">${emImplantacao
+        ? `O plano está em <strong>regime de implantação</strong>. Os dados de monitoramento da qualidade do ar${incluiQai ? ' (Anexo I)' : ''} não figuram nesta lista: por decisão do responsável técnico, a sua ausência não impede a emissão, sendo impressos como “A definir” até a contratação da campanha.`
+        : `O plano está em <strong>regime pleno</strong>. Os dados de monitoramento da qualidade do ar${incluiQai ? ' (Anexo I)' : ''} não figuram nesta lista: a sua ausência não impede a emissão, mas em regime pleno espera-se a identificação completa do laboratório acreditado — recomenda-se preenchê-los antes de emitir.`}</p>
+    </div>` : '';
+
+  const rodape = `
+    <div class="doc-rodape">
+      ${modoMinuta ? 'MINUTA SEM VALIDADE · ' : ''}PMOC ${cfg.ano} — ${escapeHTML(cfg.razao)} · Lei nº 13.589/2018 · Portaria MS nº 3.523/98
+    </div>`;
+
+  // ── ANEXO II — Guia de Execução dos Itens de Verificação (POP-PMOC-001) ──
+  // Embutido no mesmo documento a pedido do RT: usa CHECKLIST_PMOC_DEFS (labels/periodicidade)
+  // e CHECKLIST_EXECUCAO_GUIA (como executar, critérios C/NC/NA, ferramenta/segurança) — ambos
+  // fonte única em app.js — restrito às categorias efetivamente presentes no parque cadastrado.
+  let guiaCorpo = '';
+  catsPresentes.forEach(cat => {
+    const defs = CHECKLIST_PMOC_DEFS[cat] || CHECKLIST_PMOC_DEFS.OUT;
+    const nEqCat = _planoEqs.filter(e => planoNormCat(e.categoria) === cat).length;
+    guiaCorpo += `<div class="guia-cat-header">${escapeHTML(PLANO_CAT_LABEL[cat])} — ${nEqCat} equipamento(s) cadastrado(s)</div>`;
+    CHECKLIST_PERIODICIDADE_INFO.forEach(p => {
+      const itens = defs[p.key] || [];
+      if (!itens.length) return;
+      guiaCorpo += `<div class="guia-periodo">${PLANO_PERIODO_LABEL[p.key]}</div>`;
+      itens.forEach(([key, label]) => {
+        const g = CHECKLIST_EXECUCAO_GUIA[key];
+        const badge = key.replace('_', '-').toUpperCase();
+        if (!g) {
+          guiaCorpo += `<div class="guia-item"><div class="guia-item-header"><span class="guia-badge">${escapeHTML(badge)}</span><span class="guia-item-titulo">${escapeHTML(label)}</span></div></div>`;
+          return;
+        }
+        const extras = [];
+        if (g.ferramenta) extras.push(`<span><b>FERRAMENTA</b> ${escapeHTML(g.ferramenta)}</span>`);
+        if (g.seguranca)  extras.push(`<span><b>SEGURANÇA</b> ${escapeHTML(g.seguranca)}</span>`);
+        guiaCorpo += `
+          <div class="guia-item">
+            <div class="guia-item-header"><span class="guia-badge">${escapeHTML(badge)}</span><span class="guia-item-titulo">${escapeHTML(label)}</span></div>
+            <div class="guia-exec-label">Como Executar</div>
+            <div class="guia-exec-texto">${escapeHTML(g.exec)}</div>
+            <div class="guia-avaliacao">
+              <div class="guia-crit c"><strong>C · Conforme</strong>${escapeHTML(g.c)}</div>
+              <div class="guia-crit nc"><strong>NC · Não Conforme</strong>${escapeHTML(g.nc)}</div>
+              <div class="guia-crit na"><strong>NA · Não Aplicável</strong>${escapeHTML(g.na)}</div>
+            </div>
+            ${extras.length ? `<div class="guia-extra">${extras.join('')}</div>` : ''}
+          </div>`;
+      });
+    });
+  });
+
+  // AUDITORIA NBR 17037 / RDC 886, item S5. O POP é documento do sistema de gestão da
+  // manutenção, não conteúdo de PMOC — nenhuma norma de referência o exige dentro do plano.
+  // Embutir 79 itens de procedimento interno converte-os em obrigação auto-imposta e
+  // fiscalizável, além de inflar o documento a tamanho incompatível com a fiscalização.
+  // Por padrão, o PMOC apenas REFERENCIA o POP por código e revisão; o anexo integral só é
+  // embutido por escolha expressa do RT no painel de configuração.
+  const sec9Guia = cfg.incluir_pop ? `
+    <div class="sec sec-anexo">
+      <div class="anexo-etiqueta">ANEXO ${incluiQai ? 'II' : 'I'} · POP-PMOC-001</div>
+      <div class="sec-titulo">GUIA DE EXECUÇÃO DOS ITENS DE VERIFICAÇÃO</div>
+      <p class="texto">Manual de campo para os executantes: o procedimento a ser realizado em cada item do
+      checklist da Seção 6, e os critérios objetivos para classificar o resultado como <strong>C</strong>
+      (Conforme), <strong>NC</strong> (Não Conforme) ou <strong>NA</strong> (Não Aplicável) no laudo PMOC do
+      sistema. Os códigos seguem exatamente o checklist desta Seção 6.</p>
+      ${guiaCorpo}
+    </div>` : '';
+
+
+
+  const html = capa + sec1 + sec2 + sec3 + sec4 + sec5Memorial + sec5 + sec6 + sec7 + secKpi + sec8 + secQai + sec9Guia + secPendencias + rodape;
+
+  // ── Popup de impressão (mesma técnica das demais impressões do sistema) ──
+  const win = window.open('', '_blank', 'width=1000,height=760');
+  if (!win) { planoToast('⚠️ Permita pop-ups para gerar o documento.', true); return; }
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>${modoMinuta ? 'MINUTA — ' : ''}PMOC ${cfg.ano} — ${escapeHTML(cfg.razao)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      @page{size:A4 portrait;margin:14mm}
+      body{font-family:'Inter',Arial,sans-serif;color:#1a202c;background:#fff;font-size:10px;line-height:1.5;}
+
+      /* Capa */
+      .capa{min-height:230mm;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-align:center;page-break-after:always;break-after:page;position:relative;
+            background:linear-gradient(180deg,#f4f7fb 0%,#ffffff 45%);}
+      .capa::before{content:'';position:absolute;top:0;left:0;right:0;height:10px;background:#1e3a5f;}
+      .capa::after{content:'';position:absolute;bottom:0;left:0;right:0;height:10px;background:#1e3a5f;}
+      .capa-logo-wrap{background:#1e3a5f;border-radius:14px;padding:18px 34px;margin-bottom:28px;
+                       box-shadow:0 10px 24px rgba(30,58,95,.28);}
+      .capa-logo-wrap img{height:44px;width:auto;display:block;filter:brightness(0) invert(1);}
+      .capa-titulo{font-size:27px;font-weight:700;color:#1e3a5f;line-height:1.28;margin-bottom:10px;letter-spacing:.01em;}
+      .capa-sub{font-size:13px;color:#4a5568;margin-bottom:16px;font-weight:600;}
+      .capa-legal{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:430px;margin-bottom:36px;}
+      .capa-legal span{font-size:8px;color:#1e3a5f;background:#eef2ff;border:1px solid #c7d2ef;
+                        border-radius:10px;padding:3px 9px;font-weight:600;letter-spacing:.02em;white-space:nowrap;}
+      .capa-box{border:1px solid #cbd5e1;border-radius:10px;min-width:370px;max-width:430px;text-align:left;
+                overflow:hidden;box-shadow:0 6px 18px rgba(30,58,95,.10);background:#fff;}
+      .capa-box-header{background:#1e3a5f;color:#fff;font-size:10px;font-weight:700;letter-spacing:.09em;
+                        text-transform:uppercase;padding:8px 20px;}
+      .capa-box-body{padding:14px 20px 16px;display:grid;grid-template-columns:1fr 1fr;gap:0 22px;}
+      .capa-item{grid-column:1 / -1;padding:7px 0;border-bottom:1px dashed #e2e8f0;}
+      .capa-item.half{grid-column:auto;}
+      .capa-item:last-child, .capa-item.half:nth-last-child(-n+2){border-bottom:none;}
+      .capa-item span{display:block;font-size:7.5px;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;}
+      .capa-item strong{font-size:11.5px;color:#1a202c;}
+      .capa-emissao{margin-top:26px;font-size:10px;color:#64748b;font-weight:600;}
+
+      /* Seções */
+      .sec{margin-bottom:16px;break-inside:auto;}
+      .sec-titulo{background:#1e3a5f;color:#fff;font-size:10.5px;font-weight:700;
+                  padding:5px 10px;margin-bottom:8px;break-after:avoid;page-break-after:avoid;}
+      .texto{font-size:9.5px;text-align:justify;margin-bottom:6px;color:#334155;}
+
+      table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px;}
+      td,th{border:1px solid #cbd5e1;padding:3px 6px;vertical-align:top;}
+      thead th{background:#eef2ff;color:#1e3a5f;font-weight:700;text-align:left;break-inside:avoid;}
+      tr{break-inside:avoid;page-break-inside:avoid;}
+
+      .tb-ident .lbl{background:#f8fafc;font-weight:700;color:#475569;width:110px;white-space:nowrap;}
+      .tb-resumo td{text-align:center;background:#f8fafc;font-size:11px;padding:6px;}
+      .tr-grupo td{background:#f0f4ff;font-weight:700;color:#1e3a5f;font-size:8.5px;}
+      .tr-periodo td{background:#f8fafc;font-weight:700;color:#475569;font-size:8.5px;letter-spacing:.03em;}
+      .cat-titulo{font-size:9.5px;font-weight:700;color:#1e3a5f;margin:10px 0 4px;break-after:avoid;page-break-after:avoid;}
+      /* Cada setor do Memorial (5.1) é uma unidade de leitura: título + tabela não podem
+         ser separados por quebra de página, sob pena de o setor aparecer com apenas a
+         linha "Sistemas Presentes" no rodapé de uma página. */
+      .bloco-memorial{break-inside:avoid;page-break-inside:avoid;}
+
+      /* Avaliação (C/NC/NA) na tabela de atividades */
+      .avaliacao-opcoes{display:flex;gap:4px;justify-content:center;}
+      .avaliacao-opcoes span{border:1px solid #94a3b8;border-radius:3px;padding:1px 4px;
+                              font-size:7px;color:#475569;font-weight:700;background:#fff;}
+
+      /* Cronograma */
+      .tb-cron th{text-align:center;font-size:8px;padding:3px 2px;}
+      .tb-cron td{text-align:center;font-size:8.5px;}
+      .cron-cat{font-weight:700;color:#1e3a5f;text-align:left !important;background:#f8fafc;}
+      .cron-cel{width:22px;color:#94a3b8;}
+      .cron-cel.on-M{background:#dbeafe;color:#1d4ed8;font-weight:700;}
+      .cron-cel.on-T{background:#ede9fe;color:#6d28d9;font-weight:700;}
+      .cron-cel.on-S{background:#fce7f3;color:#9d174d;font-weight:700;}
+      .cron-cel.on-A{background:#fef3c7;color:#92400e;font-weight:700;}
+      .cron-legenda{display:flex;gap:14px;font-size:8.5px;color:#475569;align-items:center;}
+      .pill{display:inline-block;padding:1px 6px;border-radius:8px;font-weight:700;font-size:8px;margin-right:3px;}
+      .pill.on-M{background:#dbeafe;color:#1d4ed8;} .pill.on-T{background:#ede9fe;color:#6d28d9;}
+      .pill.on-S{background:#fce7f3;color:#9d174d;} .pill.on-A{background:#fef3c7;color:#92400e;}
+
+      .lista-orient{padding-left:18px;font-size:9.5px;color:#334155;}
+      .lista-orient li{margin-bottom:4px;text-align:justify;}
+
+      /* Assinaturas */
+      .sec-termo{break-inside:avoid;page-break-inside:avoid;}
+      .assinaturas{display:flex;gap:40px;justify-content:space-around;margin-top:44px;}
+      .ass-bloco{flex:1;text-align:center;max-width:300px;}
+      .ass-linha{border-bottom:1px solid #1a202c;margin-bottom:5px;height:34px;}
+      .ass-nome{font-size:10px;font-weight:700;}
+      .ass-info{font-size:8.5px;color:#475569;}
+      .ass-local{text-align:center;margin-top:22px;font-size:9.5px;color:#475569;}
+
+      /* ── Marcação de MINUTA ──
+         position:fixed é repetido pelo motor de impressão em todas as páginas, o que garante
+         que nenhuma folha solta do rascunho possa ser confundida com o documento válido. */
+      .minuta-marca{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;
+                    pointer-events:none;display:flex;align-items:center;justify-content:center;}
+      .minuta-marca span{font-size:88px;font-weight:700;color:rgba(155,44,44,.13);
+                          letter-spacing:.14em;transform:rotate(-38deg);white-space:nowrap;
+                          border:6px solid rgba(155,44,44,.13);padding:14px 40px;border-radius:14px;}
+      .minuta-capa-aviso{margin-top:24px;max-width:430px;border:2px solid #9b2c2c;border-radius:10px;
+                          background:#fff5f5;color:#742a2a;padding:12px 16px;font-size:9px;line-height:1.6;
+                          text-align:left;}
+      .minuta-capa-aviso strong{display:block;font-size:11px;letter-spacing:.06em;margin-bottom:5px;}
+      .minuta-capa-aviso strong + strong{display:inline;font-size:9px;letter-spacing:0;margin:0;}
+      .minuta-sem-assinatura{border:1px dashed #9b2c2c;border-radius:8px;background:#fff5f5;
+                              color:#742a2a;padding:12px 14px;font-size:9.5px;line-height:1.6;margin-top:10px;}
+      .sec-minuta-pend{break-before:page;page-break-before:always;}
+      .doc-rodape{margin-top:18px;padding-top:6px;border-top:1px solid #cbd5e1;
+                  font-size:7.5px;color:#94a3b8;text-align:center;}
+
+      /* Guia de Execução (POP-PMOC-001) — embutido no mesmo documento */
+      /* Guia de Execução (POP-PMOC-001) — embutido no mesmo documento, como Anexo */
+      .sec-anexo{page-break-before:always;break-before:page;}
+      .anexo-etiqueta{display:inline-block;background:#eef2ff;color:#1e3a5f;font-size:8.5px;font-weight:700;
+                       letter-spacing:.08em;text-transform:uppercase;border:1px solid #c7d2ef;border-radius:10px;
+                       padding:3px 10px;margin-bottom:8px;}
+      .guia-cat-header{background:#1e3a5f;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;
+                        margin:16px 0 8px;border-radius:4px;break-after:avoid;page-break-after:avoid;}
+      .guia-periodo{background:#f8fafc;font-weight:700;color:#475569;font-size:8.5px;letter-spacing:.05em;
+                     text-transform:uppercase;padding:4px 9px;margin:10px 0 8px;border-left:3px solid #1e3a5f;
+                     break-after:avoid;page-break-after:avoid;}
+      .guia-item{border:1px solid #cbd5e1;border-radius:8px;padding:10px 13px;margin-bottom:9px;
+                  break-inside:avoid;page-break-inside:avoid;}
+      .guia-item-header{display:flex;align-items:center;gap:9px;margin-bottom:7px;flex-wrap:wrap;}
+      .guia-badge{background:#1e3a5f;color:#fff;font-size:8.5px;font-weight:700;border-radius:4px;
+                   padding:2px 7px;white-space:nowrap;}
+      .guia-item-titulo{font-size:9.5px;font-weight:700;color:#1a202c;}
+      .guia-exec-label{font-size:7.5px;font-weight:700;color:#64748b;text-transform:uppercase;
+                        letter-spacing:.06em;margin-bottom:2px;}
+      .guia-exec-texto{font-size:8.5px;color:#334155;margin-bottom:7px;text-align:justify;}
+      .guia-avaliacao{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+      .guia-crit{border-radius:6px;padding:5px 7px;font-size:7.5px;color:#334155;}
+      .guia-crit.c{background:#ecfdf5;} .guia-crit.nc{background:#fef2f2;} .guia-crit.na{background:#f1f5f9;}
+      .guia-crit strong{display:block;font-size:8px;margin-bottom:2px;}
+      .guia-crit.c strong{color:#059669;} .guia-crit.nc strong{color:#dc2626;} .guia-crit.na strong{color:#64748b;}
+      .guia-extra{margin-top:7px;font-size:7.5px;color:#475569;display:flex;gap:16px;flex-wrap:wrap;}
+      .guia-extra b{color:#92400e;}
+    </style></head>
+    <body>${modoMinuta ? '<div class="minuta-marca"><span>MINUTA</span></div>' : ''}${html}
+    <script>window.addEventListener('load',function(){setTimeout(function(){window.print();window.addEventListener('afterprint',function(){window.close();});},600);});<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+// ── Inicialização ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Popular meses
+  $('pp-mes-inicio').innerHTML = PLANO_MESES
+    .map((m, i) => `<option value="${i}">${m}</option>`).join('');
+  // Padrões
+  $('pp-ano').value = new Date().getFullYear();
+  $('pp-data-emissao').value = hoje();
+  // Carrega config salva e inventário
+  await carregarConfigPlano();
+  planoAtualizarRegime();
+  await carregarEquipamentosPlano();
+  await carregarBlocosPlano();
+  await carregarSalasPlano();
+});
+</script>
+</body>
+</html>

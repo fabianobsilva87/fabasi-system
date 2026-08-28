@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concredur — Acesso Integrado</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="login-page-wrapper">
+    <div class="login-brand-area">
+      <div class="login-logo-icon">🏗️</div>
+      <div class="login-brand-name">MANUTENÇÃO <span>CONCREDUR</span></div>
+      <div class="login-brand-sub">Sistema Integrado de Gestão de Manutenção</div>
+    </div>
+    <div class="login-card-panel">
+      <h2 id="login-title">Acesso ao Sistema</h2>
+      <p class="login-subtitle" id="login-desc">Informe suas credenciais para continuar</p>
+      <div class="login-form-inputs">
+        <div class="login-field-group">
+          <label for="email">Usuário / E-mail</label>
+          <div class="input-with-icon">
+            <span class="field-icon">👤</span>
+            <input type="email" id="email" placeholder="Digite seu e-mail" required>
+          </div>
+        </div>
+        <div class="login-field-group" id="login-password-group">
+          <label for="password" id="lbl-password">Senha</label>
+          <div class="input-with-icon">
+            <span class="field-icon">🔑</span>
+            <input type="password" id="password" placeholder="Digite sua senha">
+          </div>
+        </div>
+      </div>
+      <button id="btn-login" class="btn-login-submit"><span>➔</span> Entrar no Sistema</button>
+      <div class="login-card-links">
+        <a href="#" class="forgot-password-link" id="link-recuperar" onclick="toggleModoRecuperacao(true)">Recuperar Senha?</a>
+        <a href="#" class="forgot-password-link" id="link-voltar" style="display:none;" onclick="toggleModoRecuperacao(false)">Voltar ao Login</a>
+      </div>
+      <p id="mensagem" class="erro"></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestão de usuários e níveis de acesso — Concredur / Univag.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-univag.png" type="image/png">
+    <title>Concredur — Administração</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-univag.png" alt="Univag" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+            <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item active" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <h2>🔒 Controle de Acesso ao Sistema</h2>
+      </div>
+
+      <div class="section-content">
+
+        <div id="sub-rh-usuarios" class="app-sub-panel">
+          <div class="card">
+            <div class="card-header-admin">
+              <h2>🛡️ Controle de Acesso — Convite e Gerenciamento de Usuários</h2>
+              <p>Gerencie permissões, revogue acessos e recupere links de ativação para envio direto via WhatsApp.</p>
+            </div>
+
+            <div class="admin-split-grid" style="margin-top:20px;">
+              
+              <div class="admin-form-side">
+                <h3>📨 Convidar Novo Usuário</h3>
+                <p style="font-size:12px;color:#718096;margin-bottom:16px;">O usuário definirá sua própria credencial de acesso.</p>
+
+                <div class="form-group">
+                  <label for="adm-user-nome">Nome Completo *</label>
+                  <input type="text" id="adm-user-nome" placeholder="Nome completo do usuário">
+                </div>
+
+                <div class="form-group" style="margin-top:12px;">
+                  <label for="adm-user-cpf">CPF *</label>
+                  <div style="position:relative;">
+                    <input type="text" id="adm-user-cpf" class="input-cpf" placeholder="000.000.000-00" maxlength="14" style="padding-right:36px;">
+                    <span id="cpf-status-icon" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:16px;"></span>
+                  </div>
+                  <small id="cpf-feedback" style="font-size:11px;color:#a0aec0;margin-top:3px;display:block;">Validação automática algorítmica</small>
+                </div>
+
+                <div class="form-group" style="margin-top:12px;">
+                  <label for="adm-user-email">E-mail Corporativo *</label>
+                  <input type="email" id="adm-user-email" placeholder="usuario@empresa.com.br">
+                </div>
+
+                <div class="form-group" style="margin-top:12px;">
+                  <label for="adm-user-role">Perfil de Acesso *</label>
+                  <select id="adm-user-role" class="form-input-style">
+                    <option value="tecnico">🔬 Técnico de Campo — acesso básico</option>
+                    <option value="master">👨‍💻 Técnico Master / Supervisor</option>
+                    <option value="admin">🛡️ Administrador Geral — acesso total</option>
+                    <option value="auditor">👁️ Auditor — somente leitura</option>
+                  </select>
+                </div>
+
+                <div id="role-desc" class="role-desc-box" style="margin-top:10px;"></div>
+
+                <button type="button" id="btn-admin-salvar-usuario" class="btn-primary" style="margin-top:18px;width:100%;background:#10b981;">
+                  📨 Criar e Gerar Link de Acesso
+                </button>
+                <p id="msg-admin-usuario" class="msg-form" style="font-weight:600;margin-top:10px;"></p>
+
+                <div id="wrapper-link-ativacao" style="display:none; margin-top:14px; padding:12px; background:#fffdf5; border:1px solid #fef08a; border-radius:6px;">
+                  <label for="adm-link-gerado" id="lbl-link-contexto" style="font-weight:700; color:#854d0e; font-size:12px; display:block; margin-bottom:4px;">🔗 Link de Acesso Gerado:</label>
+                  <p id="desc-link-contexto" style="font-size:11px; color:#665d1e; margin-bottom:8px;">Copie o token abaixo e encaminhe para o operador via WhatsApp:</p>
+                  <div style="display:flex; gap:6px;">
+                    <input type="text" id="adm-link-gerado" readonly class="form-input-style" style="background:#fff; font-family:monospace; font-size:11px;">
+                    <button type="button" onclick="navigator.clipboard.writeText($('adm-link-gerado').value); alert('Link copiado com sucesso!')" class="btn-primary" style="padding:4px 12px; font-size:11px; white-space:nowrap; background:#854d0e;">📋 Copiar</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="admin-table-side">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                  <h3 style="margin:0;">Usuários Cadastrados</h3>
+                  <button type="button" class="btn-refresh" style="font-size:11px;padding:5px 10px;" onclick="carregarUsuariosSistema()">↺ Atualizar</button>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Usuário</th>
+                        <th>CPF</th>
+                        <th>Perfil</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-usuarios-sistema">
+                      <tr><td colspan="5" class="td-loading">Carregando operadores...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const ROLE_DESC = {
+      tecnico:  { cor:'#dbeafe', txt:'<strong>Técnico de Campo:</strong> permissões operacionais padrão.' },
+      master:   { cor:'#fef3c7', txt:'<strong>Master / Supervisor:</strong> gerencia Ordens e Fichas alheias.' },
+      admin:    { cor:'#fee2e2', txt:'<strong>Administrador:</strong> controle global de infraestrutura e RH.' },
+      auditor:  { cor:'#f3e8ff', txt:'<strong>Auditor:</strong> visibilidade irrestrita sem direito à modificação.' },
+    };
+
+    document.getElementById('adm-user-role')?.addEventListener('change', function() {
+      const box = document.getElementById('role-desc');
+      const d = ROLE_DESC[this.value];
+      if (d) { box.style.cssText = `background:${d.cor};border-radius:6px;padding:10px 12px;font-size:12px;border:1px solid #e2e8f0;`; box.innerHTML = d.txt; }
+    });
+
+    const cpfAdm = document.getElementById('adm-user-cpf');
+    if (cpfAdm) {
+      cpfAdm.addEventListener('input', () => {
+        const icon = document.getElementById('cpf-status-icon');
+        const fb   = document.getElementById('cpf-feedback');
+        if (cpfAdm.value.replace(/\D/g,'').length < 11) return;
+        const ok = validarCPF(cpfAdm.value);
+        icon.textContent = ok ? '✅' : '❌';
+        fb.textContent = ok ? 'CPF válido ✓' : 'CPF inválido';
+        fb.style.color = ok ? 'var(--success)' : 'var(--danger)';
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await carregarUsuariosSistema();
+    });
+  </script>
+</body>
+</html>
