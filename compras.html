@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Fornecedores, catálogo de materiais e requisições de compra — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+  <title>Fabasi — Compras</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+<div class="app-container">
+  <aside class="sidebar no-print">
+    <div class="sidebar-header">
+      <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        
+      <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+    </div>
+    <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-item active" onclick="location.href='compras.html'"><span>🛒</span> Compras</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+    <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar no-print">
+      <button type="button" class="btn-refresh" onclick="alternarAbaCompras('requisicoes')">🛒 Requisições</button>
+      <button type="button" class="btn-refresh" style="background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="alternarAbaCompras('fornecedores')">🏭 Fornecedores</button>
+      <button type="button" class="btn-refresh" style="background:#0891b2;border-color:#0891b2;color:#fff;" onclick="alternarAbaCompras('materiais')">📦 Catálogo de Materiais</button>
+    </div>
+
+    <div class="section-content">
+
+      <!-- ===== ABA: REQUISIÇÕES ===== -->
+      <div id="aba-requisicoes" class="app-sub-panel">
+        <div class="card" id="foco-formulario-requisicao">
+          <h3 class="card-title">🛒 Nova Requisição de Compra</h3>
+          <input type="hidden" id="req-id-edicao" value="">
+
+          <div class="form-grid">
+            <div class="form-group"><label for="req-numero">Número *</label><input type="text" id="req-numero" placeholder="Ex: RC-2026-0001"></div>
+            <div class="form-group"><label for="req-solicitante">Solicitante *</label><input type="text" id="req-solicitante" placeholder="Nome de quem solicita"></div>
+            <div class="form-group"><label for="req-os">O.S. Vinculada (opcional)</label><select id="req-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+            <div class="form-group"><label for="req-fornecedor">Fornecedor (opcional)</label><select id="req-fornecedor" class="form-input-style"><option value="">-- A definir --</option></select></div>
+            <div class="form-group"><label for="req-status">Status</label>
+              <select id="req-status" class="form-input-style">
+                <option value="Solicitado">Solicitado</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Comprado">Comprado</option>
+                <option value="Entregue">Entregue</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div class="form-group"><label for="req-data-necessidade">Necessário até</label><input type="date" id="req-data-necessidade"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="req-observacoes">Observações</label><textarea id="req-observacoes" rows="2" placeholder="Detalhes da requisição..."></textarea></div>
+          </div>
+
+          <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <label style="font-weight:600;font-size:13px;">Itens da Requisição</label>
+              <button type="button" class="btn-refresh" style="font-size:11px;padding:4px 10px;" onclick="adicionarLinhaItemRequisicao()">➕ Adicionar Item</button>
+            </div>
+            <div class="table-wrap">
+              <table id="tabela-itens-requisicao">
+                <thead>
+                  <tr><th>Material (catálogo)</th><th>Descrição</th><th>Qtd.</th><th>Unid.</th><th>Valor Unit. (R$)</th><th>Total</th><th></th></tr>
+                </thead>
+                <tbody id="tbody-itens-requisicao"></tbody>
+              </table>
+            </div>
+            <p style="text-align:right;font-weight:700;margin-top:8px;font-size:14px;">Total: <span id="req-valor-total-display">R$ 0,00</span></p>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-requisicao" class="btn-primary">💾 Registrar Requisição</button>
+            <button type="button" id="btn-cancelar-requisicao" class="btn-secondary" style="display:none;" onclick="resetarFormRequisicao()">✕ Cancelar</button>
+          </div>
+          <p id="msg-requisicao" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Requisições Registradas</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="filtro-status-requisicao" class="form-input-style" style="font-size:12px;width:auto;" onchange="carregarRequisicoes()">
+                <option value="">Todos os status</option>
+                <option value="Solicitado">Solicitado</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Comprado">Comprado</option>
+                <option value="Entregue">Entregue</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+              <button type="button" class="btn-refresh" onclick="carregarRequisicoes()">↺ Atualizar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Número</th><th>Solicitante</th><th>O.S.</th><th>Fornecedor</th><th>Status</th><th>Valor Total</th><th>Data</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-requisicoes"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ABA: FORNECEDORES ===== -->
+      <div id="aba-fornecedores" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🏭 Novo Fornecedor</h3>
+          <input type="hidden" id="forn-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="forn-razao">Razão Social *</label><input type="text" id="forn-razao" placeholder="Nome da empresa"></div>
+            <div class="form-group"><label for="forn-fantasia">Nome Fantasia</label><input type="text" id="forn-fantasia" placeholder="Nome fantasia (opcional)"></div>
+            <div class="form-group"><label for="forn-cnpj">CNPJ</label><input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00" maxlength="18"></div>
+            <div class="form-group"><label for="forn-categoria">Categoria</label><input type="text" id="forn-categoria" placeholder="Ex: Materiais elétricos, EPI, Refrigeração"></div>
+            <div class="form-group"><label for="forn-telefone">Telefone</label><input type="text" id="forn-telefone" placeholder="(65) 99999-9999"></div>
+            <div class="form-group"><label for="forn-email">E-mail</label><input type="email" id="forn-email" placeholder="contato@fornecedor.com.br"></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="forn-observacoes">Observações</label><textarea id="forn-observacoes" rows="2"></textarea></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-fornecedor" class="btn-primary">💾 Registrar Fornecedor</button>
+            <button type="button" id="btn-cancelar-fornecedor" class="btn-secondary" style="display:none;" onclick="resetarFormFornecedor()">✕ Cancelar</button>
+          </div>
+          <p id="msg-fornecedor" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Fornecedores Cadastrados</h3>
+            <button type="button" class="btn-refresh" onclick="carregarFornecedores()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Categoria</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-fornecedores"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ABA: CATÁLOGO DE MATERIAIS ===== -->
+      <div id="aba-materiais" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">📦 Novo Material no Catálogo</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Itens reutilizáveis entre requisições — cadastre uma vez, use em quantas compras precisar.</p>
+          <input type="hidden" id="mat-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group" style="grid-column:span 2;"><label for="mat-nome">Nome do Material *</label><input type="text" id="mat-nome" placeholder="Ex: Cabo flexível 2,5mm"></div>
+            <div class="form-group"><label for="mat-unidade">Unidade</label><input type="text" id="mat-unidade" placeholder="Ex: un, m, kg, cx"></div>
+            <div class="form-group"><label for="mat-categoria">Categoria</label><input type="text" id="mat-categoria" placeholder="Ex: Elétrica, Refrigeração"></div>
+            <div class="form-group"><label for="mat-valor">Valor de Referência (R$)</label><input type="number" id="mat-valor" step="0.01" placeholder="0,00"></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="mat-observacoes">Observações</label><textarea id="mat-observacoes" rows="2"></textarea></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-material" class="btn-primary">💾 Registrar Material</button>
+            <button type="button" id="btn-cancelar-material" class="btn-secondary" style="display:none;" onclick="resetarFormMaterial()">✕ Cancelar</button>
+          </div>
+          <p id="msg-material" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Catálogo Cadastrado</h3>
+            <button type="button" class="btn-refresh" onclick="carregarMateriais()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Unidade</th><th>Categoria</th><th>Valor Referência</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-materiais"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /section-content -->
+  </main>
+</div>
+
+  <script src="app.js"></script>
+<script>
+// ===================== ABAS =====================
+function alternarAbaCompras(aba) {
+  ['requisicoes','fornecedores','materiais'].forEach(a => {
+    const el = document.getElementById('aba-' + a);
+    if (el) el.style.display = a === aba ? 'block' : 'none';
+  });
+}
+
+// ===================== FORNECEDORES =====================
+let _fornecedoresCache = [];
+
+async function carregarFornecedores() {
+  const tbody = document.getElementById('tbody-fornecedores'); if (!tbody) return;
+  const { data, error } = await db.from('fornecedores').select('*').order('ativo', {ascending:false}).order('razao_social');
+  if (error) { toast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
+  _fornecedoresCache = data || [];
+  await atualizarSelectFornecedoresParaRequisicao();
+  if (!_fornecedoresCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum fornecedor cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _fornecedoresCache.map(f => `<tr>
+    <td><strong>${escapeHTML(f.razao_social)}</strong>${f.nome_fantasia ? `<br><small style="color:#718096">${escapeHTML(f.nome_fantasia)}</small>` : ''}</td>
+    <td style="font-family:monospace;">${escapeHTML(f.cnpj || '—')}</td>
+    <td>${escapeHTML(f.categoria || '—')}</td>
+    <td style="font-size:12px;">${escapeHTML(f.telefone || '')}${f.telefone && f.email ? '<br>' : ''}${escapeHTML(f.email || '')}</td>
+    <td>${f.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarFornecedor('${escapeHTML(f.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirFornecedor('${escapeHTML(f.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarFornecedor(id) {
+  const f = _fornecedoresCache.find(x => x.id === id); if (!f) return;
+  document.getElementById('forn-id-edicao').value = id;
+  document.getElementById('forn-razao').value      = f.razao_social || '';
+  document.getElementById('forn-fantasia').value   = f.nome_fantasia || '';
+  document.getElementById('forn-cnpj').value       = f.cnpj || '';
+  document.getElementById('forn-categoria').value  = f.categoria || '';
+  document.getElementById('forn-telefone').value   = f.telefone || '';
+  document.getElementById('forn-email').value      = f.email || '';
+  document.getElementById('forn-observacoes').value = f.observacoes || '';
+  const btn = document.getElementById('btn-salvar-fornecedor');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-fornecedor').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormFornecedor() {
+  ['forn-id-edicao','forn-razao','forn-fantasia','forn-cnpj','forn-categoria','forn-telefone','forn-email','forn-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-fornecedor');
+  btn.textContent = '💾 Registrar Fornecedor'; btn.style.background = '';
+  document.getElementById('btn-cancelar-fornecedor').style.display = 'none';
+}
+
+async function excluirFornecedor(id) {
+  const nome = _fornecedoresCache.find(x => x.id === id)?.razao_social || 'este fornecedor';
+  if (!confirm(`Excluir fornecedor "${nome}"? Requisições que já referenciam esse fornecedor mantêm o vínculo até serem editadas.`)) return;
+  const { error } = await db.from('fornecedores').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarFornecedores();
+}
+
+document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', async () => {
+  const razao = document.getElementById('forn-razao').value.trim();
+  if (!razao) { msgForm('msg-fornecedor','Informe a Razão Social.','red'); return; }
+
+  const payload = {
+    razao_social:  razao,
+    nome_fantasia: document.getElementById('forn-fantasia').value.trim() || null,
+    cnpj:          document.getElementById('forn-cnpj').value.trim() || null,
+    categoria:     document.getElementById('forn-categoria').value.trim() || null,
+    telefone:      document.getElementById('forn-telefone').value.trim() || null,
+    email:         document.getElementById('forn-email').value.trim() || null,
+    observacoes:   document.getElementById('forn-observacoes').value.trim() || null,
+  };
+
+  const idEd = document.getElementById('forn-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('fornecedores').update(payload).eq('id', idEd)
+    : await db.from('fornecedores').insert([payload]);
+
+  if (error) { msgForm('msg-fornecedor','Erro ao salvar: ' + error.message,'red'); return; }
+  msgForm('msg-fornecedor', idEd ? '✓ Fornecedor atualizado!' : '✓ Fornecedor registrado!', 'green');
+  resetarFormFornecedor();
+  carregarFornecedores();
+});
+
+async function atualizarSelectFornecedoresParaRequisicao() {
+  const sel = document.getElementById('req-fornecedor'); if (!sel) return;
+  const atual = sel.value;
+  const ativos = _fornecedoresCache.length ? _fornecedoresCache.filter(f => f.ativo) : (await db.from('fornecedores').select('id,razao_social').eq('ativo', true).order('razao_social')).data || [];
+  sel.innerHTML = '<option value="">-- A definir --</option>' +
+    ativos.map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+  sel.value = atual;
+}
+
+// ===================== CATÁLOGO DE MATERIAIS =====================
+let _materiaisCache = [];
+
+async function carregarMateriais() {
+  const tbody = document.getElementById('tbody-materiais'); if (!tbody) return;
+  const { data, error } = await db.from('materiais').select('*').order('ativo', {ascending:false}).order('nome');
+  if (error) { toast('Erro ao carregar materiais: ' + error.message, 'erro'); return; }
+  _materiaisCache = data || [];
+  await carregarMateriaisParaSelectItem();
+  if (!_materiaisCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum material cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _materiaisCache.map(m => `<tr>
+    <td><strong>${escapeHTML(m.nome)}</strong></td>
+    <td>${escapeHTML(m.unidade || '—')}</td>
+    <td>${escapeHTML(m.categoria || '—')}</td>
+    <td>${m.valor_referencia != null ? 'R$ ' + Number(m.valor_referencia).toFixed(2).replace('.',',') : '—'}</td>
+    <td>${m.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarMaterial('${escapeHTML(m.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMaterial('${escapeHTML(m.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarMaterial(id) {
+  const m = _materiaisCache.find(x => x.id === id); if (!m) return;
+  document.getElementById('mat-id-edicao').value = id;
+  document.getElementById('mat-nome').value       = m.nome || '';
+  document.getElementById('mat-unidade').value    = m.unidade || '';
+  document.getElementById('mat-categoria').value  = m.categoria || '';
+  document.getElementById('mat-valor').value      = m.valor_referencia ?? '';
+  document.getElementById('mat-observacoes').value = m.observacoes || '';
+  const btn = document.getElementById('btn-salvar-material');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-material').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormMaterial() {
+  ['mat-id-edicao','mat-nome','mat-unidade','mat-categoria','mat-valor','mat-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-material');
+  btn.textContent = '💾 Registrar Material'; btn.style.background = '';
+  document.getElementById('btn-cancelar-material').style.display = 'none';
+}
+
+async function excluirMaterial(id) {
+  const nome = _materiaisCache.find(x => x.id === id)?.nome || 'este material';
+  if (!confirm(`Excluir "${nome}" do catálogo? Itens de requisições já lançados mantêm a descrição, só perdem o vínculo com o catálogo.`)) return;
+  const { error } = await db.from('materiais').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarMateriais();
+}
+
+document.getElementById('btn-salvar-material')?.addEventListener('click', async () => {
+  const nome = document.getElementById('mat-nome').value.trim();
+  if (!nome) { msgForm('msg-material','Informe o nome do material.','red'); return; }
+
+  const valorRaw = document.getElementById('mat-valor').value;
+  const payload = {
+    nome,
+    unidade:          document.getElementById('mat-unidade').value.trim() || null,
+    categoria:        document.getElementById('mat-categoria').value.trim() || null,
+    valor_referencia: valorRaw ? Number(valorRaw) : null,
+    observacoes:      document.getElementById('mat-observacoes').value.trim() || null,
+  };
+
+  const idEd = document.getElementById('mat-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('materiais').update(payload).eq('id', idEd)
+    : await db.from('materiais').insert([payload]);
+
+  if (error) { msgForm('msg-material','Erro ao salvar: ' + error.message,'red'); return; }
+  msgForm('msg-material', idEd ? '✓ Material atualizado!' : '✓ Material registrado!', 'green');
+  resetarFormMaterial();
+  carregarMateriais();
+});
+
+async function carregarMateriaisParaSelectItem() {
+  // Preenche os <select> de material já renderizados nas linhas de item existentes
+  const ativos = _materiaisCache.length ? _materiaisCache.filter(m => m.ativo) : (await db.from('materiais').select('id,nome,unidade,valor_referencia').eq('ativo', true).order('nome')).data || [];
+  window._materiaisAtivosParaSelect = ativos;
+  document.querySelectorAll('.select-material-item').forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">-- item avulso --</option>' +
+      ativos.map(m => `<option value="${escapeHTML(m.id)}" data-unidade="${escapeHTML(m.unidade||'')}" data-valor="${m.valor_referencia ?? ''}">${escapeHTML(m.nome)}</option>`).join('');
+    sel.value = atual;
+  });
+}
+
+// ===================== O.S. — SELECT DA REQUISIÇÃO =====================
+// Mesmo padrão de rótulo usado em carregarOrdensServico() (app.js): a O.S. de
+// climatização não tem um campo "número" próprio, o rótulo OS-AC-xxxxx é
+// derivado do id.
+function rotuloOS(o) {
+  const curto = String(o.id).slice(0,5).toUpperCase();
+  return `OS-AC-${curto}` + (o.descricao_defeito ? ' — ' + String(o.descricao_defeito).slice(0,40) : '');
+}
+
+async function atualizarSelectOSParaRequisicao() {
+  const sel = document.getElementById('req-os'); if (!sel) return;
+  const { data, error } = await db.from('ordens_servico').select('id,descricao_defeito,created_at').order('created_at', {ascending:false}).limit(200);
+  if (error) { console.warn('Não foi possível carregar O.S. para vínculo da requisição:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Nenhuma --</option>' +
+    (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(rotuloOS(o))}</option>`).join('');
+}
+
+// ===================== ITENS DA REQUISIÇÃO (linhas dinâmicas) =====================
+let _contadorLinhaItem = 0;
+
+function adicionarLinhaItemRequisicao(itemExistente = null) {
+  const tbody = document.getElementById('tbody-itens-requisicao');
+  const linhaId = 'item-linha-' + (++_contadorLinhaItem);
+  const tr = document.createElement('tr');
+  tr.id = linhaId;
+  tr.innerHTML = `
+    <td><select class="select-material-item form-input-style" style="font-size:12px;" onchange="aoEscolherMaterialItem('${linhaId}')"><option value="">-- item avulso --</option></select></td>
+    <td><input type="text" class="form-input-style item-descricao" style="font-size:12px;" placeholder="Descrição"></td>
+    <td><input type="number" class="form-input-style item-qtd" style="font-size:12px;width:70px;" value="1" min="0" step="0.001" oninput="recalcularTotalItem('${linhaId}')"></td>
+    <td><input type="text" class="form-input-style item-unidade" style="font-size:12px;width:60px;"></td>
+    <td><input type="number" class="form-input-style item-valor" style="font-size:12px;width:90px;" value="0" min="0" step="0.01" oninput="recalcularTotalItem('${linhaId}')"></td>
+    <td class="item-total-display" style="font-weight:600;">R$ 0,00</td>
+    <td><button type="button" class="btn-excluir" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${linhaId}').remove(); recalcularTotalRequisicao();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  carregarMateriaisParaSelectItem();
+
+  if (itemExistente) {
+    tr.querySelector('.select-material-item').value = itemExistente.material_id || '';
+    tr.querySelector('.item-descricao').value = itemExistente.descricao || '';
+    tr.querySelector('.item-qtd').value = itemExistente.quantidade ?? 1;
+    tr.querySelector('.item-unidade').value = itemExistente.unidade || '';
+    tr.querySelector('.item-valor').value = itemExistente.valor_unitario ?? 0;
+    recalcularTotalItem(linhaId);
+  }
+}
+
+function aoEscolherMaterialItem(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const sel = tr.querySelector('.select-material-item');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    tr.querySelector('.item-descricao').value = opt.textContent;
+    tr.querySelector('.item-unidade').value = opt.dataset.unidade || '';
+    if (opt.dataset.valor) tr.querySelector('.item-valor').value = opt.dataset.valor;
+  }
+  recalcularTotalItem(linhaId);
+}
+
+function recalcularTotalItem(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const qtd = Number(tr.querySelector('.item-qtd').value) || 0;
+  const valor = Number(tr.querySelector('.item-valor').value) || 0;
+  tr.querySelector('.item-total-display').textContent = 'R$ ' + (qtd * valor).toFixed(2).replace('.',',');
+  recalcularTotalRequisicao();
+}
+
+function recalcularTotalRequisicao() {
+  let total = 0;
+  document.querySelectorAll('#tbody-itens-requisicao tr').forEach(tr => {
+    const qtd = Number(tr.querySelector('.item-qtd')?.value) || 0;
+    const valor = Number(tr.querySelector('.item-valor')?.value) || 0;
+    total += qtd * valor;
+  });
+  document.getElementById('req-valor-total-display').textContent = 'R$ ' + total.toFixed(2).replace('.',',');
+  return total;
+}
+
+function coletarItensRequisicaoDoForm() {
+  const itens = [];
+  document.querySelectorAll('#tbody-itens-requisicao tr').forEach(tr => {
+    const descricao = tr.querySelector('.item-descricao').value.trim();
+    if (!descricao) return; // ignora linha vazia
+    itens.push({
+      material_id:    tr.querySelector('.select-material-item').value || null,
+      descricao,
+      quantidade:     Number(tr.querySelector('.item-qtd').value) || 0,
+      unidade:        tr.querySelector('.item-unidade').value.trim() || null,
+      valor_unitario: Number(tr.querySelector('.item-valor').value) || 0,
+    });
+  });
+  return itens;
+}
+
+function limparLinhasItensRequisicao() {
+  document.getElementById('tbody-itens-requisicao').innerHTML = '';
+  document.getElementById('req-valor-total-display').textContent = 'R$ 0,00';
+}
+
+// ===================== REQUISIÇÕES =====================
+let _requisicoesCache = [];
+
+async function carregarRequisicoes() {
+  const tbody = document.getElementById('tbody-requisicoes'); if (!tbody) return;
+  const filtroStatus = document.getElementById('filtro-status-requisicao')?.value || '';
+
+  let query = db.from('requisicoes_compra')
+    .select('*, fornecedores(razao_social), ordens_servico(id,descricao_defeito)')
+    .order('created_at', { ascending: false });
+  if (filtroStatus) query = query.eq('status', filtroStatus);
+
+  const { data, error } = await query;
+  if (error) { toast('Erro ao carregar requisições: ' + error.message, 'erro'); return; }
+  _requisicoesCache = data || [];
+
+  if (!_requisicoesCache.length) { tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Nenhuma requisição encontrada.</td></tr>'; return; }
+
+  const corStatus = { Solicitado:'#dbeafe', Aprovado:'#fef3c7', Comprado:'#ede9fe', Entregue:'#d1fae5', Cancelado:'#fee2e2' };
+  const txtStatus = { Solicitado:'#1e40af', Aprovado:'#92400e', Comprado:'#5b21b6', Entregue:'#065f46', Cancelado:'#991b1b' };
+
+  tbody.innerHTML = _requisicoesCache.map(r => `<tr>
+    <td><strong>${escapeHTML(r.numero)}</strong></td>
+    <td>${escapeHTML(r.solicitante)}</td>
+    <td>${r.ordens_servico ? escapeHTML(rotuloOS(r.ordens_servico)) : '—'}</td>
+    <td>${escapeHTML(r.fornecedores?.razao_social || '—')}</td>
+    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span></td>
+    <td>R$ ${Number(r.valor_total || 0).toFixed(2).replace('.',',')}</td>
+    <td>${r.data_solicitacao ? new Date(r.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarRequisicao('${escapeHTML(r.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirRequisicao('${escapeHTML(r.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function editarRequisicao(id) {
+  const r = _requisicoesCache.find(x => x.id === id); if (!r) return;
+
+  document.getElementById('req-id-edicao').value    = id;
+  document.getElementById('req-numero').value        = r.numero || '';
+  document.getElementById('req-solicitante').value   = r.solicitante || '';
+  document.getElementById('req-status').value         = r.status || 'Solicitado';
+  document.getElementById('req-data-necessidade').value = r.data_necessidade || '';
+  document.getElementById('req-observacoes').value    = r.observacoes || '';
+
+  await Promise.all([atualizarSelectOSParaRequisicao(), atualizarSelectFornecedoresParaRequisicao()]);
+  document.getElementById('req-os').value = r.os_id || '';
+  document.getElementById('req-fornecedor').value = r.fornecedor_id || '';
+
+  limparLinhasItensRequisicao();
+  const { data: itens } = await db.from('requisicoes_compra_itens').select('*').eq('requisicao_id', id).order('id');
+  (itens || []).forEach(it => adicionarLinhaItemRequisicao(it));
+  if (!itens || !itens.length) recalcularTotalRequisicao();
+
+  const btn = document.getElementById('btn-salvar-requisicao');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-requisicao').style.display = 'inline-block';
+  document.getElementById('foco-formulario-requisicao').scrollIntoView({ behavior:'smooth' });
+}
+
+function resetarFormRequisicao() {
+  ['req-id-edicao','req-numero','req-solicitante','req-data-necessidade','req-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('req-status').value = 'Solicitado';
+  document.getElementById('req-os').value = '';
+  document.getElementById('req-fornecedor').value = '';
+  limparLinhasItensRequisicao();
+  const btn = document.getElementById('btn-salvar-requisicao');
+  btn.textContent = '💾 Registrar Requisição'; btn.style.background = '';
+  document.getElementById('btn-cancelar-requisicao').style.display = 'none';
+}
+
+async function excluirRequisicao(id) {
+  const numero = _requisicoesCache.find(x => x.id === id)?.numero || 'esta requisição';
+  if (!confirm(`Excluir requisição "${numero}"? Os itens vinculados também serão removidos.`)) return;
+  const { error } = await db.from('requisicoes_compra').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarRequisicoes();
+}
+
+document.getElementById('btn-salvar-requisicao')?.addEventListener('click', async () => {
+  const numero = document.getElementById('req-numero').value.trim();
+  const solicitante = document.getElementById('req-solicitante').value.trim();
+  if (!numero)      { msgForm('msg-requisicao','Informe o número da requisição.','red'); return; }
+  if (!solicitante) { msgForm('msg-requisicao','Informe o solicitante.','red'); return; }
+
+  const itens = coletarItensRequisicaoDoForm();
+  const valorTotal = recalcularTotalRequisicao();
+
+  const payload = {
+    numero,
+    solicitante,
+    os_id:            document.getElementById('req-os').value || null,
+    fornecedor_id:    document.getElementById('req-fornecedor').value || null,
+    status:            document.getElementById('req-status').value,
+    data_necessidade:  document.getElementById('req-data-necessidade').value || null,
+    observacoes:        document.getElementById('req-observacoes').value.trim() || null,
+    valor_total:         valorTotal,
+    updated_at:           new Date().toISOString(),
+  };
+
+  const idEd = document.getElementById('req-id-edicao').value;
+  let requisicaoId = idEd;
+
+  if (idEd) {
+    const { error } = await db.from('requisicoes_compra').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-requisicao','Erro ao salvar: ' + error.message,'red'); return; }
+    // T-padrão do projeto: DELETE+INSERT dos itens garante substituição completa,
+    // sem registro órfão de uma edição anterior (mesmo princípio da importação de folha).
+    await db.from('requisicoes_compra_itens').delete().eq('requisicao_id', idEd);
+  } else {
+    const { data, error } = await db.from('requisicoes_compra').insert([payload]).select('id').single();
+    if (error) { msgForm('msg-requisicao','Erro ao salvar: ' + error.message,'red'); return; }
+    requisicaoId = data.id;
+  }
+
+  if (itens.length) {
+    const itensComRequisicao = itens.map(it => ({ ...it, requisicao_id: requisicaoId }));
+    const { error: errItens } = await db.from('requisicoes_compra_itens').insert(itensComRequisicao);
+    if (errItens) { msgForm('msg-requisicao','Requisição salva, mas houve erro ao salvar os itens: ' + errItens.message,'red'); return; }
+  }
+
+  msgForm('msg-requisicao', idEd ? '✓ Requisição atualizada!' : '✓ Requisição registrada!', 'green');
+  resetarFormRequisicao();
+  carregarRequisicoes();
+});
+
+// ===================== INIT =====================
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+  await Promise.all([
+    atualizarSelectOSParaRequisicao(),
+    carregarFornecedores(),
+    carregarMateriais(),
+  ]);
+  await carregarRequisicoes();
+});
+</script>
+</body>
+</html>
