@@ -101,6 +101,26 @@
             <p style="text-align:right;font-weight:700;margin-top:8px;font-size:14px;">Itens: <span id="oc-valor-itens-display">R$ 0,00</span> + Frete: <span id="oc-valor-frete-display">R$ 0,00</span> = <span id="oc-valor-total-display" style="color:var(--brand-navy);">R$ 0,00</span></p>
           </div>
 
+          <div id="oc-parcelas-wrap" style="display:none;margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <label style="font-weight:600;font-size:13px;">💰 Parcelas de Pagamento <span style="font-weight:400;color:#a0aec0;font-size:11px;">(base para o Financeiro)</span></label>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="btn-refresh" style="font-size:11px;padding:4px 10px;" onclick="gerarParcelasAutomatico()">✨ Gerar da Condição de Pagamento</button>
+                <button type="button" class="btn-refresh" style="font-size:11px;padding:4px 10px;" onclick="adicionarLinhaParcela()">➕ Adicionar Parcela</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nº</th><th>Valor (R$)</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+                <tbody id="tbody-parcelas-oc"></tbody>
+              </table>
+            </div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button type="button" class="btn-primary" style="background:#059669;font-size:12px;" onclick="salvarParcelas()">💾 Salvar Parcelas</button>
+            </div>
+            <p id="msg-parcelas" class="msg-form"></p>
+          </div>
+
           <div class="btn-row" style="margin-top:16px;">
             <button type="button" id="btn-salvar-oc" class="btn-primary" style="background:#4338ca;">💾 Registrar Ordem de Compra</button>
             <button type="button" id="btn-cancelar-oc" class="btn-secondary" style="display:none;" onclick="resetarFormOC()">✕ Cancelar</button>
@@ -313,6 +333,9 @@ async function editarOC(id) {
   (itens || []).forEach(it => adicionarLinhaItemOC(it));
   recalcularTotalOC();
 
+  document.getElementById('oc-parcelas-wrap').style.display = 'block';
+  await carregarParcelas(id);
+
   const btn = document.getElementById('btn-salvar-oc');
   btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
   document.getElementById('btn-cancelar-oc').style.display = 'inline-block';
@@ -327,6 +350,8 @@ function resetarFormOC() {
   document.getElementById('oc-status').value = 'Emitida';
   document.getElementById('oc-frete').value = 0;
   limparLinhasItensOC();
+  document.getElementById('oc-parcelas-wrap').style.display = 'none';
+  document.getElementById('tbody-parcelas-oc').innerHTML = '';
   const info = document.getElementById('oc-origem-info');
   info.style.display = 'none'; info.textContent = '';
   const btn = document.getElementById('btn-salvar-oc');
@@ -370,7 +395,7 @@ async function imprimirOrdemCompra(id) {
   const html = `
   <div class="laudo-wrapper">
     <div class="laudo-header">
-      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Ordem de Compra</h1><p>Documento para envio ao fornecedor</p></div></div>
+      <div style="display:flex;align-items:center;gap:14px;"><img src="${comprador?.logo_url || LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Ordem de Compra</h1><p>Documento para envio ao fornecedor</p></div></div>
       <div class="laudo-header-meta">
         <strong>Nº ${escapeHTML(oc.numero)}</strong><br>
         Emissão: ${fmtDate(oc.data_emissao)}<br>
@@ -438,6 +463,103 @@ async function imprimirOrdemCompra(id) {
   </div>`;
 
   imprimir('area-oc-impressao', html, 'retrato');
+}
+
+// ===================== PARCELAS DE PAGAMENTO (base pro Financeiro) =====================
+let _contadorLinhaParcela = 0;
+
+function adicionarLinhaParcela(parcelaExistente = null) {
+  const tbody = document.getElementById('tbody-parcelas-oc');
+  const numero = tbody.children.length + 1;
+  const linhaId = 'parcela-linha-' + (++_contadorLinhaParcela);
+  const tr = document.createElement('tr');
+  tr.id = linhaId;
+  tr.innerHTML = `
+    <td class="numero-parcela">${numero}</td>
+    <td><input type="number" class="form-input-style parcela-valor" style="font-size:12px;width:100px;" step="0.01" min="0" value="${parcelaExistente?.valor ?? ''}"></td>
+    <td><input type="date" class="form-input-style parcela-data" style="font-size:12px;" value="${parcelaExistente?.data_vencimento ?? ''}"></td>
+    <td>
+      <select class="form-input-style parcela-status" style="font-size:12px;">
+        ${['Pendente','Paga','Atrasada','Cancelada'].map(s => `<option value="${s}" ${parcelaExistente?.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+      </select>
+    </td>
+    <td><button type="button" class="btn-excluir" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${linhaId}').remove(); renumerarParcelas();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function renumerarParcelas() {
+  document.querySelectorAll('#tbody-parcelas-oc tr').forEach((tr, i) => {
+    tr.querySelector('.numero-parcela').textContent = i + 1;
+  });
+}
+
+function limparLinhasParcelas() {
+  document.getElementById('tbody-parcelas-oc').innerHTML = '';
+}
+
+async function carregarParcelas(ordemId) {
+  limparLinhasParcelas();
+  const { data } = await db.from('parcelas_pagamento_oc').select('*').eq('ordem_compra_id', ordemId).order('numero_parcela');
+  (data || []).forEach(p => adicionarLinhaParcela(p));
+}
+
+// Interpreta a condição de pagamento em texto livre (ex.: "30/60/90",
+// "30, 60, 90 dias", "à vista") e gera as parcelas automaticamente — o
+// usuário sempre pode ajustar valor/data depois, isso só evita digitar
+// tudo na mão no caso comum.
+function gerarParcelasAutomatico() {
+  const condicao = document.getElementById('oc-condicao-pagamento').value.trim();
+  const valorTotalTexto = document.getElementById('oc-valor-total-display').textContent;
+  const valorTotal = Number(valorTotalTexto.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+  const dataEmissaoBase = new Date(); // parcelas contam a partir de hoje/emissão
+
+  const numeros = (condicao.match(/\d+/g) || []).map(Number).filter(n => n > 0 && n <= 3650);
+
+  let dias;
+  if (/à vista|a vista/i.test(condicao)) {
+    dias = [0];
+  } else if (numeros.length) {
+    dias = numeros;
+  } else {
+    // Não deu pra interpretar o texto — gera 1 parcela só, com o valor
+    // total, pra não travar o usuário; ele ajusta manualmente depois.
+    dias = [30];
+  }
+
+  limparLinhasParcelas();
+  const valorParcela = Math.round((valorTotal / dias.length) * 100) / 100;
+  dias.forEach((d, i) => {
+    const data = new Date(dataEmissaoBase); data.setDate(data.getDate() + d);
+    adicionarLinhaParcela({ valor: valorParcela, data_vencimento: data.toISOString().slice(0,10), status: 'Pendente' });
+  });
+
+  msgForm('msg-parcelas', dias.length > 1 || numeros.length
+    ? `✓ ${dias.length} parcela(s) gerada(s) a partir de "${condicao}". Confira antes de salvar.`
+    : `Não consegui interpretar "${condicao}" — gerei 1 parcela com o valor total; ajuste manualmente.`, 'green');
+}
+
+async function salvarParcelas() {
+  const ordemId = document.getElementById('oc-id-edicao').value;
+  if (!ordemId) { msgForm('msg-parcelas','Salve a Ordem de Compra antes de registrar as parcelas.','red'); return; }
+
+  const linhas = Array.from(document.querySelectorAll('#tbody-parcelas-oc tr')).map((tr, i) => ({
+    ordem_compra_id: ordemId,
+    numero_parcela: i + 1,
+    valor: Number(tr.querySelector('.parcela-valor').value) || 0,
+    data_vencimento: tr.querySelector('.parcela-data').value || null,
+    status: tr.querySelector('.parcela-status').value,
+  }));
+
+  if (linhas.some(l => !l.data_vencimento)) { msgForm('msg-parcelas','Toda parcela precisa de data de vencimento.','red'); return; }
+
+  // T-padrão do projeto: DELETE+INSERT garante substituição completa.
+  await db.from('parcelas_pagamento_oc').delete().eq('ordem_compra_id', ordemId);
+  if (linhas.length) {
+    const { error } = await db.from('parcelas_pagamento_oc').insert(linhas);
+    if (error) { msgForm('msg-parcelas','Erro ao salvar: ' + error.message,'red'); return; }
+  }
+  msgForm('msg-parcelas', '✓ Parcelas salvas!', 'green');
 }
 
 async function excluirOC(id) {

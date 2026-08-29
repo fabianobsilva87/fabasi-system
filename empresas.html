@@ -117,6 +117,12 @@
               <label for="emp-cnae">CNAE Principal</label>
               <input type="text" id="emp-cnae" placeholder="Ex: 4322-3/01">
             </div>
+            <div class="form-group">
+              <label for="emp-logo-input">Logo (aparece na Ordem de Compra)</label>
+              <input type="file" id="emp-logo-input" accept="image/*" onchange="preVisualizarLogo('emp-logo-input','emp-logo-preview')">
+              <img id="emp-logo-preview" style="display:none;max-height:50px;margin-top:6px;border:1px solid #e2e8f0;border-radius:4px;padding:2px;">
+              <input type="hidden" id="emp-logo-url">
+            </div>
           </div>
 
           <div class="btn-row" style="margin-top:6px;">
@@ -203,6 +209,12 @@
             <div class="form-group">
               <label for="cont-obs">Observações</label>
               <input type="text" id="cont-obs" placeholder="Ex: Contrato anual renovável">
+            </div>
+            <div class="form-group">
+              <label for="cont-logo-input">Logo (aparece na Ordem de Compra quando for o cliente da cotação)</label>
+              <input type="file" id="cont-logo-input" accept="image/*" onchange="preVisualizarLogo('cont-logo-input','cont-logo-preview')">
+              <img id="cont-logo-preview" style="display:none;max-height:50px;margin-top:6px;border:1px solid #e2e8f0;border-radius:4px;padding:2px;">
+              <input type="hidden" id="cont-logo-url">
             </div>
           </div>
 
@@ -386,14 +398,19 @@ function editarEmpresa(id) {
   document.getElementById('emp-email').value    = e.email || '';
   document.getElementById('emp-site').value     = e.site || '';
   document.getElementById('emp-cnae').value     = e.cnae || '';
+  document.getElementById('emp-logo-url').value = e.logo_url || '';
+  const preview = document.getElementById('emp-logo-preview');
+  if (e.logo_url) { preview.src = e.logo_url; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
   document.getElementById('btn-cancelar-empresa').style.display = 'inline-flex';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function limparFormEmpresa() {
-  ['emp-id-edicao','emp-razao','emp-fantasia','emp-cnpj','emp-ie','emp-tel','emp-end','emp-email','emp-site','emp-cnae'].forEach(id => {
+  ['emp-id-edicao','emp-razao','emp-fantasia','emp-cnpj','emp-ie','emp-tel','emp-end','emp-email','emp-site','emp-cnae','emp-logo-url'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  document.getElementById('emp-logo-preview').style.display = 'none';
+  document.getElementById('emp-logo-input').value = '';
   document.getElementById('btn-cancelar-empresa').style.display = 'none';
 }
 
@@ -406,11 +423,38 @@ async function excluirEmpresa(id) {
   carregarEmpresas('empregadora');
 }
 
+// Pré-visualização local (sem subir nada ainda) assim que o usuário escolhe o arquivo.
+function preVisualizarLogo(inputId, previewId) {
+  const input = document.getElementById(inputId);
+  const file = input.files?.[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const preview = document.getElementById(previewId);
+    preview.src = ev.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// Faz o upload de verdade (reaproveita uploadFoto() do app.js, mesmo bucket
+// já usado pelas fotos de PMOC/O.S., só numa subpasta própria) — chamado só
+// no momento de salvar, não a cada troca de arquivo.
+async function uploadLogoSeHouver(inputId, urlAtualInputId) {
+  const input = document.getElementById(inputId);
+  const file = input.files?.[0];
+  if (!file) return document.getElementById(urlAtualInputId).value || null;
+  const url = await uploadFoto(file, 'logos-empresas', null);
+  return url || document.getElementById(urlAtualInputId).value || null;
+}
+
 document.getElementById('btn-salvar-empresa')?.addEventListener('click', async () => {
   const razao = document.getElementById('emp-razao').value.trim();
   const cnpj  = document.getElementById('emp-cnpj').value.trim();
   const end   = document.getElementById('emp-end').value.trim();
   if (!razao) { msgForm('msg-empresa','Informe a Razão Social.','red'); return; }
+
+  msgForm('msg-empresa','Salvando...','blue');
+  const logoUrl = await uploadLogoSeHouver('emp-logo-input','emp-logo-url');
 
   const payload = {
     tipo: 'empregadora',
@@ -423,10 +467,10 @@ document.getElementById('btn-salvar-empresa')?.addEventListener('click', async (
     email:     document.getElementById('emp-email').value.trim(),
     site:      document.getElementById('emp-site').value.trim(),
     cnae:      document.getElementById('emp-cnae').value.trim(),
+    logo_url:  logoUrl,
     ativa:     true,
   };
 
-  msgForm('msg-empresa','Salvando...','blue');
   const idEd = document.getElementById('emp-id-edicao').value;
 
   if (idEd) {
@@ -478,17 +522,22 @@ function editarContratante(id) {
   document.getElementById('cont-segmento').value     = e.segmento || 'Construção Civil';
   document.getElementById('cont-status').value       = e.status_contrato || 'Ativo';
   document.getElementById('cont-obs').value          = e.observacoes || '';
+  document.getElementById('cont-logo-url').value     = e.logo_url || '';
+  const preview = document.getElementById('cont-logo-preview');
+  if (e.logo_url) { preview.src = e.logo_url; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
   document.getElementById('btn-cancelar-contratante').style.display = 'inline-flex';
   alternarAba('contratante');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function limparFormContratante() {
-  ['cont-id-edicao','cont-razao','cont-fantasia','cont-cnpj','cont-contato','cont-tel','cont-end','cont-obs'].forEach(id => {
+  ['cont-id-edicao','cont-razao','cont-fantasia','cont-cnpj','cont-contato','cont-tel','cont-end','cont-obs','cont-logo-url'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('cont-segmento').value = 'Construção Civil';
   document.getElementById('cont-status').value   = 'Ativo';
+  document.getElementById('cont-logo-preview').style.display = 'none';
+  document.getElementById('cont-logo-input').value = '';
   document.getElementById('btn-cancelar-contratante').style.display = 'none';
 }
 
@@ -504,6 +553,9 @@ document.getElementById('btn-salvar-contratante')?.addEventListener('click', asy
   const razao = document.getElementById('cont-razao').value.trim();
   if (!razao) { msgForm('msg-contratante','Informe a Razão Social.','red'); return; }
 
+  msgForm('msg-contratante','Salvando...','blue');
+  const logoUrl = await uploadLogoSeHouver('cont-logo-input','cont-logo-url');
+
   const payload = {
     tipo: 'contratante',
     razao_social:    razao,
@@ -515,10 +567,10 @@ document.getElementById('btn-salvar-contratante')?.addEventListener('click', asy
     segmento:        document.getElementById('cont-segmento').value,
     status_contrato: document.getElementById('cont-status').value,
     observacoes:     document.getElementById('cont-obs').value.trim(),
+    logo_url:        logoUrl,
     ativa:           true,
   };
 
-  msgForm('msg-contratante','Salvando...','blue');
   const idEd = document.getElementById('cont-id-edicao').value;
   const { error } = idEd
     ? await db.from('empresas').update(payload).eq('id', idEd)

@@ -77,9 +77,15 @@
         <div class="card" id="painel-cotacao-detalhe" style="display:none;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
             <h3 class="card-title" id="cotacao-titulo" style="margin:0;">Cotação</h3>
+            <button type="button" class="btn-secondary" style="background:#1a56db;color:#fff;" onclick="exportarMapaCotacao()">🖨️ Exportar Mapa de Cotação</button>
             <button type="button" class="btn-secondary" onclick="fecharDetalheCotacao()">✕ Fechar</button>
           </div>
           <p id="cotacao-origem-info" style="font-size:12px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:8px 12px;border-radius:6px;margin:10px 0;"></p>
+
+          <div class="form-group" style="max-width:400px;margin-bottom:14px;">
+            <label for="cotacao-cliente">Cliente / Obra desta compra</label>
+            <select id="cotacao-cliente" class="form-input-style" onchange="salvarClienteCotacao()"><option value="">-- Selecione --</option></select>
+          </div>
 
           <div style="margin:14px 0;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -219,9 +225,26 @@ async function abrirDetalheCotacao(cotacaoId) {
   const info = document.getElementById('cotacao-origem-info');
   info.innerHTML = `↳ Originada da Solicitação de Compra <a href="solicitacoes-compra.html?ver=${escapeHTML(c.requisicao_compra_id)}" target="_blank" style="color:#3730a3;font-weight:600;">${escapeHTML(c.requisicoes_compra?.numero || '')}</a>${c.criado_por_nome ? ' · iniciada por ' + escapeHTML(c.criado_por_nome) : ''}${seloAprovacao(c.aprovado_por_nome, c.aprovado_em)}`;
 
+  await atualizarSelectClienteCotacao(c.cliente_id);
   await atualizarSelectFornecedoresCotacao();
   renderizarMapaCotacao();
   document.getElementById('painel-cotacao-detalhe').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function atualizarSelectClienteCotacao(clienteIdAtual) {
+  const sel = document.getElementById('cotacao-cliente'); if (!sel) return;
+  const { data } = await db.from('empresas').select('id,razao_social').eq('tipo','contratante').eq('ativa', true).order('razao_social');
+  sel.innerHTML = '<option value="">-- Selecione --</option>' + (data || []).map(e => `<option value="${escapeHTML(e.id)}">${escapeHTML(e.razao_social)}</option>`).join('');
+  sel.value = clienteIdAtual || '';
+}
+
+async function salvarClienteCotacao() {
+  if (!_cotacaoAtual) return;
+  const clienteId = document.getElementById('cotacao-cliente').value || null;
+  const { error } = await db.from('cotacoes').update({ cliente_id: clienteId }).eq('id', _cotacaoAtual.id);
+  if (error) { toast('Erro ao salvar cliente: ' + error.message, 'erro'); return; }
+  _cotacaoAtual.cliente_id = clienteId;
+  toast('Cliente da cotação atualizado.', 'info');
 }
 
 function fecharDetalheCotacao() {
@@ -240,22 +263,41 @@ async function atualizarSelectFornecedoresCotacao() {
 
 // Renderiza a grade: linha de cabeçalho com 1 coluna por proposta, uma
 // linha por item, e no fim uma linha de total + linha de ação por proposta.
+// Retorna o total de uma proposta a partir dos preços já carregados
+// (não depende do DOM) — usado tanto pra achar a "melhor opção" quanto
+// pro documento exportado.
+function calcularTotalPropostaDeDados(p) {
+  return Object.values(p.precos || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
+// Só considera "melhor opção" propostas com TODOS os itens já cotados —
+// senão uma proposta parcialmente preenchida pareceria mais barata só por
+// faltar preço, o que seria enganoso.
+function acharMelhorPropostaId() {
+  const totalmenteCotadas = _propostasCotacaoAtual.filter(p =>
+    _itensCotacaoAtual.every(item => p.precos[item.id] != null)
+  );
+  if (!totalmenteCotadas.length) return null;
+  return totalmenteCotadas.reduce((a, b) => calcularTotalPropostaDeDados(b) < calcularTotalPropostaDeDados(a) ? b : a).id;
+}
+
 function renderizarMapaCotacao() {
   const thead = document.getElementById('thead-mapa-cotacao');
   const tbody = document.getElementById('tbody-mapa-cotacao');
   const tfoot = document.getElementById('tfoot-mapa-cotacao');
   const encerrada = _cotacaoAtual.status !== 'Em Cotação';
+  const melhorId = acharMelhorPropostaId();
 
   thead.innerHTML = `<tr>
     <th>Item</th><th>Qtd.</th>
-    ${_propostasCotacaoAtual.map(p => `<th>${escapeHTML(p.fornecedores?.razao_social || '—')}${p.vencedora ? ' 🏆' : ''}<br><small style="font-weight:400;">${p.prazo_entrega_dias ? p.prazo_entrega_dias+'d · ' : ''}${escapeHTML(p.condicao_pagamento || '')}</small></th>`).join('')}
+    ${_propostasCotacaoAtual.map(p => `<th style="${p.id === melhorId ? 'background:#ecfdf5;' : ''}">${escapeHTML(p.fornecedores?.razao_social || '—')}${p.vencedora ? ' 🏆' : ''}${p.id === melhorId && !p.vencedora ? ' <span class="tag-badge success" style="font-size:9px;">💡 melhor preço</span>' : ''}<br><small style="font-weight:400;">${p.prazo_entrega_dias ? p.prazo_entrega_dias+'d · ' : ''}${escapeHTML(p.condicao_pagamento || '')}</small></th>`).join('')}
   </tr>`;
 
   tbody.innerHTML = _itensCotacaoAtual.map(item => `<tr>
     <td>${escapeHTML(item.descricao)}</td>
     <td>${item.quantidade} ${escapeHTML(item.unidade || '')}</td>
     ${_propostasCotacaoAtual.map(p => `
-      <td>
+      <td style="${p.id === melhorId ? 'background:#f0fdf4;' : ''}">
         <input type="number" class="form-input-style preco-item" style="font-size:12px;width:90px;" step="0.01" min="0"
           data-proposta="${escapeHTML(p.id)}" data-item="${escapeHTML(item.id)}"
           value="${p.precos[item.id] ?? ''}" ${encerrada ? 'disabled' : ''}
@@ -265,7 +307,7 @@ function renderizarMapaCotacao() {
 
   tfoot.innerHTML = `<tr style="font-weight:700;">
     <td colspan="2">Total</td>
-    ${_propostasCotacaoAtual.map(p => `<td id="total-proposta-${escapeHTML(p.id)}">R$ 0,00</td>`).join('')}
+    ${_propostasCotacaoAtual.map(p => `<td id="total-proposta-${escapeHTML(p.id)}" style="${p.id === melhorId ? 'background:#f0fdf4;color:#059669;' : ''}">R$ 0,00</td>`).join('')}
   </tr>
   <tr>
     <td colspan="2"></td>
@@ -280,6 +322,40 @@ function renderizarMapaCotacao() {
   </tr>`;
 
   _propostasCotacaoAtual.forEach(p => recalcularTotalProposta(p.id));
+}
+
+// ===================== EXPORTAR MAPA DE COTAÇÃO (impressão) =====================
+function exportarMapaCotacao() {
+  const melhorId = acharMelhorPropostaId();
+  const linhasItens = _itensCotacaoAtual.map(item => `
+    <tr>
+      <td>${escapeHTML(item.descricao)}</td>
+      <td style="text-align:center;">${item.quantidade} ${escapeHTML(item.unidade || '')}</td>
+      ${_propostasCotacaoAtual.map(p => `<td style="text-align:right;${p.id === melhorId ? 'background:#f0fdf4;font-weight:700;' : ''}">${p.precos[item.id] != null ? 'R$ ' + Number(p.precos[item.id]).toFixed(2).replace('.',',') : '—'}</td>`).join('')}
+    </tr>`).join('');
+
+  const html = `
+  <div class="laudo-wrapper">
+    <div class="laudo-header">
+      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Mapa de Cotação</h1><p>Comparativo de fornecedores</p></div></div>
+      <div class="laudo-header-meta"><strong>Nº ${escapeHTML(_cotacaoAtual.numero)}</strong><br>Origem: ${escapeHTML(_cotacaoAtual.requisicoes_compra?.numero || '')}</div>
+    </div>
+    <div class="laudo-section">
+      <table class="laudo-checklist-table">
+        <thead><tr>
+          <th>Item</th><th style="text-align:center;">Qtd.</th>
+          ${_propostasCotacaoAtual.map(p => `<th style="text-align:right;">${escapeHTML(p.fornecedores?.razao_social || '—')}${p.id === melhorId ? ' 💡' : ''}${p.vencedora ? ' 🏆' : ''}</th>`).join('')}
+        </tr></thead>
+        <tbody>${linhasItens}</tbody>
+        <tfoot><tr style="font-weight:700;">
+          <td colspan="2">Total</td>
+          ${_propostasCotacaoAtual.map(p => `<td style="text-align:right;${p.id === melhorId ? 'color:#059669;' : ''}">R$ ${calcularTotalPropostaDeDados(p).toFixed(2).replace('.',',')}</td>`).join('')}
+        </tr></tfoot>
+      </table>
+      <p style="font-size:10px;color:#a0aec0;margin-top:10px;">💡 = melhor preço entre as propostas totalmente cotadas · 🏆 = proposta vencedora</p>
+    </div>
+  </div>`;
+  imprimir('area-mapa-cotacao', html, 'paisagem');
 }
 
 function recalcularTotalProposta(propostaId) {
