@@ -689,6 +689,91 @@ function inicializarCanvasAssinatura() {
 function limparCanvasAssinatura() { canvasFiscal?.limpar(); }
 
 // ===================== SESSÃO & ROTEAMENTO =====================
+// ===================== MENU LATERAL — FONTE ÚNICA =====================
+// Antes, o <nav> inteiro era copiado e colado em cada página HTML (~21
+// arquivos). Isso já causava divergências (ex.: "Resp. de Segurança" e
+// "Empresa Master" só apareciam em algumas páginas) e é o tipo de problema
+// que cresce rápido conforme novos módulos (Fiscal, Financeiro, Bancário...)
+// entram. Agora cada página só tem <nav id="app-nav"></nav> vazio, e o menu
+// inteiro é montado em runtime a partir de MENU_SECTIONS abaixo — adicionar
+// um item novo em qualquer módulo passa a ser 1 linha aqui, nunca mais uma
+// edição repetida em N arquivos.
+const MENU_SECTIONS = [
+  { id: 'visaogeral', label: 'Visão Geral', items: [
+    { icon: '📊', label: 'Dashboard Geral', href: 'dashboard.html' },
+  ]},
+  { id: 'refrigeracao', label: 'Refrigeração', items: [
+    { icon: '➕', label: 'Novo Ativo', href: 'equipamentos.html' },
+    { icon: '⚙️', label: 'Gerenciamento de Ativos', href: 'gerir-equipamentos.html' },
+    { icon: '📋', label: 'Formulário PMOC', href: 'pmoc.html' },
+    { icon: '📅', label: 'Programação PMOC', href: 'programacao-pmoc.html' },
+    { icon: '📘', label: 'Plano PMOC (Documento)', href: 'plano-pmoc.html' },
+    { icon: '🖨️', label: 'Central de Impressões', href: 'impressoes.html', dataNav: 'impressoes' },
+  ]},
+  { id: 'manutencao', label: 'Manutenção', items: [
+    { icon: '🛠️', label: 'Ordens de Serviço', href: 'os.html' },
+  ]},
+  { id: 'compras', label: 'Compras', items: [
+    { icon: '📝', label: 'Requisição de Materiais', href: 'requisicao-materiais.html' },
+    { icon: '🛒', label: 'Solicitações de Compra', href: 'solicitacoes-compra.html' },
+    { icon: '🔍', label: 'Cotação', href: 'cotacao.html' },
+    { icon: '📦', label: 'Ordem de Compra', href: 'ordem-compra.html' },
+    { icon: '📡', label: 'Follow-up', href: 'followup-compra.html' },
+  ]},
+  // NÚCLEO "CADASTROS" — reagrupado a partir de itens que antes ficavam
+  // espalhados em Compras e Administração (arquitetura ERP integrado,
+  // princípio "cadastre uma vez, utilize em todos os módulos").
+  { id: 'cadastros', label: 'Cadastros', items: [
+    { icon: '🏭', label: 'Fornecedores', href: 'fornecedores.html' },
+    { icon: '🗂️', label: 'Cadastro de Materiais', href: 'cadastro-materiais.html' },
+    { icon: '🤝', label: 'Clientes', href: 'clientes.html' },
+    { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
+    { icon: '🦺', label: 'Resp. de Segurança', href: 'empresas.html' },
+    { icon: '📍', label: 'Locais', href: 'locais.html' },
+  ]},
+  // NÚCLEO FINANCEIRO — placeholders desta entrega; conteúdo interno entra
+  // em fases seguintes do roadmap.
+  { id: 'financeiro', label: 'Financeiro', items: [
+    { icon: '💵', label: 'Contas a Pagar', href: 'financeiro-contas-pagar.html' },
+    { icon: '💰', label: 'Contas a Receber', href: 'financeiro-contas-receber.html' },
+    { icon: '📈', label: 'Fluxo de Caixa', href: 'financeiro-fluxo-caixa.html' },
+  ]},
+  // NÚCLEO BANCÁRIO — placeholders desta entrega.
+  { id: 'bancario', label: 'Bancário', items: [
+    { icon: '🏦', label: 'Contas Bancárias', href: 'bancario-contas.html' },
+    { icon: '🔄', label: 'Conciliação Bancária', href: 'bancario-conciliacao.html' },
+  ]},
+  { id: 'administracao', label: 'Administração', items: [
+    { icon: '🏛️', label: 'Empresa Master', href: 'empresa-master.html' },
+    { icon: '👥', label: 'Gestão de Usuários', href: 'usuarios.html' },
+    { icon: '🔔', label: 'Central de Pendências', href: 'central-pendencias.html' },
+    { icon: '📜', label: 'Auditoria', href: 'auditoria.html' },
+  ]},
+];
+
+// Monta o <nav> inteiro dentro de <nav id="app-nav"></nav>, marcando como
+// "active" o item cujo href bate com a página atual. Roda de forma síncrona
+// (a tag <script src="app.js"> fica no fim do <body>, então #app-nav já
+// existe no DOM nesse ponto — sem precisar esperar DOMContentLoaded).
+function renderAppNav() {
+  const nav = document.getElementById('app-nav');
+  if (!nav) return; // páginas sem menu (login, verificação pública) não têm #app-nav
+  const pagAtual = window.location.pathname.split('/').pop() || 'dashboard.html';
+  let html = '';
+  for (const sec of MENU_SECTIONS) {
+    html += `<div class="nav-label" onclick="alternarSecaoMenu('${sec.id}')">${sec.label} <span class="nav-chevron" id="nav-chevron-${sec.id}">▾</span></div>`;
+    html += `<div class="nav-section-items" id="nav-section-${sec.id}">`;
+    for (const it of sec.items) {
+      const ativo = it.href === pagAtual ? ' active' : '';
+      const dataAttr = it.dataNav ? ` data-nav="${it.dataNav}"` : '';
+      html += `<div class="nav-item${ativo}"${dataAttr} onclick="location.href='${it.href}'"><span>${it.icon}</span> ${it.label}</div>`;
+    }
+    html += `</div>`;
+  }
+  nav.innerHTML = html;
+}
+renderAppNav();
+
 // ===================== MENU LATERAL RECOLHÍVEL =====================
 // Cada seção (Refrigeração, Compras, Administração...) pode ser fechada
 // clicando no cabeçalho — estado lembrado por navegador via localStorage,
