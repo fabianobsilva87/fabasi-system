@@ -37,6 +37,24 @@
       <div class="section-content">
         <div class="app-sub-panel">
 
+          <div class="card">
+            <h3 class="card-title">📤 Upload de XML de Teste (Etapa 13.3)</h3>
+            <p style="font-size:12px;color:#718096;margin-bottom:14px;">
+              Processamento inteiramente no navegador — não depende de certificado nem da SEFAZ. Valida o parser, a
+              vinculação automática de fornecedor e a classificação de material antes da integração real (Etapa 13.4).
+              NF-e tem suporte completo; NFS-e é melhor esforço (o layout do padrão nacional pode variar — confira os
+              campos extraídos).
+            </p>
+            <div class="form-group" style="max-width:420px;">
+              <label for="fiscal-upload-xml">Arquivo XML (NF-e ou NFS-e)</label>
+              <input type="file" id="fiscal-upload-xml" accept=".xml,text/xml,application/xml">
+            </div>
+            <div class="btn-row" style="margin-top:12px;">
+              <button type="button" id="btn-processar-xml" class="btn-primary">⚙️ Processar XML</button>
+            </div>
+            <div id="fiscal-upload-resultado" style="margin-top:14px;font-size:13px;"></div>
+          </div>
+
           <div class="dash-cards-grid" style="grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;">
             <div class="dash-card">
               <div class="dash-card-icon">🧾</div>
@@ -132,6 +150,242 @@
 
   <script src="app.js"></script>
   <script>
+    // ===================== ETAPA 13.3 — UPLOAD DE XML DE TESTE =====================
+    // Tudo client-side: parsear um XML já obtido não precisa de certificado
+    // nem de Edge Function — só assinatura/consulta à SEFAZ precisam ficar
+    // no servidor (ver Fase 0 do documento de arquitetura do Fiscal).
+
+    function xmlTexto(el, tag) {
+      if (!el) return null;
+      const node = el.getElementsByTagName(tag)[0];
+      return node ? node.textContent.trim() : null;
+    }
+
+    // Converte os filhos diretos de um elemento em {tag: valor} — usado para
+    // blocos de imposto (ICMS/IPI/PIS/COFINS), que têm um único filho
+    // variável conforme o regime (ICMS00, ICMSSN102, PISAliq, etc.).
+    function filhosParaObjeto(el) {
+      if (!el || !el.children || !el.children.length) return null;
+      const bloco = el.children[0]; // ex.: <ICMS00>, <ICMSSN102>, <PISAliq>...
+      const obj = { _bloco: bloco.tagName };
+      Array.from(bloco.children).forEach(c => { obj[c.tagName] = c.textContent.trim(); });
+      return obj;
+    }
+
+    async function calcularHashXml(texto) {
+      const bytes = new TextEncoder().encode(texto);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function parseNFe(doc) {
+      const infNFe = doc.getElementsByTagName('infNFe')[0];
+      const ide = doc.getElementsByTagName('ide')[0];
+      const emit = doc.getElementsByTagName('emit')[0];
+      const dest = doc.getElementsByTagName('dest')[0];
+      const total = doc.getElementsByTagName('ICMSTot')[0];
+
+      const idAttr = infNFe?.getAttribute('Id') || '';
+      const chaveAcesso = idAttr.replace(/\D/g, '').slice(-44) || null;
+
+      const enderEmit = emit?.getElementsByTagName('enderEmit')[0];
+
+      const itens = Array.from(doc.getElementsByTagName('det')).map(det => {
+        const prod = det.getElementsByTagName('prod')[0];
+        const imposto = det.getElementsByTagName('imposto')[0];
+        return {
+          numero_item: Number(det.getAttribute('nItem')) || null,
+          codigo_produto: xmlTexto(prod, 'cProd'),
+          descricao_original: xmlTexto(prod, 'xProd'),
+          ncm: xmlTexto(prod, 'NCM'),
+          cfop: xmlTexto(prod, 'CFOP'),
+          unidade: xmlTexto(prod, 'uCom'),
+          quantidade: Number(xmlTexto(prod, 'qCom')) || null,
+          valor_unitario: Number(xmlTexto(prod, 'vUnCom')) || null,
+          valor_total: Number(xmlTexto(prod, 'vProd')) || null,
+          desconto: Number(xmlTexto(prod, 'vDesc')) || 0,
+          frete: Number(xmlTexto(prod, 'vFrete')) || 0,
+          outras_despesas: Number(xmlTexto(prod, 'vOutro')) || 0,
+          icms: filhosParaObjeto(imposto?.getElementsByTagName('ICMS')[0]),
+          ipi: filhosParaObjeto(imposto?.getElementsByTagName('IPI')[0]),
+          pis: filhosParaObjeto(imposto?.getElementsByTagName('PIS')[0]),
+          cofins: filhosParaObjeto(imposto?.getElementsByTagName('COFINS')[0]),
+          status_classificacao: 'pendente',
+        };
+      });
+
+      return {
+        tipo_documento: 'NFE',
+        modelo: xmlTexto(ide, 'mod'),
+        serie: xmlTexto(ide, 'serie'),
+        numero: xmlTexto(ide, 'nNF'),
+        chave_acesso: chaveAcesso,
+        data_emissao: xmlTexto(ide, 'dhEmi') || xmlTexto(ide, 'dEmi'),
+        cnpj_emitente: limparCNPJ(xmlTexto(emit, 'CNPJ') || ''),
+        cnpj_destinatario: limparCNPJ(xmlTexto(dest, 'CNPJ') || ''),
+        valor_total: Number(xmlTexto(total, 'vNF')) || 0,
+        ambiente: xmlTexto(ide, 'tpAmb') === '1' ? 'producao' : 'homologacao',
+        _emitente_nome: xmlTexto(emit, 'xNome'),
+        _emitente_endereco: enderEmit ? {
+          logradouro: xmlTexto(enderEmit, 'xLgr'), numero: xmlTexto(enderEmit, 'nro'),
+          bairro: xmlTexto(enderEmit, 'xBairro'), municipio: xmlTexto(enderEmit, 'xMun'), uf: xmlTexto(enderEmit, 'UF'),
+        } : null,
+        itens,
+      };
+    }
+
+    // Melhor esforço — o layout "NFS-e Padrão Nacional" (ADN) pode variar;
+    // sem uma amostra real validada, extraímos por nome de tag de forma
+    // tolerante e sinalizamos claramente que precisa de conferência manual.
+    function acharTagContendo(doc, parte) {
+      const todas = doc.getElementsByTagName('*');
+      for (const el of todas) if (el.tagName.toLowerCase().includes(parte.toLowerCase())) return el;
+      return null;
+    }
+    function parseNFSeMelhorEsforco(doc) {
+      const prestadorEl = acharTagContendo(doc, 'prestador');
+      const tomadorEl = acharTagContendo(doc, 'tomador');
+      const valorEl = acharTagContendo(doc, 'valorliquido') || acharTagContendo(doc, 'valorservico') || acharTagContendo(doc, 'vserv');
+      const numeroEl = acharTagContendo(doc, 'ndps') || acharTagContendo(doc, 'numero');
+      const dataEl = acharTagContendo(doc, 'dhemi') || acharTagContendo(doc, 'dataemissao');
+      const chaveEl = acharTagContendo(doc, 'chave') || doc.documentElement;
+
+      return {
+        tipo_documento: 'NFSE',
+        numero: numeroEl?.textContent?.trim() || null,
+        nfse_identificador: chaveEl?.getAttribute?.('Id') || chaveEl?.textContent?.trim()?.slice(0, 60) || null,
+        data_emissao: dataEl?.textContent?.trim() || null,
+        cnpj_emitente: limparCNPJ(prestadorEl ? (xmlTexto(prestadorEl, 'CNPJ') || '') : ''),
+        cnpj_destinatario: limparCNPJ(tomadorEl ? (xmlTexto(tomadorEl, 'CNPJ') || '') : ''),
+        valor_total: Number(valorEl?.textContent?.trim()) || 0,
+        ambiente: 'homologacao',
+        _emitente_nome: prestadorEl ? (xmlTexto(prestadorEl, 'xNome') || xmlTexto(prestadorEl, 'razaoSocial')) : null,
+        _emitente_endereco: null,
+        itens: [],
+        _melhorEsforco: true,
+      };
+    }
+
+    async function vincularFornecedorEClassificar(documentoId, dadosDoc) {
+      const resultado = { fornecedorCriado: false, itensVinculados: 0, itensPendentes: 0 };
+      if (!dadosDoc.cnpj_emitente) return resultado;
+
+      let { data: fornecedor } = await db.from('fornecedores').select('id').eq('cnpj', dadosDoc.cnpj_emitente).maybeSingle();
+
+      if (!fornecedor) {
+        const end = dadosDoc._emitente_endereco || {};
+        const { data: novoForn, error: errForn } = await db.from('fornecedores').insert([{
+          razao_social: dadosDoc._emitente_nome || dadosDoc.cnpj_emitente,
+          cnpj: dadosDoc.cnpj_emitente,
+          logradouro: end.logradouro || null, numero: end.numero || null, bairro: end.bairro || null,
+          cidade: end.municipio || null, uf: end.uf || null,
+          origem_cadastro: 'pre_cadastro_fiscal', status_pre_cadastro: 'aguardando_confirmacao',
+          ativo: true,
+        }]).select('id').single();
+        if (!errForn) { fornecedor = novoForn; resultado.fornecedorCriado = true; }
+      }
+
+      if (fornecedor) {
+        await db.from('fiscal_documentos').update({ fornecedor_id: fornecedor.id }).eq('id', documentoId);
+
+        const { data: itens } = await db.from('fiscal_documento_itens').select('id, descricao_original').eq('documento_id', documentoId);
+        for (const item of (itens || [])) {
+          const { data: alias } = await db.from('fornecedor_item_nomenclatura')
+            .select('material_id').eq('fornecedor_id', fornecedor.id).eq('descricao_fornecedor', item.descricao_original).maybeSingle();
+          if (alias?.material_id) {
+            await db.from('fiscal_documento_itens').update({
+              material_id: alias.material_id, confianca_vinculo: 'alta', status_classificacao: 'vinculado',
+            }).eq('id', item.id);
+            resultado.itensVinculados++;
+          } else {
+            resultado.itensPendentes++;
+          }
+        }
+      }
+      return resultado;
+    }
+
+    async function processarXmlFiscal() {
+      const input = document.getElementById('fiscal-upload-xml');
+      const resultadoEl = document.getElementById('fiscal-upload-resultado');
+      const arquivo = input.files[0];
+      if (!arquivo) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Selecione um arquivo XML primeiro.</span>'; return; }
+
+      resultadoEl.innerHTML = 'Processando...';
+      const texto = await arquivo.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(texto, 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) {
+        resultadoEl.innerHTML = '<span style="color:#dc2626;">XML inválido — não foi possível interpretar o arquivo.</span>';
+        return;
+      }
+
+      let dados;
+      if (doc.getElementsByTagName('infNFe').length) {
+        dados = parseNFe(doc);
+      } else if (acharTagContendo(doc, 'nfse') || acharTagContendo(doc, 'dps')) {
+        dados = parseNFSeMelhorEsforco(doc);
+      } else {
+        resultadoEl.innerHTML = '<span style="color:#dc2626;">Formato não reconhecido — não achei &lt;infNFe&gt; (NF-e) nem nada com "NFSe"/"DPS" no XML.</span>';
+        return;
+      }
+
+      const hashXml = await calcularHashXml(texto);
+
+      const { data: existente } = await db.from('fiscal_documentos')
+        .select('id')
+        .or(`hash_xml.eq.${hashXml}${dados.chave_acesso ? ',chave_acesso.eq.' + dados.chave_acesso : ''}`)
+        .maybeSingle();
+      if (existente) { resultadoEl.innerHTML = '<span style="color:#d97706;">⚠️ Este documento já foi importado anteriormente (mesma chave/hash).</span>'; return; }
+
+      const { data: empresaMaster } = await db.from('empresa_master').select('id').limit(1).maybeSingle();
+
+      const { data: novoDoc, error: errDoc } = await db.from('fiscal_documentos').insert([{
+        empresa_id: empresaMaster?.id || null,
+        tipo_documento: dados.tipo_documento,
+        modelo: dados.modelo || null,
+        serie: dados.serie || null,
+        numero: dados.numero || null,
+        chave_acesso: dados.chave_acesso || null,
+        nfse_identificador: dados.nfse_identificador || null,
+        data_emissao: dados.data_emissao ? new Date(dados.data_emissao).toISOString() : null,
+        cnpj_emitente: dados.cnpj_emitente || null,
+        cnpj_destinatario: dados.cnpj_destinatario || null,
+        valor_total: dados.valor_total || 0,
+        ambiente: dados.ambiente,
+        status: 'processada',
+        xml_storage_path: null, // upload de teste não grava no Storage — só nas etapas com Edge Function
+        hash_xml: hashXml,
+        data_processamento: new Date().toISOString(),
+      }]).select('id').single();
+
+      if (errDoc) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Erro ao salvar documento: ' + escapeHTML(errDoc.message) + '</span>'; return; }
+
+      if (dados.itens && dados.itens.length) {
+        const itensComDoc = dados.itens.map(it => ({ ...it, documento_id: novoDoc.id }));
+        const { error: errItens } = await db.from('fiscal_documento_itens').insert(itensComDoc);
+        if (errItens) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Documento salvo, mas erro ao salvar itens: ' + escapeHTML(errItens.message) + '</span>'; return; }
+      }
+
+      const vinculo = await vincularFornecedorEClassificar(novoDoc.id, dados);
+
+      const avisoMelhorEsforco = dados._melhorEsforco
+        ? '<br><span style="color:#d97706;">⚠️ NFS-e processada em modo melhor-esforço — confira os campos extraídos, o layout do padrão nacional pode variar.</span>' : '';
+
+      resultadoEl.innerHTML = `
+        <span style="color:#059669;">✓ Documento processado! ${dados.itens.length} item(ns) importado(s)` +
+        (vinculo.fornecedorCriado ? ', fornecedor pré-cadastrado automaticamente (aguardando confirmação em Fornecedores)' : '') +
+        (vinculo.itensVinculados ? `, ${vinculo.itensVinculados} item(ns) classificado(s) automaticamente por nomenclatura já conhecida` : '') +
+        (vinculo.itensPendentes ? `, ${vinculo.itensPendentes} item(ns) pendente(s) de classificação (Conferência Fiscal)` : '') +
+        `.</span>${avisoMelhorEsforco}`;
+
+      input.value = '';
+      await carregarKpisDocumentosFiscais();
+      await carregarDocumentosFiscais();
+    }
+
+    document.getElementById('btn-processar-xml').addEventListener('click', processarXmlFiscal);
+
     async function carregarKpisDocumentosFiscais() {
       const [{ count: totalNfe }, { count: totalNfse }, { count: totalPendentes }, { count: totalErro }, { count: totalCancelados }, { data: docs }] = await Promise.all([
         db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('tipo_documento', 'NFE'),

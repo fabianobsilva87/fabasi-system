@@ -52,9 +52,24 @@
               <button type="button" class="btn-refresh" onclick="carregarCertificadoFiscal()">↺ Atualizar</button>
             </div>
             <div id="fiscal-certificado-info" style="font-size:13px;color:#a0aec0;">Carregando...</div>
+
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:12px;color:#92400e;margin-top:14px;line-height:1.5;">
+              ⚠️ A Edge Function <code>fiscal-certificate</code> (Etapa 13.2) ainda precisa ser publicada e testada em homologação (ver <code>supabase/functions/fiscal-certificate/README.md</code>) antes destes botões funcionarem de verdade.
+            </div>
+
+            <div class="form-grid" style="margin-top:14px;">
+              <div class="form-group"><label for="fiscal-cert-arquivo">Arquivo do Certificado (.pfx / .p12)</label><input type="file" id="fiscal-cert-arquivo" accept=".pfx,.p12"></div>
+              <div class="form-group"><label for="fiscal-cert-senha">Senha do Certificado</label><input type="password" id="fiscal-cert-senha" placeholder="Nunca fica salva no navegador"></div>
+              <div class="form-group"><label for="fiscal-cert-ambiente">Ambiente</label>
+                <select id="fiscal-cert-ambiente" class="form-input-style">
+                  <option value="homologacao">Homologação</option>
+                  <option value="producao">Produção</option>
+                </select>
+              </div>
+            </div>
             <div class="btn-row" style="margin-top:16px;">
-              <button type="button" class="btn-primary" onclick="acaoFiscalIndisponivel('Cadastro de certificado')">📤 Cadastrar Certificado</button>
-              <button type="button" class="btn-secondary" onclick="acaoFiscalIndisponivel('Teste de certificado')">🔎 Testar Certificado</button>
+              <button type="button" class="btn-primary" onclick="cadastrarCertificadoFiscal()">📤 Cadastrar Certificado</button>
+              <button type="button" class="btn-secondary" onclick="testarCertificadoFiscal()">🔎 Testar Certificado</button>
             </div>
             <p id="msg-fiscal-certificado" class="msg-form"></p>
           </div>
@@ -84,6 +99,65 @@
   <script>
     function acaoFiscalIndisponivel(recurso) {
       alert(recurso + ' ainda não está disponível — entra em uma próxima etapa do Módulo Fiscal, via Edge Function no servidor (o navegador nunca tem acesso ao certificado ou à senha).');
+    }
+
+    function arquivoParaBase64(arquivo) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+        reader.readAsDataURL(arquivo);
+      });
+    }
+
+    async function cadastrarCertificadoFiscal() {
+      const arquivo = document.getElementById('fiscal-cert-arquivo').files[0];
+      const senha = document.getElementById('fiscal-cert-senha').value;
+      const ambiente = document.getElementById('fiscal-cert-ambiente').value;
+      if (!arquivo) { msgForm('msg-fiscal-certificado', 'Selecione o arquivo .pfx/.p12.', 'red'); return; }
+      if (!senha) { msgForm('msg-fiscal-certificado', 'Informe a senha do certificado.', 'red'); return; }
+
+      msgForm('msg-fiscal-certificado', 'Enviando certificado...', 'green');
+      try {
+        const base64 = await arquivoParaBase64(arquivo);
+        const { data, error } = await db.functions.invoke('fiscal-certificate', {
+          body: { acao: 'cadastrar', certificado_base64: base64, senha, ambiente_padrao: ambiente },
+        });
+        if (error) throw error;
+        if (data?.error === 'cnpj_diferente') {
+          if (confirm(data.mensagem + '\n\nConfirmar mesmo assim?')) {
+            const { data: data2, error: error2 } = await db.functions.invoke('fiscal-certificate', {
+              body: { acao: 'cadastrar', certificado_base64: base64, senha, ambiente_padrao: ambiente, confirmar_cnpj_diferente: true },
+            });
+            if (error2) throw error2;
+            if (data2?.error) { msgForm('msg-fiscal-certificado', data2.error, 'red'); return; }
+          } else { msgForm('msg-fiscal-certificado', 'Cadastro cancelado.', 'red'); return; }
+        } else if (data?.error) {
+          msgForm('msg-fiscal-certificado', data.error, 'red'); return;
+        }
+        document.getElementById('fiscal-cert-senha').value = '';
+        document.getElementById('fiscal-cert-arquivo').value = '';
+        msgForm('msg-fiscal-certificado', '✓ Certificado cadastrado!', 'green');
+        await carregarCertificadoFiscal();
+      } catch (e) {
+        msgForm('msg-fiscal-certificado', 'Erro ao cadastrar (a Edge Function precisa estar publicada — ver supabase/functions/fiscal-certificate/README.md): ' + e.message, 'red');
+      }
+    }
+
+    async function testarCertificadoFiscal() {
+      msgForm('msg-fiscal-certificado', 'Testando certificado...', 'green');
+      try {
+        const { data: cert } = await db.from('fiscal_certificados').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (!cert) { msgForm('msg-fiscal-certificado', 'Nenhum certificado cadastrado ainda.', 'red'); return; }
+
+        const { data, error } = await db.functions.invoke('fiscal-certificate', { body: { acao: 'testar', certificado_id: cert.id } });
+        if (error) throw error;
+        if (data?.error) { msgForm('msg-fiscal-certificado', data.error, 'red'); return; }
+        msgForm('msg-fiscal-certificado', `✓ Certificado testado — status: ${data.status}.${data.aviso ? ' (' + data.aviso + ')' : ''}`, 'green');
+        await carregarCertificadoFiscal();
+      } catch (e) {
+        msgForm('msg-fiscal-certificado', 'Erro ao testar (a Edge Function precisa estar publicada — ver supabase/functions/fiscal-certificate/README.md): ' + e.message, 'red');
+      }
     }
 
     async function carregarCertificadoFiscal() {
