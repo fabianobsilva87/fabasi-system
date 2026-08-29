@@ -713,12 +713,32 @@ const MENU_SECTIONS = [
   { id: 'manutencao', label: 'Manutenção', items: [
     { icon: '🛠️', label: 'Ordens de Serviço', href: 'os.html' },
   ]},
+  // NÚCLEO "OBRAS" — maior gap identificado no raio-x de concorrentes
+  // (Obra Prima / Operatop): "obra" precisa ser uma entidade central com
+  // ciclo de vida próprio (orçamento → cronograma → execução → medição →
+  // faturamento), não só um campo de rateio de custo solto em Compras.
+  // RDO/Diário de Obra ficou de fora por decisão explícita (não é
+  // prioridade agora) — pode entrar depois como item novo desta mesma seção.
+  { id: 'obras', label: 'Obras', items: [
+    { icon: '🏗️', label: 'Cadastro de Obra', href: 'obras.html' },
+    { icon: '📐', label: 'Orçamento de Obra', href: 'obras-orcamento.html' },
+    { icon: '📅', label: 'Cronograma de Obra', href: 'obras-cronograma.html' },
+    { icon: '📊', label: 'Medição de Obra', href: 'obras-medicao.html' },
+    { icon: '📄', label: 'Contratos', href: 'contratos.html' },
+  ]},
   { id: 'compras', label: 'Compras', items: [
     { icon: '📝', label: 'Requisição de Materiais', href: 'requisicao-materiais.html' },
     { icon: '🛒', label: 'Solicitações de Compra', href: 'solicitacoes-compra.html' },
     { icon: '🔍', label: 'Cotação', href: 'cotacao.html' },
     { icon: '📦', label: 'Ordem de Compra', href: 'ordem-compra.html' },
     { icon: '📡', label: 'Follow-up', href: 'followup-compra.html' },
+  ]},
+  // NÚCLEO "ESTOQUE" — outro gap do raio-x: o prompt master original citava
+  // estoque como conceito, mas nunca virou módulo navegável (ficava
+  // implícito dentro de Compras). Formalizado como núcleo próprio porque
+  // recebe movimentação de mais de uma origem (NF-e, Requisição, Obra).
+  { id: 'estoque', label: 'Estoque', items: [
+    { icon: '📦', label: 'Movimentações', href: 'estoque.html' },
   ]},
   // NÚCLEO "CADASTROS" — reagrupado a partir de itens que antes ficavam
   // espalhados em Compras e Administração (arquitetura ERP integrado,
