@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Ordem de compra emitida a fornecedor, com condições de pagamento e frete (Estágio 3 do fluxo de Compras) — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Ordem de Compra</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item active" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>📦 Ordem de Compra</h2></div>
+      <div class="section-content">
+
+        <div class="card" id="foco-formulario-oc">
+          <h3 class="card-title">📦 Nova Ordem de Compra</h3>
+          <p id="oc-origem-info" style="display:none;font-size:12px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:8px 12px;border-radius:6px;margin-bottom:12px;"></p>
+          <input type="hidden" id="oc-id-edicao" value="">
+          <input type="hidden" id="oc-origem-rc" value="">
+
+          <div class="form-grid">
+            <div class="form-group"><label for="oc-numero">Número</label><input type="text" id="oc-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
+            <div class="form-group"><label for="oc-fornecedor">Fornecedor *</label><select id="oc-fornecedor" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+            <div class="form-group"><label for="oc-status">Status</label>
+              <select id="oc-status" class="form-input-style">
+                <option value="Emitida">Emitida</option>
+                <option value="Confirmada">Confirmada</option>
+                <option value="Enviada">Enviada</option>
+                <option value="Recebida Parcial">Recebida Parcial</option>
+                <option value="Recebida Total">Recebida Total</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div class="form-group"><label for="oc-data-entrega">Entrega Prevista</label><input type="date" id="oc-data-entrega"></div>
+            <div class="form-group"><label for="oc-condicao-pagamento">Condição de Pagamento</label><input type="text" id="oc-condicao-pagamento" placeholder="Ex: 30/60/90, à vista, boleto 28 dias"></div>
+            <div class="form-group"><label for="oc-frete">Frete (R$)</label><input type="number" id="oc-frete" step="0.01" value="0"></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="oc-observacoes">Observações</label><textarea id="oc-observacoes" rows="2"></textarea></div>
+          </div>
+
+          <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <label style="font-weight:600;font-size:13px;">Itens da Ordem</label>
+              <button type="button" class="btn-refresh" style="font-size:11px;padding:4px 10px;" onclick="adicionarLinhaItemOC()">➕ Adicionar Item</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Material (catálogo)</th><th>Descrição</th><th>Qtd.</th><th>Unid.</th><th>Valor Unit. (R$)</th><th>Total</th><th></th></tr></thead>
+                <tbody id="tbody-itens-oc"></tbody>
+              </table>
+            </div>
+            <p style="text-align:right;font-weight:700;margin-top:8px;font-size:14px;">Itens: <span id="oc-valor-itens-display">R$ 0,00</span> + Frete: <span id="oc-valor-frete-display">R$ 0,00</span> = <span id="oc-valor-total-display" style="color:var(--brand-navy);">R$ 0,00</span></p>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-oc" class="btn-primary" style="background:#4338ca;">💾 Registrar Ordem de Compra</button>
+            <button type="button" id="btn-cancelar-oc" class="btn-secondary" style="display:none;" onclick="resetarFormOC()">✕ Cancelar</button>
+          </div>
+          <p id="msg-oc" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Ordens de Compra Emitidas</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="filtro-status-oc" class="form-input-style" style="font-size:12px;width:auto;" onchange="carregarOrdensCompra()">
+                <option value="">Todos os status</option>
+                <option value="Emitida">Emitida</option>
+                <option value="Confirmada">Confirmada</option>
+                <option value="Enviada">Enviada</option>
+                <option value="Recebida Parcial">Recebida Parcial</option>
+                <option value="Recebida Total">Recebida Total</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+              <button type="button" class="btn-refresh" onclick="carregarOrdensCompra()">↺ Atualizar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Número</th><th>Fornecedor</th><th>Status</th><th>Valor Total</th><th>Entrega Prevista</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-oc"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== FORNECEDORES — select desta página =====================
+async function atualizarSelectFornecedoresOC() {
+  const sel = document.getElementById('oc-fornecedor'); if (!sel) return;
+  const atual = sel.value;
+  const { data, error } = await db.from('fornecedores').select('id,razao_social').eq('ativo', true).order('razao_social');
+  if (error) { console.warn('Não foi possível carregar fornecedores:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Selecione --</option>' +
+    (data || []).map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+  sel.value = atual;
+}
+
+// ===================== ITENS DA OC (linhas dinâmicas) =====================
+let _contadorLinhaItemOC = 0;
+
+function adicionarLinhaItemOC(itemExistente = null) {
+  const tbody = document.getElementById('tbody-itens-oc');
+  const linhaId = 'oc-item-linha-' + (++_contadorLinhaItemOC);
+  const tr = document.createElement('tr');
+  tr.id = linhaId;
+  tr.innerHTML = `
+    <td><select class="select-material-item form-input-style" style="font-size:12px;" onchange="aoEscolherMaterialItemOC('${linhaId}')"><option value="">-- item avulso --</option></select></td>
+    <td><input type="text" class="form-input-style item-descricao" style="font-size:12px;" placeholder="Descrição"></td>
+    <td><input type="number" class="form-input-style item-qtd" style="font-size:12px;width:70px;" value="1" min="0" step="0.001" oninput="recalcularTotalItemOC('${linhaId}')"></td>
+    <td><input type="text" class="form-input-style item-unidade" style="font-size:12px;width:60px;"></td>
+    <td><input type="number" class="form-input-style item-valor" style="font-size:12px;width:90px;" value="0" min="0" step="0.01" oninput="recalcularTotalItemOC('${linhaId}')"></td>
+    <td class="item-total-display" style="font-weight:600;">R$ 0,00</td>
+    <td><button type="button" class="btn-excluir" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${linhaId}').remove(); recalcularTotalOC();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  carregarMateriaisParaSelectItem();
+
+  if (itemExistente) {
+    tr.querySelector('.select-material-item').value = itemExistente.material_id || '';
+    tr.querySelector('.item-descricao').value = itemExistente.descricao || '';
+    tr.querySelector('.item-qtd').value = itemExistente.quantidade ?? 1;
+    tr.querySelector('.item-unidade').value = itemExistente.unidade || '';
+    tr.querySelector('.item-valor').value = itemExistente.valor_unitario ?? 0;
+    recalcularTotalItemOC(linhaId);
+  }
+}
+
+function aoEscolherMaterialItemOC(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const sel = tr.querySelector('.select-material-item');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    tr.querySelector('.item-descricao').value = opt.textContent;
+    tr.querySelector('.item-unidade').value = opt.dataset.unidade || '';
+    if (opt.dataset.valor) tr.querySelector('.item-valor').value = opt.dataset.valor;
+  }
+  recalcularTotalItemOC(linhaId);
+}
+
+function recalcularTotalItemOC(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const qtd = Number(tr.querySelector('.item-qtd').value) || 0;
+  const valor = Number(tr.querySelector('.item-valor').value) || 0;
+  tr.querySelector('.item-total-display').textContent = 'R$ ' + (qtd * valor).toFixed(2).replace('.',',');
+  recalcularTotalOC();
+}
+
+function recalcularTotalOC() {
+  let totalItens = 0;
+  document.querySelectorAll('#tbody-itens-oc tr').forEach(tr => {
+    const qtd = Number(tr.querySelector('.item-qtd')?.value) || 0;
+    const valor = Number(tr.querySelector('.item-valor')?.value) || 0;
+    totalItens += qtd * valor;
+  });
+  const frete = Number(document.getElementById('oc-frete').value) || 0;
+  document.getElementById('oc-valor-itens-display').textContent = 'R$ ' + totalItens.toFixed(2).replace('.',',');
+  document.getElementById('oc-valor-frete-display').textContent = 'R$ ' + frete.toFixed(2).replace('.',',');
+  const total = totalItens + frete;
+  document.getElementById('oc-valor-total-display').textContent = 'R$ ' + total.toFixed(2).replace('.',',');
+  return total;
+}
+
+function coletarItensOCDoForm() {
+  const itens = [];
+  document.querySelectorAll('#tbody-itens-oc tr').forEach(tr => {
+    const descricao = tr.querySelector('.item-descricao').value.trim();
+    if (!descricao) return;
+    itens.push({
+      material_id:    tr.querySelector('.select-material-item').value || null,
+      descricao,
+      quantidade:     Number(tr.querySelector('.item-qtd').value) || 0,
+      unidade:        tr.querySelector('.item-unidade').value.trim() || null,
+      valor_unitario: Number(tr.querySelector('.item-valor').value) || 0,
+    });
+  });
+  return itens;
+}
+
+function limparLinhasItensOC() {
+  document.getElementById('tbody-itens-oc').innerHTML = '';
+  recalcularTotalOC();
+}
+
+document.getElementById('oc-frete')?.addEventListener('input', recalcularTotalOC);
+
+// ===================== ORDENS DE COMPRA =====================
+let _ordensCompraCache = [];
+
+async function carregarOrdensCompra() {
+  const tbody = document.getElementById('tbody-oc'); if (!tbody) return;
+  const filtroStatus = document.getElementById('filtro-status-oc')?.value || '';
+
+  let query = db.from('ordens_compra').select('*, fornecedores(razao_social)').order('created_at', { ascending: false });
+  if (filtroStatus) query = query.eq('status', filtroStatus);
+
+  const { data, error } = await query;
+  if (error) { toast('Erro ao carregar ordens de compra: ' + error.message, 'erro'); return; }
+  _ordensCompraCache = data || [];
+
+  if (!_ordensCompraCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma ordem de compra encontrada.</td></tr>'; return; }
+
+  const corStatus = { 'Emitida':'#dbeafe', 'Confirmada':'#fef3c7', 'Enviada':'#e0e7ff', 'Recebida Parcial':'#fed7aa', 'Recebida Total':'#d1fae5', 'Cancelada':'#fee2e2' };
+  const txtStatus = { 'Emitida':'#1e40af', 'Confirmada':'#92400e', 'Enviada':'#3730a3', 'Recebida Parcial':'#9a3412', 'Recebida Total':'#065f46', 'Cancelada':'#991b1b' };
+
+  tbody.innerHTML = _ordensCompraCache.map(o => `<tr>
+    <td><strong>${escapeHTML(o.numero)}</strong></td>
+    <td>${escapeHTML(o.fornecedores?.razao_social || '—')}</td>
+    <td><span class="tag-badge" style="background:${corStatus[o.status]||'#f1f5f9'};color:${txtStatus[o.status]||'#4a5568'};">${escapeHTML(o.status)}</span></td>
+    <td>R$ ${Number(o.valor_total || 0).toFixed(2).replace('.',',')}</td>
+    <td>${o.data_entrega_prevista ? new Date(o.data_entrega_prevista + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarOC('${escapeHTML(o.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirOC('${escapeHTML(o.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function editarOC(id) {
+  const o = _ordensCompraCache.find(x => x.id === id); if (!o) return;
+
+  document.getElementById('oc-id-edicao').value = id;
+  document.getElementById('oc-numero').value = o.numero || '';
+  document.getElementById('oc-status').value = o.status || 'Emitida';
+  document.getElementById('oc-data-entrega').value = o.data_entrega_prevista || '';
+  document.getElementById('oc-condicao-pagamento').value = o.condicao_pagamento || '';
+  document.getElementById('oc-frete').value = o.frete ?? 0;
+  document.getElementById('oc-observacoes').value = o.observacoes || '';
+
+  await atualizarSelectFornecedoresOC();
+  document.getElementById('oc-fornecedor').value = o.fornecedor_id || '';
+
+  limparLinhasItensOC();
+  const { data: itens } = await db.from('ordens_compra_itens').select('*').eq('ordem_id', id).order('id');
+  (itens || []).forEach(it => adicionarLinhaItemOC(it));
+  recalcularTotalOC();
+
+  const btn = document.getElementById('btn-salvar-oc');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-oc').style.display = 'inline-block';
+  document.getElementById('foco-formulario-oc').scrollIntoView({ behavior:'smooth' });
+}
+
+function resetarFormOC() {
+  ['oc-id-edicao','oc-origem-rc','oc-numero','oc-data-entrega','oc-condicao-pagamento','oc-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('oc-fornecedor').value = '';
+  document.getElementById('oc-status').value = 'Emitida';
+  document.getElementById('oc-frete').value = 0;
+  limparLinhasItensOC();
+  const info = document.getElementById('oc-origem-info');
+  info.style.display = 'none'; info.textContent = '';
+  const btn = document.getElementById('btn-salvar-oc');
+  btn.textContent = '💾 Registrar Ordem de Compra'; btn.style.background = '#4338ca';
+  document.getElementById('btn-cancelar-oc').style.display = 'none';
+}
+
+async function excluirOC(id) {
+  const numero = _ordensCompraCache.find(x => x.id === id)?.numero || 'esta ordem de compra';
+  if (!confirm(`Excluir "${numero}"? Os itens vinculados também serão removidos. O follow-up registrado para ela também será perdido.`)) return;
+  const { error } = await db.from('ordens_compra').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarOrdensCompra();
+}
+
+document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => {
+  const fornecedorId = document.getElementById('oc-fornecedor').value;
+  if (!fornecedorId) { msgForm('msg-oc','Selecione o fornecedor.','red'); return; }
+
+  const itens = coletarItensOCDoForm();
+  const valorTotal = recalcularTotalOC();
+  const idEd = document.getElementById('oc-id-edicao').value;
+  const origemRc = document.getElementById('oc-origem-rc').value || null;
+  let ordemId = idEd;
+
+  if (idEd) {
+    const payload = {
+      fornecedor_id:         fornecedorId,
+      status:                 document.getElementById('oc-status').value,
+      data_entrega_prevista:   document.getElementById('oc-data-entrega').value || null,
+      condicao_pagamento:       document.getElementById('oc-condicao-pagamento').value.trim() || null,
+      frete:                     Number(document.getElementById('oc-frete').value) || 0,
+      observacoes:                document.getElementById('oc-observacoes').value.trim() || null,
+      valor_total:                 valorTotal,
+      updated_at:                   new Date().toISOString(),
+    };
+    const { error } = await db.from('ordens_compra').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-oc','Erro ao salvar: ' + error.message,'red'); return; }
+    await db.from('ordens_compra_itens').delete().eq('ordem_id', idEd);
+  } else {
+    const { data: numero, error: errNum } = await db.rpc('gerar_numero_documento', { p_tipo: 'OC' });
+    if (errNum) { msgForm('msg-oc','Erro ao gerar número da ordem: ' + errNum.message,'red'); return; }
+
+    const payload = {
+      numero,
+      fornecedor_id:         fornecedorId,
+      status:                 document.getElementById('oc-status').value,
+      data_entrega_prevista:   document.getElementById('oc-data-entrega').value || null,
+      condicao_pagamento:       document.getElementById('oc-condicao-pagamento').value.trim() || null,
+      frete:                     Number(document.getElementById('oc-frete').value) || 0,
+      observacoes:                document.getElementById('oc-observacoes').value.trim() || null,
+      valor_total:                 valorTotal,
+    };
+    if (origemRc) payload.requisicao_compra_id = origemRc;
+
+    const { data, error } = await db.from('ordens_compra').insert([payload]).select('id').single();
+    if (error) { msgForm('msg-oc','Erro ao salvar: ' + error.message,'red'); return; }
+    ordemId = data.id;
+    document.getElementById('oc-numero').value = numero;
+  }
+
+  if (itens.length) {
+    const itensComOrdem = itens.map(it => ({ ...it, ordem_id: ordemId }));
+    const { error: errItens } = await db.from('ordens_compra_itens').insert(itensComOrdem);
+    if (errItens) { msgForm('msg-oc','Ordem salva, mas houve erro ao salvar os itens: ' + errItens.message,'red'); return; }
+  }
+
+  // Fecha o ciclo: a Solicitação de Compra de origem passa a "Convertida".
+  if (origemRc && !idEd) {
+    await db.from('requisicoes_compra').update({ status: 'Convertida' }).eq('id', origemRc);
+  }
+
+  const numeroFinal = document.getElementById('oc-numero').value;
+  msgForm('msg-oc', idEd ? `✓ Ordem ${numeroFinal} atualizada!` : `✓ Ordem ${numeroFinal} registrada!`, 'green');
+  resetarFormOC();
+  carregarOrdensCompra();
+});
+
+// ===================== PONTE: chegada vinda de Solicitação de Compra =====================
+// Lê ?origem_rc=<id> na URL (setado por gerarOrdemDeCompra em
+// solicitacoes-compra.html), busca a solicitação e seus itens (agora com
+// os valores já cotados, ao contrário da ponte RM→RC que zera preço),
+// e pré-preenche o formulário.
+async function aplicarOrigemRcDaURL() {
+  const params = new URLSearchParams(location.search);
+  const origemRc = params.get('origem_rc');
+  if (!origemRc) return;
+
+  const { data: r, error } = await db.from('requisicoes_compra').select('*').eq('id', origemRc).single();
+  if (error || !r) { toast('Não foi possível carregar a solicitação de compra de origem.', 'erro'); return; }
+  const { data: itensOrigem } = await db.from('requisicoes_compra_itens').select('*').eq('requisicao_id', origemRc).order('id');
+
+  resetarFormOC();
+  document.getElementById('oc-origem-rc').value = origemRc;
+  await atualizarSelectFornecedoresOC();
+  document.getElementById('oc-fornecedor').value = r.fornecedor_id || '';
+
+  limparLinhasItensOC();
+  (itensOrigem || []).forEach(it => adicionarLinhaItemOC({
+    material_id: it.material_id, descricao: it.descricao,
+    quantidade: it.quantidade, unidade: it.unidade, valor_unitario: it.valor_unitario,
+  }));
+  recalcularTotalOC();
+
+  const info = document.getElementById('oc-origem-info');
+  info.style.display = 'block';
+  info.textContent = `↳ Gerada a partir da Solicitação de Compra ${r.numero}. Confira fornecedor, itens e valores antes de registrar.`;
+
+  document.getElementById('foco-formulario-oc').scrollIntoView({ behavior:'smooth' });
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await atualizarSelectFornecedoresOC();
+  await aplicarOrigemRcDaURL();
+  await carregarOrdensCompra();
+});
+</script>
+</body>
+</html>

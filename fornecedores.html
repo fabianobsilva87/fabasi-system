@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cadastro de fornecedores — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Fornecedores</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item active" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>🏭 Fornecedores</h2></div>
+      <div class="section-content">
+<div class="app-sub-panel">
+        <div class="card">
+          <h3 class="card-title">🏭 Novo Fornecedor</h3>
+          <input type="hidden" id="forn-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="forn-razao">Razão Social *</label><input type="text" id="forn-razao" placeholder="Nome da empresa"></div>
+            <div class="form-group"><label for="forn-fantasia">Nome Fantasia</label><input type="text" id="forn-fantasia" placeholder="Nome fantasia (opcional)"></div>
+            <div class="form-group"><label for="forn-cnpj">CNPJ</label><input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00" maxlength="18"></div>
+            <div class="form-group"><label for="forn-categoria">Categoria</label><input type="text" id="forn-categoria" placeholder="Ex: Materiais elétricos, EPI, Refrigeração"></div>
+            <div class="form-group"><label for="forn-telefone">Telefone</label><input type="text" id="forn-telefone" placeholder="(65) 99999-9999"></div>
+            <div class="form-group"><label for="forn-email">E-mail</label><input type="email" id="forn-email" placeholder="contato@fornecedor.com.br"></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="forn-observacoes">Observações</label><textarea id="forn-observacoes" rows="2"></textarea></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-fornecedor" class="btn-primary">💾 Registrar Fornecedor</button>
+            <button type="button" id="btn-cancelar-fornecedor" class="btn-secondary" style="display:none;" onclick="resetarFormFornecedor()">✕ Cancelar</button>
+          </div>
+          <p id="msg-fornecedor" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Fornecedores Cadastrados</h3>
+            <button type="button" class="btn-refresh" onclick="carregarFornecedores()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Categoria</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-fornecedores"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== FORNECEDORES =====================
+let _fornecedoresCache = [];
+
+async function carregarFornecedores() {
+  const tbody = document.getElementById('tbody-fornecedores'); if (!tbody) return;
+  const { data, error } = await db.from('fornecedores').select('*').order('ativo', {ascending:false}).order('razao_social');
+  if (error) { toast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
+  _fornecedoresCache = data || [];
+  if (!_fornecedoresCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum fornecedor cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _fornecedoresCache.map(f => `<tr>
+    <td><strong>${escapeHTML(f.razao_social)}</strong>${f.nome_fantasia ? `<br><small style="color:#718096">${escapeHTML(f.nome_fantasia)}</small>` : ''}</td>
+    <td style="font-family:monospace;">${escapeHTML(f.cnpj || '—')}</td>
+    <td>${escapeHTML(f.categoria || '—')}</td>
+    <td style="font-size:12px;">${escapeHTML(f.telefone || '')}${f.telefone && f.email ? '<br>' : ''}${escapeHTML(f.email || '')}</td>
+    <td>${f.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarFornecedor('${escapeHTML(f.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirFornecedor('${escapeHTML(f.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarFornecedor(id) {
+  const f = _fornecedoresCache.find(x => x.id === id); if (!f) return;
+  document.getElementById('forn-id-edicao').value = id;
+  document.getElementById('forn-razao').value      = f.razao_social || '';
+  document.getElementById('forn-fantasia').value   = f.nome_fantasia || '';
+  document.getElementById('forn-cnpj').value       = f.cnpj || '';
+  document.getElementById('forn-categoria').value  = f.categoria || '';
+  document.getElementById('forn-telefone').value   = f.telefone || '';
+  document.getElementById('forn-email').value      = f.email || '';
+  document.getElementById('forn-observacoes').value = f.observacoes || '';
+  const btn = document.getElementById('btn-salvar-fornecedor');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-fornecedor').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormFornecedor() {
+  ['forn-id-edicao','forn-razao','forn-fantasia','forn-cnpj','forn-categoria','forn-telefone','forn-email','forn-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-fornecedor');
+  btn.textContent = '💾 Registrar Fornecedor'; btn.style.background = '';
+  document.getElementById('btn-cancelar-fornecedor').style.display = 'none';
+}
+
+async function excluirFornecedor(id) {
+  const nome = _fornecedoresCache.find(x => x.id === id)?.razao_social || 'este fornecedor';
+  if (!confirm(`Excluir fornecedor "${nome}"? Requisições que já referenciam esse fornecedor mantêm o vínculo até serem editadas.`)) return;
+  const { error } = await db.from('fornecedores').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarFornecedores();
+}
+
+document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', async () => {
+  const razao = document.getElementById('forn-razao').value.trim();
+  if (!razao) { msgForm('msg-fornecedor','Informe a Razão Social.','red'); return; }
+
+  const payload = {
+    razao_social:  razao,
+    nome_fantasia: document.getElementById('forn-fantasia').value.trim() || null,
+    cnpj:          document.getElementById('forn-cnpj').value.trim() || null,
+    categoria:     document.getElementById('forn-categoria').value.trim() || null,
+    telefone:      document.getElementById('forn-telefone').value.trim() || null,
+    email:         document.getElementById('forn-email').value.trim() || null,
+    observacoes:   document.getElementById('forn-observacoes').value.trim() || null,
+  };
+
+  const idEd = document.getElementById('forn-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('fornecedores').update(payload).eq('id', idEd)
+    : await db.from('fornecedores').insert([payload]);
+
+  if (error) { msgForm('msg-fornecedor','Erro ao salvar: ' + error.message,'red'); return; }
+  msgForm('msg-fornecedor', idEd ? '✓ Fornecedor atualizado!' : '✓ Fornecedor registrado!', 'green');
+  resetarFormFornecedor();
+  carregarFornecedores();
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+  await carregarFornecedores();
+});
+</script>
+</body>
+</html>

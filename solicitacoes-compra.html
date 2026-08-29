@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Solicitação de compra com fornecedor e valores (Estágio 2 do fluxo de Compras) — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Solicitações de Compra</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item active" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>🛒 Solicitações de Compra</h2></div>
+      <div class="section-content">
+<div class="app-sub-panel">
+        <div class="card" id="foco-formulario-requisicao">
+          <h3 class="card-title">🛒 Nova Solicitação de Compra</h3>
+          <p id="rc-origem-info" style="display:none;font-size:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:8px 12px;border-radius:6px;margin-bottom:12px;"></p>
+          <input type="hidden" id="req-id-edicao" value="">
+
+          <div class="form-grid">
+            <div class="form-group"><label for="req-numero">Número</label><input type="text" id="req-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
+            <div class="form-group"><label for="req-solicitante">Solicitante *</label><input type="text" id="req-solicitante" placeholder="Nome de quem solicita"></div>
+            <div class="form-group"><label for="req-os">O.S. Vinculada (opcional)</label><select id="req-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+            <div class="form-group"><label for="req-fornecedor">Fornecedor (opcional)</label><select id="req-fornecedor" class="form-input-style"><option value="">-- A definir --</option></select></div>
+            <div class="form-group"><label for="req-status">Status</label>
+              <select id="req-status" class="form-input-style">
+                <option value="Solicitado">Solicitado</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Rejeitado">Rejeitado</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div class="form-group"><label for="req-data-necessidade">Necessário até</label><input type="date" id="req-data-necessidade"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="req-observacoes">Observações</label><textarea id="req-observacoes" rows="2" placeholder="Detalhes da requisição..."></textarea></div>
+          </div>
+
+          <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <label style="font-weight:600;font-size:13px;">Itens da Requisição</label>
+              <button type="button" class="btn-refresh" style="font-size:11px;padding:4px 10px;" onclick="adicionarLinhaItemRequisicao()">➕ Adicionar Item</button>
+            </div>
+            <div class="table-wrap">
+              <table id="tabela-itens-requisicao">
+                <thead>
+                  <tr><th>Material (catálogo)</th><th>Descrição</th><th>Qtd.</th><th>Unid.</th><th>Valor Unit. (R$)</th><th>Total</th><th></th></tr>
+                </thead>
+                <tbody id="tbody-itens-requisicao"></tbody>
+              </table>
+            </div>
+            <p style="text-align:right;font-weight:700;margin-top:8px;font-size:14px;">Total: <span id="req-valor-total-display">R$ 0,00</span></p>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-requisicao" class="btn-primary">💾 Registrar Requisição</button>
+            <button type="button" id="btn-cancelar-requisicao" class="btn-secondary" style="display:none;" onclick="resetarFormRequisicao()">✕ Cancelar</button>
+          </div>
+          <p id="msg-requisicao" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Requisições Registradas</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="filtro-status-requisicao" class="form-input-style" style="font-size:12px;width:auto;" onchange="carregarRequisicoes()">
+                <option value="">Todos os status</option>
+                <option value="Solicitado">Solicitado</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Rejeitado">Rejeitado</option>
+                <option value="Convertida">Convertida</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+              <button type="button" class="btn-refresh" onclick="carregarRequisicoes()">↺ Atualizar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Número</th><th>Solicitante</th><th>O.S.</th><th>Fornecedor</th><th>Status</th><th>Valor Total</th><th>Data</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-requisicoes"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== O.S. — SELECT DA REQUISIÇÃO =====================
+// Mesmo padrão de rótulo usado em carregarOrdensServico() (app.js): a O.S. de
+// climatização não tem um campo "número" próprio, o rótulo OS-AC-xxxxx é
+// derivado do id.
+async function atualizarSelectOSParaRequisicao() {
+  const sel = document.getElementById('req-os'); if (!sel) return;
+  const { data, error } = await db.from('ordens_servico').select('id,descricao_defeito,created_at').order('created_at', {ascending:false}).limit(200);
+  if (error) { console.warn('Não foi possível carregar O.S. para vínculo da requisição:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Nenhuma --</option>' +
+    (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(rotuloOS(o))}</option>`).join('');
+}
+
+// ===================== ITENS DA REQUISIÇÃO (linhas dinâmicas) =====================
+let _contadorLinhaItem = 0;
+
+function adicionarLinhaItemRequisicao(itemExistente = null) {
+  const tbody = document.getElementById('tbody-itens-requisicao');
+  const linhaId = 'item-linha-' + (++_contadorLinhaItem);
+  const tr = document.createElement('tr');
+  tr.id = linhaId;
+  tr.innerHTML = `
+    <td><select class="select-material-item form-input-style" style="font-size:12px;" onchange="aoEscolherMaterialItem('${linhaId}')"><option value="">-- item avulso --</option></select></td>
+    <td><input type="text" class="form-input-style item-descricao" style="font-size:12px;" placeholder="Descrição"></td>
+    <td><input type="number" class="form-input-style item-qtd" style="font-size:12px;width:70px;" value="1" min="0" step="0.001" oninput="recalcularTotalItem('${linhaId}')"></td>
+    <td><input type="text" class="form-input-style item-unidade" style="font-size:12px;width:60px;"></td>
+    <td><input type="number" class="form-input-style item-valor" style="font-size:12px;width:90px;" value="0" min="0" step="0.01" oninput="recalcularTotalItem('${linhaId}')"></td>
+    <td class="item-total-display" style="font-weight:600;">R$ 0,00</td>
+    <td><button type="button" class="btn-excluir" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${linhaId}').remove(); recalcularTotalRequisicao();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  carregarMateriaisParaSelectItem();
+
+  if (itemExistente) {
+    tr.querySelector('.select-material-item').value = itemExistente.material_id || '';
+    tr.querySelector('.item-descricao').value = itemExistente.descricao || '';
+    tr.querySelector('.item-qtd').value = itemExistente.quantidade ?? 1;
+    tr.querySelector('.item-unidade').value = itemExistente.unidade || '';
+    tr.querySelector('.item-valor').value = itemExistente.valor_unitario ?? 0;
+    recalcularTotalItem(linhaId);
+  }
+}
+
+function aoEscolherMaterialItem(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const sel = tr.querySelector('.select-material-item');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    tr.querySelector('.item-descricao').value = opt.textContent;
+    tr.querySelector('.item-unidade').value = opt.dataset.unidade || '';
+    if (opt.dataset.valor) tr.querySelector('.item-valor').value = opt.dataset.valor;
+  }
+  recalcularTotalItem(linhaId);
+}
+
+function recalcularTotalItem(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const qtd = Number(tr.querySelector('.item-qtd').value) || 0;
+  const valor = Number(tr.querySelector('.item-valor').value) || 0;
+  tr.querySelector('.item-total-display').textContent = 'R$ ' + (qtd * valor).toFixed(2).replace('.',',');
+  recalcularTotalRequisicao();
+}
+
+function recalcularTotalRequisicao() {
+  let total = 0;
+  document.querySelectorAll('#tbody-itens-requisicao tr').forEach(tr => {
+    const qtd = Number(tr.querySelector('.item-qtd')?.value) || 0;
+    const valor = Number(tr.querySelector('.item-valor')?.value) || 0;
+    total += qtd * valor;
+  });
+  document.getElementById('req-valor-total-display').textContent = 'R$ ' + total.toFixed(2).replace('.',',');
+  return total;
+}
+
+function coletarItensRequisicaoDoForm() {
+  const itens = [];
+  document.querySelectorAll('#tbody-itens-requisicao tr').forEach(tr => {
+    const descricao = tr.querySelector('.item-descricao').value.trim();
+    if (!descricao) return; // ignora linha vazia
+    itens.push({
+      material_id:    tr.querySelector('.select-material-item').value || null,
+      descricao,
+      quantidade:     Number(tr.querySelector('.item-qtd').value) || 0,
+      unidade:        tr.querySelector('.item-unidade').value.trim() || null,
+      valor_unitario: Number(tr.querySelector('.item-valor').value) || 0,
+    });
+  });
+  return itens;
+}
+
+function limparLinhasItensRequisicao() {
+  document.getElementById('tbody-itens-requisicao').innerHTML = '';
+  document.getElementById('req-valor-total-display').textContent = 'R$ 0,00';
+}
+
+// ===================== REQUISIÇÕES =====================
+let _requisicoesCache = [];
+
+async function carregarRequisicoes() {
+  const tbody = document.getElementById('tbody-requisicoes'); if (!tbody) return;
+  const filtroStatus = document.getElementById('filtro-status-requisicao')?.value || '';
+
+  let query = db.from('requisicoes_compra')
+    .select('*, fornecedores(razao_social), ordens_servico(id,descricao_defeito)')
+    .order('created_at', { ascending: false });
+  if (filtroStatus) query = query.eq('status', filtroStatus);
+
+  const { data, error } = await query;
+  if (error) { toast('Erro ao carregar requisições: ' + error.message, 'erro'); return; }
+  _requisicoesCache = data || [];
+
+  if (!_requisicoesCache.length) { tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Nenhuma requisição encontrada.</td></tr>'; return; }
+
+  const corStatus = { Solicitado:'#dbeafe', Aprovado:'#d1fae5', Rejeitado:'#fee2e2', Convertida:'#e0e7ff', Cancelado:'#fee2e2' };
+  const txtStatus = { Solicitado:'#1e40af', Aprovado:'#065f46', Rejeitado:'#991b1b', Convertida:'#3730a3', Cancelado:'#991b1b' };
+
+  tbody.innerHTML = _requisicoesCache.map(r => `<tr>
+    <td><strong>${escapeHTML(r.numero)}</strong></td>
+    <td>${escapeHTML(r.solicitante)}</td>
+    <td>${r.ordens_servico ? escapeHTML(rotuloOS(r.ordens_servico)) : '—'}</td>
+    <td>${escapeHTML(r.fornecedores?.razao_social || '—')}</td>
+    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span></td>
+    <td>R$ ${Number(r.valor_total || 0).toFixed(2).replace('.',',')}</td>
+    <td>${r.data_solicitacao ? new Date(r.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${r.status === 'Aprovado' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="gerarOrdemDeCompra('${escapeHTML(r.id)}')">📦 Gerar Ordem de Compra</button>` : ''}
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarRequisicao('${escapeHTML(r.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirRequisicao('${escapeHTML(r.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+// Ponte Estágio 2 → Estágio 3: manda pra Ordem de Compra, que busca os dados
+// sozinha a partir do parâmetro na URL (mesmo padrão da ponte RM → RC).
+function gerarOrdemDeCompra(id) {
+  location.href = 'ordem-compra.html?origem_rc=' + encodeURIComponent(id);
+}
+
+async function editarRequisicao(id) {
+  const r = _requisicoesCache.find(x => x.id === id); if (!r) return;
+
+  document.getElementById('req-id-edicao').value    = id;
+  document.getElementById('req-numero').value        = r.numero || '';
+  document.getElementById('req-solicitante').value   = r.solicitante || '';
+  document.getElementById('req-status').value         = r.status || 'Solicitado';
+  document.getElementById('req-data-necessidade').value = r.data_necessidade || '';
+  document.getElementById('req-observacoes').value    = r.observacoes || '';
+
+  await Promise.all([atualizarSelectOSParaRequisicao(), atualizarSelectFornecedores()]);
+  document.getElementById('req-os').value = r.os_id || '';
+  document.getElementById('req-fornecedor').value = r.fornecedor_id || '';
+
+  limparLinhasItensRequisicao();
+  const { data: itens } = await db.from('requisicoes_compra_itens').select('*').eq('requisicao_id', id).order('id');
+  (itens || []).forEach(it => adicionarLinhaItemRequisicao(it));
+  if (!itens || !itens.length) recalcularTotalRequisicao();
+
+  const btn = document.getElementById('btn-salvar-requisicao');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-requisicao').style.display = 'inline-block';
+  document.getElementById('foco-formulario-requisicao').scrollIntoView({ behavior:'smooth' });
+}
+
+function resetarFormRequisicao() {
+  ['req-id-edicao','req-numero','req-solicitante','req-data-necessidade','req-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('req-status').value = 'Solicitado';
+  document.getElementById('req-os').value = '';
+  document.getElementById('req-fornecedor').value = '';
+  delete document.getElementById('req-id-edicao').dataset.origemRm;
+  const info = document.getElementById('rc-origem-info');
+  info.style.display = 'none'; info.textContent = '';
+  limparLinhasItensRequisicao();
+  const btn = document.getElementById('btn-salvar-requisicao');
+  btn.textContent = '💾 Registrar Requisição'; btn.style.background = '';
+  document.getElementById('btn-cancelar-requisicao').style.display = 'none';
+}
+
+async function excluirRequisicao(id) {
+  const numero = _requisicoesCache.find(x => x.id === id)?.numero || 'esta requisição';
+  if (!confirm(`Excluir requisição "${numero}"? Os itens vinculados também serão removidos.`)) return;
+  const { error } = await db.from('requisicoes_compra').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarRequisicoes();
+}
+
+document.getElementById('btn-salvar-requisicao')?.addEventListener('click', async () => {
+  const solicitante = document.getElementById('req-solicitante').value.trim();
+  if (!solicitante) { msgForm('msg-requisicao','Informe o solicitante.','red'); return; }
+
+  const itens = coletarItensRequisicaoDoForm();
+  const valorTotal = recalcularTotalRequisicao();
+
+  const idEd = document.getElementById('req-id-edicao').value;
+  const origemRm = document.getElementById('req-id-edicao').dataset.origemRm || null;
+  let requisicaoId = idEd;
+
+  if (idEd) {
+    // Edição: número já existe e não muda.
+    const payload = {
+      solicitante,
+      os_id:            document.getElementById('req-os').value || null,
+      fornecedor_id:    document.getElementById('req-fornecedor').value || null,
+      status:            document.getElementById('req-status').value,
+      data_necessidade:  document.getElementById('req-data-necessidade').value || null,
+      observacoes:        document.getElementById('req-observacoes').value.trim() || null,
+      valor_total:         valorTotal,
+      updated_at:           new Date().toISOString(),
+    };
+    const { error } = await db.from('requisicoes_compra').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-requisicao','Erro ao salvar: ' + error.message,'red'); return; }
+    // T-padrão do projeto: DELETE+INSERT dos itens garante substituição completa,
+    // sem registro órfão de uma edição anterior (mesmo princípio da importação de folha).
+    await db.from('requisicoes_compra_itens').delete().eq('requisicao_id', idEd);
+  } else {
+    // Nova: número só é gerado agora, no momento do save.
+    const { data: numero, error: errNum } = await db.rpc('gerar_numero_documento', { p_tipo: 'RC' });
+    if (errNum) { msgForm('msg-requisicao','Erro ao gerar número da solicitação: ' + errNum.message,'red'); return; }
+
+    const payload = {
+      numero,
+      solicitante,
+      os_id:            document.getElementById('req-os').value || null,
+      fornecedor_id:    document.getElementById('req-fornecedor').value || null,
+      status:            document.getElementById('req-status').value,
+      data_necessidade:  document.getElementById('req-data-necessidade').value || null,
+      observacoes:        document.getElementById('req-observacoes').value.trim() || null,
+      valor_total:         valorTotal,
+      updated_at:           new Date().toISOString(),
+    };
+    if (origemRm) payload.requisicao_material_id = origemRm;
+
+    const { data, error } = await db.from('requisicoes_compra').insert([payload]).select('id').single();
+    if (error) { msgForm('msg-requisicao','Erro ao salvar: ' + error.message,'red'); return; }
+    requisicaoId = data.id;
+    document.getElementById('req-numero').value = numero;
+  }
+
+  if (itens.length) {
+    const itensComRequisicao = itens.map(it => ({ ...it, requisicao_id: requisicaoId }));
+    const { error: errItens } = await db.from('requisicoes_compra_itens').insert(itensComRequisicao);
+    if (errItens) { msgForm('msg-requisicao','Requisição salva, mas houve erro ao salvar os itens: ' + errItens.message,'red'); return; }
+  }
+
+  // Fecha o ciclo: a requisição de material de origem passa a "Convertida",
+  // pra não aparecer de novo como pendente de conversão.
+  if (origemRm && !idEd) {
+    await db.from('requisicoes_material').update({ status: 'Convertida' }).eq('id', origemRm);
+  }
+
+  const numeroFinal = document.getElementById('req-numero').value;
+  msgForm('msg-requisicao', idEd ? `✓ Requisição ${numeroFinal} atualizada!` : `✓ Requisição ${numeroFinal} registrada!`, 'green');
+  resetarFormRequisicao();
+  carregarRequisicoes();
+  if (origemRm) carregarReqMateriais();
+});
+
+
+// ===================== FORNECEDORES — select desta página =====================
+async function atualizarSelectFornecedores() {
+  const sel = document.getElementById('req-fornecedor'); if (!sel) return;
+  const atual = sel.value;
+  const { data, error } = await db.from('fornecedores').select('id,razao_social').eq('ativo', true).order('razao_social');
+  if (error) { console.warn('Não foi possível carregar fornecedores:', error.message); return; }
+  sel.innerHTML = '<option value="">-- A definir --</option>' +
+    (data || []).map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+  sel.value = atual;
+}
+
+// ===================== PONTE: chegada vinda de Requisição de Materiais =====================
+// Lê ?origem_rm=<id> na URL (setado por converterReqMaterialEmCompra em
+// requisicao-materiais.html), busca a requisição de material e seus itens,
+// e pré-preenche o formulário — equivalente ao que antes era feito na mesma
+// página quando Requisição de Materiais e Solicitação de Compra eram abas
+// do mesmo compras.html.
+async function aplicarOrigemRmDaURL() {
+  const params = new URLSearchParams(location.search);
+  const origemRm = params.get('origem_rm');
+  if (!origemRm) return;
+
+  const { data: r, error } = await db.from('requisicoes_material').select('*').eq('id', origemRm).single();
+  if (error || !r) { toast('Não foi possível carregar a requisição de material de origem.', 'erro'); return; }
+  const { data: itensOrigem } = await db.from('requisicoes_material_itens').select('*').eq('requisicao_id', origemRm).order('id');
+
+  resetarFormRequisicao();
+  document.getElementById('req-solicitante').value = r.solicitante;
+  document.getElementById('req-observacoes').value = r.observacoes || '';
+  await atualizarSelectOSParaRequisicao();
+  document.getElementById('req-os').value = r.os_id || '';
+
+  limparLinhasItensRequisicao();
+  (itensOrigem || []).forEach(it => adicionarLinhaItemRequisicao({
+    material_id: it.material_id, descricao: it.descricao,
+    quantidade: it.quantidade, unidade: it.unidade, valor_unitario: 0,
+  }));
+
+  document.getElementById('req-id-edicao').dataset.origemRm = origemRm; // lido no submit
+  const info = document.getElementById('rc-origem-info');
+  info.style.display = 'block';
+  info.textContent = `↳ Gerada a partir da Requisição de Material ${r.numero}. Complete o fornecedor e os valores antes de registrar.`;
+
+  document.getElementById('foco-formulario-requisicao').scrollIntoView({ behavior:'smooth' });
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await Promise.all([atualizarSelectOSParaRequisicao(), atualizarSelectFornecedores()]);
+  await aplicarOrigemRmDaURL();
+  await carregarRequisicoes();
+});
+</script>
+</body>
+</html>

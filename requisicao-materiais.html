@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Requisição interna de materiais (Estágio 1 do fluxo de Compras) — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Requisição de Materiais</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item active" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>📝 Requisição de Materiais</h2></div>
+      <div class="section-content">
+<div class="app-sub-panel">
+        <div class="card" id="foco-formulario-reqmaterial">
+          <h3 class="card-title">📝 Nova Requisição de Materiais</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Pedido interno — "o que" e "quanto", sem fornecedor nem preço ainda. Depois de aprovada, vira uma Solicitação de Compra.</p>
+          <input type="hidden" id="rm-id-edicao" value="">
+
+          <div class="form-grid">
+            <div class="form-group"><label for="rm-numero">Número</label><input type="text" id="rm-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
+            <div class="form-group"><label for="rm-solicitante">Solicitante *</label><input type="text" id="rm-solicitante" placeholder="Nome de quem solicita"></div>
+            <div class="form-group"><label for="rm-os">O.S. Vinculada (opcional)</label><select id="rm-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="rm-observacoes">Observações</label><textarea id="rm-observacoes" rows="2" placeholder="Detalhes do pedido..."></textarea></div>
+          </div>
+
+          <div style="margin-top:16px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <label style="font-weight:600;font-size:13px;">Itens Pedidos</label>
+              <button type="button" class="btn-refresh" style="font-size:11px;padding:4px 10px;" onclick="adicionarLinhaItemReqMaterial()">➕ Adicionar Item</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Material (catálogo)</th><th>Descrição</th><th>Qtd.</th><th>Unid.</th><th></th></tr></thead>
+                <tbody id="tbody-itens-reqmaterial"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-reqmaterial" class="btn-primary" style="background:#059669;">💾 Registrar Requisição</button>
+            <button type="button" id="btn-cancelar-reqmaterial" class="btn-secondary" style="display:none;" onclick="resetarFormReqMaterial()">✕ Cancelar</button>
+          </div>
+          <p id="msg-reqmaterial" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Requisições de Materiais</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="filtro-status-reqmaterial" class="form-input-style" style="font-size:12px;width:auto;" onchange="carregarReqMateriais()">
+                <option value="">Todos os status</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Aprovada">Aprovada</option>
+                <option value="Rejeitada">Rejeitada</option>
+                <option value="Convertida">Convertida</option>
+              </select>
+              <button type="button" class="btn-refresh" onclick="carregarReqMateriais()">↺ Atualizar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Número</th><th>Solicitante</th><th>O.S.</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-reqmaterial"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== REQUISIÇÃO DE MATERIAIS (Estágio 1) =====================
+let _reqMateriaisCache = [];
+let _contadorLinhaItemRM = 0;
+
+async function atualizarSelectOSParaReqMaterial() {
+  const sel = document.getElementById('rm-os'); if (!sel) return;
+  const { data, error } = await db.from('ordens_servico').select('id,descricao_defeito,created_at').order('created_at', {ascending:false}).limit(200);
+  if (error) { console.warn('Não foi possível carregar O.S. para a requisição de material:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Nenhuma --</option>' +
+    (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(rotuloOS(o))}</option>`).join('');
+}
+
+function adicionarLinhaItemReqMaterial(itemExistente = null) {
+  const tbody = document.getElementById('tbody-itens-reqmaterial');
+  const linhaId = 'rm-item-linha-' + (++_contadorLinhaItemRM);
+  const tr = document.createElement('tr');
+  tr.id = linhaId;
+  tr.innerHTML = `
+    <td><select class="select-material-item form-input-style" style="font-size:12px;" onchange="aoEscolherMaterialItemRM('${linhaId}')"><option value="">-- item avulso --</option></select></td>
+    <td><input type="text" class="form-input-style item-descricao" style="font-size:12px;" placeholder="Descrição"></td>
+    <td><input type="number" class="form-input-style item-qtd" style="font-size:12px;width:70px;" value="1" min="0" step="0.001"></td>
+    <td><input type="text" class="form-input-style item-unidade" style="font-size:12px;width:60px;"></td>
+    <td><button type="button" class="btn-excluir" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${linhaId}').remove();">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  carregarMateriaisParaSelectItem();
+
+  if (itemExistente) {
+    tr.querySelector('.select-material-item').value = itemExistente.material_id || '';
+    tr.querySelector('.item-descricao').value = itemExistente.descricao || '';
+    tr.querySelector('.item-qtd').value = itemExistente.quantidade ?? 1;
+    tr.querySelector('.item-unidade').value = itemExistente.unidade || '';
+  }
+}
+
+function aoEscolherMaterialItemRM(linhaId) {
+  const tr = document.getElementById(linhaId); if (!tr) return;
+  const sel = tr.querySelector('.select-material-item');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    tr.querySelector('.item-descricao').value = opt.textContent;
+    tr.querySelector('.item-unidade').value = opt.dataset.unidade || '';
+  }
+}
+
+function coletarItensReqMaterialDoForm() {
+  const itens = [];
+  document.querySelectorAll('#tbody-itens-reqmaterial tr').forEach(tr => {
+    const descricao = tr.querySelector('.item-descricao').value.trim();
+    if (!descricao) return;
+    itens.push({
+      material_id: tr.querySelector('.select-material-item').value || null,
+      descricao,
+      quantidade:  Number(tr.querySelector('.item-qtd').value) || 0,
+      unidade:     tr.querySelector('.item-unidade').value.trim() || null,
+    });
+  });
+  return itens;
+}
+
+function limparLinhasItensReqMaterial() {
+  document.getElementById('tbody-itens-reqmaterial').innerHTML = '';
+}
+
+async function carregarReqMateriais() {
+  const tbody = document.getElementById('tbody-reqmaterial'); if (!tbody) return;
+  const filtroStatus = document.getElementById('filtro-status-reqmaterial')?.value || '';
+
+  let query = db.from('requisicoes_material').select('*, ordens_servico(id,descricao_defeito)').order('created_at', { ascending: false });
+  if (filtroStatus) query = query.eq('status', filtroStatus);
+
+  const { data, error } = await query;
+  if (error) { toast('Erro ao carregar requisições de materiais: ' + error.message, 'erro'); return; }
+  _reqMateriaisCache = data || [];
+
+  if (!_reqMateriaisCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma requisição de material encontrada.</td></tr>'; return; }
+
+  const corStatus = { Pendente:'#fef3c7', Aprovada:'#d1fae5', Rejeitada:'#fee2e2', Convertida:'#dbeafe' };
+  const txtStatus = { Pendente:'#92400e', Aprovada:'#065f46', Rejeitada:'#991b1b', Convertida:'#1e40af' };
+
+  tbody.innerHTML = _reqMateriaisCache.map(r => `<tr>
+    <td><strong>${escapeHTML(r.numero)}</strong></td>
+    <td>${escapeHTML(r.solicitante)}</td>
+    <td>${r.ordens_servico ? escapeHTML(rotuloOS(r.ordens_servico)) : '—'}</td>
+    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span></td>
+    <td>${r.data_solicitacao ? new Date(r.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${r.status === 'Pendente' ? `
+        <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="definirStatusReqMaterial('${escapeHTML(r.id)}','Aprovada')">✓ Aprovar</button>
+        <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="definirStatusReqMaterial('${escapeHTML(r.id)}','Rejeitada')">✕ Rejeitar</button>` : ''}
+      ${r.status === 'Aprovada' ? `
+        <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="converterReqMaterialEmCompra('${escapeHTML(r.id)}')">🛒 Converter em Compra</button>` : ''}
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarReqMaterial('${escapeHTML(r.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirReqMaterial('${escapeHTML(r.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function definirStatusReqMaterial(id, novoStatus) {
+  const { error } = await db.from('requisicoes_material').update({ status: novoStatus }).eq('id', id);
+  if (error) { toast('Erro ao atualizar status: ' + error.message, 'erro'); return; }
+  carregarReqMateriais();
+}
+
+async function editarReqMaterial(id) {
+  const r = _reqMateriaisCache.find(x => x.id === id); if (!r) return;
+  document.getElementById('rm-id-edicao').value  = id;
+  document.getElementById('rm-numero').value      = r.numero || '';
+  document.getElementById('rm-solicitante').value = r.solicitante || '';
+  document.getElementById('rm-observacoes').value = r.observacoes || '';
+
+  await atualizarSelectOSParaReqMaterial();
+  document.getElementById('rm-os').value = r.os_id || '';
+
+  limparLinhasItensReqMaterial();
+  const { data: itens } = await db.from('requisicoes_material_itens').select('*').eq('requisicao_id', id).order('id');
+  (itens || []).forEach(it => adicionarLinhaItemReqMaterial(it));
+
+  const btn = document.getElementById('btn-salvar-reqmaterial');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-reqmaterial').style.display = 'inline-block';
+  document.getElementById('foco-formulario-reqmaterial').scrollIntoView({ behavior:'smooth' });
+}
+
+function resetarFormReqMaterial() {
+  ['rm-id-edicao','rm-numero','rm-solicitante','rm-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('rm-os').value = '';
+  limparLinhasItensReqMaterial();
+  const btn = document.getElementById('btn-salvar-reqmaterial');
+  btn.textContent = '💾 Registrar Requisição'; btn.style.background = '#059669';
+  document.getElementById('btn-cancelar-reqmaterial').style.display = 'none';
+}
+
+async function excluirReqMaterial(id) {
+  const numero = _reqMateriaisCache.find(x => x.id === id)?.numero || 'esta requisição';
+  if (!confirm(`Excluir requisição de material "${numero}"? Os itens vinculados também serão removidos.`)) return;
+  const { error } = await db.from('requisicoes_material').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarReqMateriais();
+}
+
+document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', async () => {
+  const solicitante = document.getElementById('rm-solicitante').value.trim();
+  if (!solicitante) { msgForm('msg-reqmaterial','Informe o solicitante.','red'); return; }
+
+  const itens = coletarItensReqMaterialDoForm();
+  if (!itens.length) { msgForm('msg-reqmaterial','Adicione ao menos um item.','red'); return; }
+
+  const idEd = document.getElementById('rm-id-edicao').value;
+  let requisicaoId = idEd;
+
+  if (idEd) {
+    // Edição: número já existe e não muda — só os outros campos.
+    const payload = {
+      solicitante,
+      os_id:        document.getElementById('rm-os').value || null,
+      observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+    };
+    const { error } = await db.from('requisicoes_material').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-reqmaterial','Erro ao salvar: ' + error.message,'red'); return; }
+    await db.from('requisicoes_material_itens').delete().eq('requisicao_id', idEd);
+  } else {
+    // Nova: número só é gerado agora, no momento do save — evita "queimar"
+    // número de rascunho que o usuário abriu e não chegou a salvar.
+    const { data: numero, error: errNum } = await db.rpc('gerar_numero_documento', { p_tipo: 'RM' });
+    if (errNum) { msgForm('msg-reqmaterial','Erro ao gerar número da requisição: ' + errNum.message,'red'); return; }
+
+    const payload = {
+      numero,
+      solicitante,
+      os_id:        document.getElementById('rm-os').value || null,
+      observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+    };
+    const { data, error } = await db.from('requisicoes_material').insert([payload]).select('id').single();
+    if (error) { msgForm('msg-reqmaterial','Erro ao salvar: ' + error.message,'red'); return; }
+    requisicaoId = data.id;
+    document.getElementById('rm-numero').value = numero;
+  }
+
+  const itensComRequisicao = itens.map(it => ({ ...it, requisicao_id: requisicaoId }));
+  const { error: errItens } = await db.from('requisicoes_material_itens').insert(itensComRequisicao);
+  if (errItens) { msgForm('msg-reqmaterial','Requisição salva, mas houve erro ao salvar os itens: ' + errItens.message,'red'); return; }
+
+  const numeroFinal = document.getElementById('rm-numero').value;
+  msgForm('msg-reqmaterial', idEd ? `✓ Requisição ${numeroFinal} atualizada!` : `✓ Requisição ${numeroFinal} registrada!`, 'green');
+  resetarFormReqMaterial();
+  carregarReqMateriais();
+});
+
+// Ponte Estágio 1 → Estágio 2: copia os itens da requisição de material
+// aprovada para o formulário de Solicitação de Compra, já aberto pra
+// completar com fornecedor/valor, e marca a origem como "Convertida".
+function converterReqMaterialEmCompra(id) {
+  // A página de destino busca os dados sozinha a partir do parâmetro na URL —
+  // ver aplicarOrigemRmDaURL() em solicitacoes-compra.html.
+  location.href = 'solicitacoes-compra.html?origem_rm=' + encodeURIComponent(id);
+}
+
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await atualizarSelectOSParaReqMaterial();
+  await carregarReqMateriais();
+});
+</script>
+</body>
+</html>

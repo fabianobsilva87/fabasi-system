@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Catálogo padronizado de materiais e serviços, com famílias e código automático — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Cadastro de Materiais e Serviços</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item active" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <button type="button" class="btn-refresh" onclick="alternarAbaCadastro('materiais')">📦 Catálogo de Materiais</button>
+        <button type="button" class="btn-refresh" style="background:#b45309;border-color:#b45309;color:#fff;" onclick="alternarAbaCadastro('tiposmaterial')">🏷️ Tipos de Material</button>
+        <button type="button" class="btn-refresh" style="background:#0d9488;border-color:#0d9488;color:#fff;" onclick="alternarAbaCadastro('servicos')">🔧 Catálogo de Serviços</button>
+        <button type="button" class="btn-refresh" style="background:#c2410c;border-color:#c2410c;color:#fff;" onclick="alternarAbaCadastro('tiposservico')">🏷️ Tipos de Serviço</button>
+      </div>
+      <div class="section-content">
+<div id="aba-materiais" class="app-sub-panel">
+        <div class="card">
+          <h3 class="card-title">📦 Novo Material no Catálogo</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Itens reutilizáveis entre requisições — cadastre uma vez, use em quantas compras precisar.</p>
+          <input type="hidden" id="mat-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group" style="grid-column:span 2;"><label for="mat-nome">Nome do Material *</label><input type="text" id="mat-nome" placeholder="Ex: Cabo flexível 2,5mm"></div>
+            <div class="form-group"><label for="mat-codigo">Código</label><input type="text" id="mat-codigo" readonly placeholder="Gerado ao escolher a família" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
+            <div class="form-group"><label for="mat-tipo">Família (Tipo de Material) *</label><select id="mat-tipo" class="form-input-style" onchange="aoEscolherTipoMaterial()"><option value="">-- Selecione --</option></select></div>
+            <div class="form-group"><label for="mat-unidade">Unidade</label><input type="text" id="mat-unidade" placeholder="Ex: un, m, kg, cx"></div>
+            <div class="form-group"><label for="mat-ncm">NCM</label><input type="text" id="mat-ncm" placeholder="0000.00.00" maxlength="10"></div>
+            <div class="form-group"><label for="mat-valor">Valor de Referência (R$)</label><input type="number" id="mat-valor" step="0.01" placeholder="0,00"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="mat-observacoes">Observações</label><textarea id="mat-observacoes" rows="2"></textarea></div>
+          </div>
+          <p style="font-size:11px;color:#a0aec0;margin-top:-6px;margin-bottom:14px;">O código é gerado a partir do prefixo da família (ex: família "ELE" → ELE-0001, ELE-0002...). Escolha a família primeiro.</p>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-material" class="btn-primary">💾 Registrar Material</button>
+            <button type="button" id="btn-cancelar-material" class="btn-secondary" style="display:none;" onclick="resetarFormMaterial()">✕ Cancelar</button>
+          </div>
+          <p id="msg-material" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Catálogo Cadastrado</h3>
+            <button type="button" class="btn-refresh" onclick="carregarMateriais()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Nome</th><th>Unidade</th><th>Tipo</th><th>NCM</th><th>Valor Referência</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-materiais"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+<div id="aba-tiposmaterial" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🏷️ Novo Tipo de Material</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Classificação estruturada do catálogo — base para informações fiscais (NCM) por tipo de item.</p>
+          <input type="hidden" id="tm-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="tm-nome">Nome do Tipo *</label><input type="text" id="tm-nome" placeholder="Ex: Elétrica, Refrigeração, EPI"></div>
+            <div class="form-group"><label for="tm-prefixo">Prefixo (código da família) *</label><input type="text" id="tm-prefixo" placeholder="Ex: ELE, REF, EPI" maxlength="8" style="text-transform:uppercase;"></div>
+            <div class="form-group"><label for="tm-ncm-padrao">NCM Padrão (opcional)</label><input type="text" id="tm-ncm-padrao" placeholder="0000.00.00" maxlength="10"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="tm-descricao">Descrição</label><textarea id="tm-descricao" rows="2"></textarea></div>
+          </div>
+          <p style="font-size:11px;color:#a0aec0;margin-top:-6px;margin-bottom:14px;">O NCM padrão só preenche automaticamente o campo do material ao escolher esse tipo — pode ser sobrescrito por item.</p>
+          <div class="btn-row">
+            <button type="button" id="btn-salvar-tipomaterial" class="btn-primary" style="background:#b45309;">💾 Registrar Tipo</button>
+            <button type="button" id="btn-cancelar-tipomaterial" class="btn-secondary" style="display:none;" onclick="resetarFormTipoMaterial()">✕ Cancelar</button>
+          </div>
+          <p id="msg-tipomaterial" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Tipos Cadastrados</h3>
+            <button type="button" class="btn-refresh" onclick="carregarTiposMaterial()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Prefixo</th><th>Nome</th><th>NCM Padrão</th><th>Descrição</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-tiposmaterial"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+<div id="aba-servicos" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🔧 Novo Serviço no Catálogo</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Mesma ideia do catálogo de materiais, mas para mão de obra/serviços contratados — padroniza o nome, independe de como cada fornecedor chama.</p>
+          <input type="hidden" id="serv-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group" style="grid-column:span 2;"><label for="serv-nome">Nome do Serviço *</label><input type="text" id="serv-nome" placeholder="Ex: Recarga de gás R410A"></div>
+            <div class="form-group"><label for="serv-unidade">Unidade</label><input type="text" id="serv-unidade" placeholder="Ex: h, un, m², diária, visita"></div>
+            <div class="form-group"><label for="serv-tipo">Tipo de Serviço</label><select id="serv-tipo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+            <div class="form-group"><label for="serv-codigo">Código Fiscal (opcional)</label><input type="text" id="serv-codigo" placeholder="LC116/NBS — futuro"></div>
+            <div class="form-group"><label for="serv-valor">Valor de Referência (R$)</label><input type="number" id="serv-valor" step="0.01" placeholder="0,00"></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="serv-observacoes">Observações</label><textarea id="serv-observacoes" rows="2"></textarea></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-servico" class="btn-primary" style="background:#0d9488;">💾 Registrar Serviço</button>
+            <button type="button" id="btn-cancelar-servico" class="btn-secondary" style="display:none;" onclick="resetarFormServico()">✕ Cancelar</button>
+          </div>
+          <p id="msg-servico" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Catálogo de Serviços</h3>
+            <button type="button" class="btn-refresh" onclick="carregarServicos()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Unidade</th><th>Tipo</th><th>Valor Referência</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-servicos"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+<div id="aba-tiposservico" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🏷️ Novo Tipo de Serviço</h3>
+          <input type="hidden" id="ts-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="ts-nome">Nome do Tipo *</label><input type="text" id="ts-nome" placeholder="Ex: Manutenção, Instalação, Locação de equipe"></div>
+            <div class="form-group"><label for="ts-codigo-padrao">Código Padrão (opcional)</label><input type="text" id="ts-codigo-padrao" placeholder="LC116/NBS — futuro"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="ts-descricao">Descrição</label><textarea id="ts-descricao" rows="2"></textarea></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-tiposervico" class="btn-primary" style="background:#c2410c;">💾 Registrar Tipo</button>
+            <button type="button" id="btn-cancelar-tiposervico" class="btn-secondary" style="display:none;" onclick="resetarFormTipoServico()">✕ Cancelar</button>
+          </div>
+          <p id="msg-tiposervico" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Tipos Cadastrados</h3>
+            <button type="button" class="btn-refresh" onclick="carregarTiposServico()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Código Padrão</th><th>Descrição</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-tiposservico"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      
+      </div>
+
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== ABAS =====================
+function alternarAbaCadastro(aba) {
+  ['materiais','tiposmaterial','servicos','tiposservico'].forEach(a => {
+    const el = document.getElementById('aba-' + a);
+    if (el) el.style.display = a === aba ? 'block' : 'none';
+  });
+}
+
+// ===================== TIPOS DE MATERIAL =====================
+let _tiposMaterialCache = [];
+
+async function carregarTiposMaterial() {
+  const tbody = document.getElementById('tbody-tiposmaterial'); if (!tbody) return;
+  const { data, error } = await db.from('tipos_material').select('*').order('ativo', {ascending:false}).order('nome');
+  if (error) { toast('Erro ao carregar tipos de material: ' + error.message, 'erro'); return; }
+  _tiposMaterialCache = data || [];
+  await atualizarSelectTiposMaterial();
+  if (!_tiposMaterialCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum tipo cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _tiposMaterialCache.map(t => `<tr>
+    <td><span class="tag-badge" style="font-family:monospace;background:#fef3c7;color:#92400e;">${escapeHTML(t.prefixo || '—')}</span></td>
+    <td><strong>${escapeHTML(t.nome)}</strong></td>
+    <td style="font-family:monospace;">${escapeHTML(t.ncm_padrao || '—')}</td>
+    <td style="font-size:12px;">${escapeHTML(t.descricao || '—')}</td>
+    <td>${t.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarTipoMaterial('${escapeHTML(t.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirTipoMaterial('${escapeHTML(t.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarTipoMaterial(id) {
+  const t = _tiposMaterialCache.find(x => x.id === id); if (!t) return;
+  document.getElementById('tm-id-edicao').value = id;
+  document.getElementById('tm-nome').value       = t.nome || '';
+  document.getElementById('tm-prefixo').value    = t.prefixo || '';
+  document.getElementById('tm-ncm-padrao').value = t.ncm_padrao || '';
+  document.getElementById('tm-descricao').value  = t.descricao || '';
+  const btn = document.getElementById('btn-salvar-tipomaterial');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-tipomaterial').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormTipoMaterial() {
+  ['tm-id-edicao','tm-nome','tm-prefixo','tm-ncm-padrao','tm-descricao'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-tipomaterial');
+  btn.textContent = '💾 Registrar Tipo'; btn.style.background = '#b45309';
+  document.getElementById('btn-cancelar-tipomaterial').style.display = 'none';
+}
+
+async function excluirTipoMaterial(id) {
+  const nome = _tiposMaterialCache.find(x => x.id === id)?.nome || 'este tipo';
+  if (!confirm(`Excluir o tipo "${nome}"? Materiais já vinculados a ele ficam sem tipo, mas não são excluídos.`)) return;
+  const { error } = await db.from('tipos_material').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarTiposMaterial();
+}
+
+document.getElementById('btn-salvar-tipomaterial')?.addEventListener('click', async () => {
+  const nome = document.getElementById('tm-nome').value.trim();
+  const prefixo = document.getElementById('tm-prefixo').value.trim().toUpperCase();
+  if (!nome)    { msgForm('msg-tipomaterial','Informe o nome do tipo.','red'); return; }
+  if (!prefixo) { msgForm('msg-tipomaterial','Informe o prefixo — é ele que vira o código dos materiais dessa família (ex: ELE-0001).','red'); return; }
+  if (!/^[A-Z0-9]{2,8}$/.test(prefixo)) { msgForm('msg-tipomaterial','Prefixo deve ter de 2 a 8 letras/números, sem espaço ou símbolo.','red'); return; }
+
+  const payload = {
+    nome,
+    prefixo,
+    ncm_padrao: document.getElementById('tm-ncm-padrao').value.trim() || null,
+    descricao:  document.getElementById('tm-descricao').value.trim() || null,
+  };
+
+  const idEd = document.getElementById('tm-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('tipos_material').update(payload).eq('id', idEd)
+    : await db.from('tipos_material').insert([payload]);
+
+  if (error) {
+    const msg = error.code === '23505' ? `Já existe um tipo com o prefixo "${prefixo}".` : error.message;
+    msgForm('msg-tipomaterial','Erro ao salvar: ' + msg,'red');
+    return;
+  }
+  msgForm('msg-tipomaterial', idEd ? '✓ Tipo atualizado!' : '✓ Tipo registrado!', 'green');
+  resetarFormTipoMaterial();
+  carregarTiposMaterial();
+});
+
+async function atualizarSelectTiposMaterial() {
+  const sel = document.getElementById('mat-tipo'); if (!sel) return;
+  const atual = sel.value;
+  const ativos = _tiposMaterialCache.length ? _tiposMaterialCache.filter(t => t.ativo) : (await db.from('tipos_material').select('id,nome,ncm_padrao,prefixo').eq('ativo', true).order('nome')).data || [];
+  sel.innerHTML = '<option value="">-- Selecione --</option>' +
+    ativos.map(t => `<option value="${escapeHTML(t.id)}" data-ncm-padrao="${escapeHTML(t.ncm_padrao||'')}" data-prefixo="${escapeHTML(t.prefixo||'')}">${t.prefixo ? '['+escapeHTML(t.prefixo)+'] ' : ''}${escapeHTML(t.nome)}</option>`).join('');
+  sel.value = atual;
+}
+
+function aoEscolherTipoMaterial() {
+  const sel = document.getElementById('mat-tipo');
+  const opt = sel.options[sel.selectedIndex];
+  const ncmField = document.getElementById('mat-ncm');
+  // Só sugere o NCM padrão do tipo se o campo ainda estiver vazio — nunca
+  // sobrescreve um NCM que o usuário já preencheu especificamente pro item.
+  if (opt && opt.dataset.ncmPadrao && !ncmField.value.trim()) {
+    ncmField.value = opt.dataset.ncmPadrao;
+  }
+}
+
+// ===================== CATÁLOGO DE MATERIAIS =====================
+let _materiaisCache = [];
+
+async function carregarMateriais() {
+  const tbody = document.getElementById('tbody-materiais'); if (!tbody) return;
+  const { data, error } = await db.from('materiais').select('*, tipos_material(nome)').order('ativo', {ascending:false}).order('nome');
+  if (error) { toast('Erro ao carregar materiais: ' + error.message, 'erro'); return; }
+  _materiaisCache = data || [];
+  await carregarMateriaisParaSelectItem();
+  if (!_materiaisCache.length) { tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Nenhum material cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _materiaisCache.map(m => `<tr>
+    <td style="font-family:monospace;font-weight:600;">${escapeHTML(m.codigo || '—')}</td>
+    <td><strong>${escapeHTML(m.nome)}</strong></td>
+    <td>${escapeHTML(m.unidade || '—')}</td>
+    <td>${escapeHTML(m.tipos_material?.nome || '—')}</td>
+    <td style="font-family:monospace;font-size:12px;">${escapeHTML(m.ncm || '—')}</td>
+    <td>${m.valor_referencia != null ? 'R$ ' + Number(m.valor_referencia).toFixed(2).replace('.',',') : '—'}</td>
+    <td>${m.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarMaterial('${escapeHTML(m.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMaterial('${escapeHTML(m.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarMaterial(id) {
+  const m = _materiaisCache.find(x => x.id === id); if (!m) return;
+  document.getElementById('mat-id-edicao').value = id;
+  document.getElementById('mat-nome').value       = m.nome || '';
+  document.getElementById('mat-codigo').value     = m.codigo || '';
+  document.getElementById('mat-unidade').value    = m.unidade || '';
+  document.getElementById('mat-tipo').value       = m.tipo_material_id || '';
+  document.getElementById('mat-ncm').value        = m.ncm || '';
+  document.getElementById('mat-valor').value      = m.valor_referencia ?? '';
+  document.getElementById('mat-observacoes').value = m.observacoes || '';
+  const btn = document.getElementById('btn-salvar-material');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-material').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormMaterial() {
+  ['mat-id-edicao','mat-nome','mat-codigo','mat-unidade','mat-tipo','mat-ncm','mat-valor','mat-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-material');
+  btn.textContent = '💾 Registrar Material'; btn.style.background = '';
+  document.getElementById('btn-cancelar-material').style.display = 'none';
+}
+
+async function excluirMaterial(id) {
+  const nome = _materiaisCache.find(x => x.id === id)?.nome || 'este material';
+  if (!confirm(`Excluir "${nome}" do catálogo? Itens de requisições já lançados mantêm a descrição, só perdem o vínculo com o catálogo.`)) return;
+  const { error } = await db.from('materiais').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarMateriais();
+}
+
+document.getElementById('btn-salvar-material')?.addEventListener('click', async () => {
+  const nome = document.getElementById('mat-nome').value.trim();
+  if (!nome) { msgForm('msg-material','Informe o nome do material.','red'); return; }
+
+  const tipoId = document.getElementById('mat-tipo').value;
+  if (!tipoId) { msgForm('msg-material','Selecione a família (Tipo de Material) — o código do item nasce do prefixo dela.','red'); return; }
+
+  const ncm = document.getElementById('mat-ncm').value.replace(/\D/g,'');
+  if (ncm && ncm.length !== 8) { msgForm('msg-material','NCM precisa ter 8 dígitos (ou deixe em branco).','red'); return; }
+
+  const valorRaw = document.getElementById('mat-valor').value;
+  const idEd = document.getElementById('mat-id-edicao').value;
+
+  if (idEd) {
+    // Edição: código já existe e não muda, mesmo que a família seja trocada
+    // (trocar de família não deve "renumerar" um item que já está em uso).
+    const payload = {
+      nome,
+      unidade:          document.getElementById('mat-unidade').value.trim() || null,
+      tipo_material_id: tipoId,
+      ncm:              ncm || null,
+      valor_referencia: valorRaw ? Number(valorRaw) : null,
+      observacoes:      document.getElementById('mat-observacoes').value.trim() || null,
+    };
+    const { error } = await db.from('materiais').update(payload).eq('id', idEd);
+    if (error) { msgForm('msg-material','Erro ao salvar: ' + error.message,'red'); return; }
+  } else {
+    // Novo: gera o código a partir do prefixo da família escolhida.
+    const tipo = _tiposMaterialCache.find(t => t.id === tipoId);
+    if (!tipo?.prefixo) { msgForm('msg-material','Essa família ainda não tem prefixo cadastrado — edite o Tipo de Material antes.','red'); return; }
+
+    const { data: codigo, error: errCod } = await db.rpc('gerar_codigo_item', { p_prefixo: tipo.prefixo });
+    if (errCod) { msgForm('msg-material','Erro ao gerar código do material: ' + errCod.message,'red'); return; }
+
+    const payload = {
+      nome,
+      codigo,
+      unidade:          document.getElementById('mat-unidade').value.trim() || null,
+      tipo_material_id: tipoId,
+      ncm:              ncm || null,
+      valor_referencia: valorRaw ? Number(valorRaw) : null,
+      observacoes:      document.getElementById('mat-observacoes').value.trim() || null,
+    };
+    const { error } = await db.from('materiais').insert([payload]);
+    if (error) { msgForm('msg-material','Erro ao salvar: ' + error.message,'red'); return; }
+    document.getElementById('mat-codigo').value = codigo;
+  }
+
+  const codigoFinal = document.getElementById('mat-codigo').value;
+  msgForm('msg-material', idEd ? `✓ Material ${codigoFinal} atualizado!` : `✓ Material ${codigoFinal} registrado!`, 'green');
+  resetarFormMaterial();
+  carregarMateriais();
+});
+// ===================== TIPOS DE SERVIÇO =====================
+let _tiposServicoCache = [];
+
+async function carregarTiposServico() {
+  const tbody = document.getElementById('tbody-tiposservico'); if (!tbody) return;
+  const { data, error } = await db.from('tipos_servico').select('*').order('ativo', {ascending:false}).order('nome');
+  if (error) { toast('Erro ao carregar tipos de serviço: ' + error.message, 'erro'); return; }
+  _tiposServicoCache = data || [];
+  await atualizarSelectTiposServico();
+  if (!_tiposServicoCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhum tipo cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _tiposServicoCache.map(t => `<tr>
+    <td><strong>${escapeHTML(t.nome)}</strong></td>
+    <td style="font-family:monospace;">${escapeHTML(t.codigo_servico_padrao || '—')}</td>
+    <td style="font-size:12px;">${escapeHTML(t.descricao || '—')}</td>
+    <td>${t.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarTipoServico('${escapeHTML(t.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirTipoServico('${escapeHTML(t.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarTipoServico(id) {
+  const t = _tiposServicoCache.find(x => x.id === id); if (!t) return;
+  document.getElementById('ts-id-edicao').value = id;
+  document.getElementById('ts-nome').value          = t.nome || '';
+  document.getElementById('ts-codigo-padrao').value = t.codigo_servico_padrao || '';
+  document.getElementById('ts-descricao').value     = t.descricao || '';
+  const btn = document.getElementById('btn-salvar-tiposervico');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-tiposervico').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormTipoServico() {
+  ['ts-id-edicao','ts-nome','ts-codigo-padrao','ts-descricao'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-tiposervico');
+  btn.textContent = '💾 Registrar Tipo'; btn.style.background = '#c2410c';
+  document.getElementById('btn-cancelar-tiposervico').style.display = 'none';
+}
+
+async function excluirTipoServico(id) {
+  const nome = _tiposServicoCache.find(x => x.id === id)?.nome || 'este tipo';
+  if (!confirm(`Excluir o tipo "${nome}"? Serviços já vinculados a ele ficam sem tipo, mas não são excluídos.`)) return;
+  const { error } = await db.from('tipos_servico').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarTiposServico();
+}
+
+document.getElementById('btn-salvar-tiposervico')?.addEventListener('click', async () => {
+  const nome = document.getElementById('ts-nome').value.trim();
+  if (!nome) { msgForm('msg-tiposervico','Informe o nome do tipo.','red'); return; }
+
+  const payload = {
+    nome,
+    codigo_servico_padrao: document.getElementById('ts-codigo-padrao').value.trim() || null,
+    descricao:             document.getElementById('ts-descricao').value.trim() || null,
+  };
+
+  const idEd = document.getElementById('ts-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('tipos_servico').update(payload).eq('id', idEd)
+    : await db.from('tipos_servico').insert([payload]);
+
+  if (error) { msgForm('msg-tiposervico','Erro ao salvar: ' + error.message,'red'); return; }
+  msgForm('msg-tiposervico', idEd ? '✓ Tipo atualizado!' : '✓ Tipo registrado!', 'green');
+  resetarFormTipoServico();
+  carregarTiposServico();
+});
+
+async function atualizarSelectTiposServico() {
+  const sel = document.getElementById('serv-tipo'); if (!sel) return;
+  const atual = sel.value;
+  const ativos = _tiposServicoCache.length ? _tiposServicoCache.filter(t => t.ativo) : (await db.from('tipos_servico').select('id,nome').eq('ativo', true).order('nome')).data || [];
+  sel.innerHTML = '<option value="">-- Selecione --</option>' +
+    ativos.map(t => `<option value="${escapeHTML(t.id)}">${escapeHTML(t.nome)}</option>`).join('');
+  sel.value = atual;
+}
+
+// ===================== CATÁLOGO DE SERVIÇOS =====================
+let _servicosCache = [];
+
+async function carregarServicos() {
+  const tbody = document.getElementById('tbody-servicos'); if (!tbody) return;
+  const { data, error } = await db.from('servicos').select('*, tipos_servico(nome)').order('ativo', {ascending:false}).order('nome');
+  if (error) { toast('Erro ao carregar serviços: ' + error.message, 'erro'); return; }
+  _servicosCache = data || [];
+  if (!_servicosCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum serviço cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = _servicosCache.map(s => `<tr>
+    <td><strong>${escapeHTML(s.nome)}</strong></td>
+    <td>${escapeHTML(s.unidade || '—')}</td>
+    <td>${escapeHTML(s.tipos_servico?.nome || '—')}</td>
+    <td>${s.valor_referencia != null ? 'R$ ' + Number(s.valor_referencia).toFixed(2).replace('.',',') : '—'}</td>
+    <td>${s.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarServico('${escapeHTML(s.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirServico('${escapeHTML(s.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarServico(id) {
+  const s = _servicosCache.find(x => x.id === id); if (!s) return;
+  document.getElementById('serv-id-edicao').value = id;
+  document.getElementById('serv-nome').value       = s.nome || '';
+  document.getElementById('serv-unidade').value    = s.unidade || '';
+  document.getElementById('serv-tipo').value       = s.tipo_servico_id || '';
+  document.getElementById('serv-codigo').value     = s.codigo_servico || '';
+  document.getElementById('serv-valor').value      = s.valor_referencia ?? '';
+  document.getElementById('serv-observacoes').value = s.observacoes || '';
+  const btn = document.getElementById('btn-salvar-servico');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-servico').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormServico() {
+  ['serv-id-edicao','serv-nome','serv-unidade','serv-tipo','serv-codigo','serv-valor','serv-observacoes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-servico');
+  btn.textContent = '💾 Registrar Serviço'; btn.style.background = '#0d9488';
+  document.getElementById('btn-cancelar-servico').style.display = 'none';
+}
+
+async function excluirServico(id) {
+  const nome = _servicosCache.find(x => x.id === id)?.nome || 'este serviço';
+  if (!confirm(`Excluir "${nome}" do catálogo?`)) return;
+  const { error } = await db.from('servicos').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarServicos();
+}
+
+document.getElementById('btn-salvar-servico')?.addEventListener('click', async () => {
+  const nome = document.getElementById('serv-nome').value.trim();
+  if (!nome) { msgForm('msg-servico','Informe o nome do serviço.','red'); return; }
+
+  const valorRaw = document.getElementById('serv-valor').value;
+  const payload = {
+    nome,
+    unidade:           document.getElementById('serv-unidade').value.trim() || null,
+    tipo_servico_id:   document.getElementById('serv-tipo').value || null,
+    codigo_servico:    document.getElementById('serv-codigo').value.trim() || null,
+    valor_referencia:  valorRaw ? Number(valorRaw) : null,
+    observacoes:       document.getElementById('serv-observacoes').value.trim() || null,
+  };
+
+  const idEd = document.getElementById('serv-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('servicos').update(payload).eq('id', idEd)
+    : await db.from('servicos').insert([payload]);
+
+  if (error) { msgForm('msg-servico','Erro ao salvar: ' + error.message,'red'); return; }
+  msgForm('msg-servico', idEd ? '✓ Serviço atualizado!' : '✓ Serviço registrado!', 'green');
+  resetarFormServico();
+  carregarServicos();
+});
+
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await Promise.all([carregarTiposMaterial(), carregarTiposServico()]);
+  await Promise.all([carregarMateriais(), carregarServicos()]);
+});
+</script>
+</body>
+</html>

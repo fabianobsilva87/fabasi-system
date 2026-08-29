@@ -210,6 +210,30 @@ function escapeHTML(str) {
     .replace(/'/g, '&#039;');
 }
 
+// ── Compartilhado entre as páginas do módulo de Compras (Requisição de
+// Materiais e Solicitação de Compra): a O.S. de climatização não tem um
+// campo "número" próprio, o rótulo OS-AC-xxxxx é derivado do id.
+function rotuloOS(o) {
+  const curto = String(o.id).slice(0,5).toUpperCase();
+  return `OS-AC-${curto}` + (o.descricao_defeito ? ' — ' + String(o.descricao_defeito).slice(0,40) : '');
+}
+
+// ── Compartilhado entre Requisição de Materiais, Solicitação de Compra e
+// Ordem de Compra: preenche todo <select class="select-material-item"> já
+// renderizado na página com o catálogo ativo de materiais. Cada página
+// chama isso de novo depois de adicionar uma linha de item dinâmica.
+async function carregarMateriaisParaSelectItem() {
+  const { data, error } = await db.from('materiais').select('id,nome,unidade,valor_referencia').eq('ativo', true).order('nome');
+  if (error) { console.warn('Não foi possível carregar catálogo de materiais:', error.message); return; }
+  const ativos = data || [];
+  document.querySelectorAll('.select-material-item').forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">-- item avulso --</option>' +
+      ativos.map(m => `<option value="${escapeHTML(m.id)}" data-unidade="${escapeHTML(m.unidade||'')}" data-valor="${m.valor_referencia ?? ''}">${escapeHTML(m.nome)}</option>`).join('');
+    sel.value = atual;
+  });
+}
+
 // ── Compatibilidade: lê meta_pmoc (novo JSONB) com fallback para observacoes regex (legado) ──
 function lerMetaPMOC(ficha) {
   if (ficha.meta_pmoc && Object.keys(ficha.meta_pmoc).length > 0) {

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Acompanhamento de ordens de compra até a entrega (Estágio 4 do fluxo de Compras) — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Follow-up de Compras</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item active" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>📡 Follow-up de Compras</h2></div>
+      <div class="section-content">
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Ordens de Compra em Aberto</h3>
+            <button type="button" class="btn-refresh" onclick="carregarFollowupOCs()">↺ Atualizar</button>
+          </div>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Mostra só o que ainda não chegou ao fim (fora "Recebida Total" e "Cancelada"). Mude o status direto na lista ou clique numa ordem pra ver/registrar o histórico dela.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Número</th><th>Fornecedor</th><th>Status</th><th>Entrega Prevista</th><th></th><th>Ações</th></tr></thead>
+              <tbody id="tbody-followup-oc"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="painel-timeline" style="display:none;">
+          <h3 class="card-title" id="timeline-titulo">📋 Histórico</h3>
+
+          <div class="form-grid" style="grid-template-columns: 1fr 2fr;">
+            <div class="form-group">
+              <label for="fu-tipo-evento">Tipo de Evento *</label>
+              <select id="fu-tipo-evento" class="form-input-style">
+                <option value="Confirmação do Fornecedor">Confirmação do Fornecedor</option>
+                <option value="Nota Fiscal Recebida">Nota Fiscal Recebida</option>
+                <option value="Enviado pelo Fornecedor">Enviado pelo Fornecedor</option>
+                <option value="Atraso Reportado">Atraso Reportado</option>
+                <option value="Entrega Parcial">Entrega Parcial</option>
+                <option value="Entrega Total">Entrega Total</option>
+                <option value="Observação">Observação</option>
+              </select>
+            </div>
+            <div class="form-group"><label for="fu-descricao">Descrição</label><input type="text" id="fu-descricao" placeholder="Detalhes do evento (opcional)"></div>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="btn-add-evento" class="btn-primary" style="background:#0891b2;">➕ Registrar Evento</button>
+            <button type="button" class="btn-secondary" onclick="fecharPainelTimeline()">✕ Fechar</button>
+          </div>
+          <p id="msg-followup" class="msg-form"></p>
+
+          <div id="lista-eventos" style="margin-top:18px;"></div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== ORDENS DE COMPRA EM ABERTO =====================
+let _followupOCsCache = [];
+let _ocSelecionadaFollowup = null;
+
+const STATUS_OC_OPCOES = ['Emitida','Confirmada','Enviada','Recebida Parcial','Recebida Total','Cancelada'];
+
+async function carregarFollowupOCs() {
+  const tbody = document.getElementById('tbody-followup-oc'); if (!tbody) return;
+  const { data, error } = await db.from('ordens_compra')
+    .select('*, fornecedores(razao_social)')
+    .order('data_entrega_prevista', { ascending: true, nullsFirst: false });
+  if (error) { toast('Erro ao carregar ordens de compra: ' + error.message, 'erro'); return; }
+  // Filtro client-side (mais previsível que .not('in', ...) e a lista de OCs
+  // não tende a ficar grande o bastante pra pesar): só o que ainda está aberto.
+  _followupOCsCache = (data || []).filter(o => o.status !== 'Recebida Total' && o.status !== 'Cancelada');
+
+  if (!_followupOCsCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma ordem de compra em aberto.</td></tr>'; return; }
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  tbody.innerHTML = _followupOCsCache.map(o => {
+    const atrasada = o.data_entrega_prevista && new Date(o.data_entrega_prevista + 'T00:00:00') < hoje;
+    return `<tr>
+      <td><strong>${escapeHTML(o.numero)}</strong></td>
+      <td>${escapeHTML(o.fornecedores?.razao_social || '—')}</td>
+      <td>
+        <select class="form-input-style" style="font-size:12px;padding:4px 8px;" onchange="mudarStatusOCFollowup('${escapeHTML(o.id)}', this.value)">
+          ${STATUS_OC_OPCOES.map(s => `<option value="${s}" ${s===o.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td>${o.data_entrega_prevista ? new Date(o.data_entrega_prevista + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+      <td>${atrasada ? '<span class="tag-badge danger">⚠️ Atrasada</span>' : ''}</td>
+      <td><button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirTimeline('${escapeHTML(o.id)}')">📋 Histórico</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function mudarStatusOCFollowup(id, novoStatus) {
+  const { error } = await db.from('ordens_compra').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { toast('Erro ao atualizar status: ' + error.message, 'erro'); return; }
+  toast('Status atualizado para "' + novoStatus + '".', 'info');
+  carregarFollowupOCs();
+}
+
+// ===================== TIMELINE (EVENTOS) =====================
+async function abrirTimeline(ocId) {
+  const oc = _followupOCsCache.find(x => x.id === ocId);
+  _ocSelecionadaFollowup = ocId;
+  document.getElementById('painel-timeline').style.display = 'block';
+  document.getElementById('timeline-titulo').textContent = `📋 Histórico — ${oc ? oc.numero : ocId}`;
+  document.getElementById('fu-descricao').value = '';
+  await carregarEventos();
+  document.getElementById('painel-timeline').scrollIntoView({ behavior: 'smooth' });
+}
+
+function fecharPainelTimeline() {
+  _ocSelecionadaFollowup = null;
+  document.getElementById('painel-timeline').style.display = 'none';
+}
+
+async function carregarEventos() {
+  const container = document.getElementById('lista-eventos'); if (!container || !_ocSelecionadaFollowup) return;
+  const { data, error } = await db.from('ordens_compra_eventos').select('*').eq('ordem_id', _ocSelecionadaFollowup).order('data_evento', { ascending: false });
+  if (error) { toast('Erro ao carregar histórico: ' + error.message, 'erro'); return; }
+
+  if (!data || !data.length) { container.innerHTML = '<p style="font-size:13px;color:#a0aec0;">Nenhum evento registrado ainda.</p>'; return; }
+
+  container.innerHTML = data.map(e => `
+    <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #edf2f7;">
+      <div style="font-size:11px;color:#a0aec0;white-space:nowrap;min-width:110px;">${new Date(e.data_evento).toLocaleString('pt-BR')}</div>
+      <div>
+        <span class="tag-badge">${escapeHTML(e.tipo_evento)}</span>
+        ${e.descricao ? `<p style="font-size:13px;margin-top:4px;color:#4a5568;">${escapeHTML(e.descricao)}</p>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('btn-add-evento')?.addEventListener('click', async () => {
+  if (!_ocSelecionadaFollowup) return;
+  const tipoEvento = document.getElementById('fu-tipo-evento').value;
+  const descricao = document.getElementById('fu-descricao').value.trim();
+
+  const { error } = await db.from('ordens_compra_eventos').insert([{
+    ordem_id: _ocSelecionadaFollowup,
+    tipo_evento: tipoEvento,
+    descricao: descricao || null,
+  }]);
+
+  if (error) { msgForm('msg-followup','Erro ao registrar evento: ' + error.message,'red'); return; }
+  msgForm('msg-followup','✓ Evento registrado!','green');
+  document.getElementById('fu-descricao').value = '';
+  carregarEventos();
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await carregarFollowupOCs();
+});
+</script>
+</body>
+</html>
