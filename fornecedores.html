@@ -228,7 +228,12 @@
 // ===================== FORNECEDORES =====================
 let _fornecedoresCache = [];
 
-const TIPOS_CADASTRO_OPCOES = ['Cliente','Fornecedor','Prestador de Serviço','Subempreiteiro','Parceiro','Transportadora','Fabricante','Comércio','Outro'];
+// "Cliente" ficou fora de propósito — é um cadastro conceitualmente
+// diferente (quem paga a Fabasi, não quem a Fabasi paga) e vai ganhar
+// registro próprio quando isso entrar em pauta. O enum no banco
+// (tipo_cadastro_enum) ainda tem o valor 'Cliente' disponível pra quando
+// isso acontecer — só não é oferecido aqui pra não confundir hoje.
+const TIPOS_CADASTRO_OPCOES = ['Fornecedor','Prestador de Serviço','Subempreiteiro','Parceiro','Transportadora','Fabricante','Comércio','Outro'];
 
 function renderCheckboxesTipoCadastro(selecionados = ['Fornecedor']) {
   const wrap = document.getElementById('forn-tipos-cadastro-wrap'); if (!wrap) return;
@@ -351,6 +356,14 @@ async function buscarDadosCNPJ(forcarNovaConsulta = false) {
   const cnpjDigitado = document.getElementById('forn-cnpj').value.trim();
   if (!cnpjDigitado) { msgForm('msg-fornecedor','Informe um CNPJ antes de buscar.','red'); return; }
 
+  const duplicado = await verificarCnpjDuplicado(limparCNPJ(cnpjDigitado));
+  if (duplicado) {
+    const msgEl = document.getElementById('msg-fornecedor');
+    msgEl.style.color = '#dc2626';
+    msgEl.innerHTML = `⚠️ Este CNPJ já está cadastrado: <a href="#" onclick="event.preventDefault(); editarFornecedor('${duplicado.id}');" style="color:#1a56db;font-weight:600;">abrir ficha de ${escapeHTML(duplicado.razao_social)}</a>`;
+    return;
+  }
+
   const btn = document.getElementById('btn-buscar-cnpj');
   const textoOriginal = btn.textContent;
   btn.textContent = '⏳ Buscando...'; btn.disabled = true;
@@ -415,12 +428,33 @@ async function buscarDadosCNPJ(forcarNovaConsulta = false) {
   }
 }
 
+// Checa duplicidade pelo CNPJ completo (item 17) — matriz e filiais têm
+// CNPJs completos diferentes, então nunca colidem aqui; só bloqueia
+// cadastrar o EXATO mesmo CNPJ duas vezes.
+async function verificarCnpjDuplicado(cnpjLimpo) {
+  if (!cnpjLimpo) return null;
+  const idEd = document.getElementById('forn-id-edicao').value;
+  let query = db.from('fornecedores').select('id,razao_social').eq('cnpj', cnpjLimpo);
+  if (idEd) query = query.neq('id', idEd);
+  const { data } = await query.maybeSingle();
+  return data || null;
+}
+
 document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', async () => {
   const razao = document.getElementById('forn-razao').value.trim();
   if (!razao) { msgForm('msg-fornecedor','Informe a Razão Social.','red'); return; }
 
   const tipos = coletarTiposCadastroDoForm();
   if (!tipos.length) { msgForm('msg-fornecedor','Selecione ao menos um Tipo de Cadastro.','red'); return; }
+
+  const cnpjLimpoParaSalvar = limparCNPJ(document.getElementById('forn-cnpj').value);
+  const duplicado = await verificarCnpjDuplicado(cnpjLimpoParaSalvar);
+  if (duplicado) {
+    const msgEl = document.getElementById('msg-fornecedor');
+    msgEl.style.color = '#dc2626';
+    msgEl.innerHTML = `⚠️ Este CNPJ já está cadastrado: <a href="#" onclick="event.preventDefault(); editarFornecedor('${duplicado.id}');" style="color:#1a56db;font-weight:600;">abrir ficha de ${escapeHTML(duplicado.razao_social)}</a>`;
+    return;
+  }
 
   const logradouro = document.getElementById('forn-logradouro').value.trim();
   const numero = document.getElementById('forn-numero').value.trim();
