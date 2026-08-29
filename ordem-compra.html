@@ -267,6 +267,7 @@ async function carregarOrdensCompra() {
       ${!o.aprovado_em && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarOC('${escapeHTML(o.id)}')">✓ Aprovar</button>` : ''}
       ${!o.aprovado_em && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">não aprovada</span>` : ''}
       <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarOC('${escapeHTML(o.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;background:#1a56db;color:#fff;" onclick="imprimirOrdemCompra('${escapeHTML(o.id)}')">🖨️ Emitir Documento</button>
       <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirOC('${escapeHTML(o.id)}')">✕</button>
     </td>
   </tr>`).join('');
@@ -331,6 +332,112 @@ function resetarFormOC() {
   const btn = document.getElementById('btn-salvar-oc');
   btn.textContent = '💾 Registrar Ordem de Compra'; btn.style.background = '#4338ca';
   document.getElementById('btn-cancelar-oc').style.display = 'none';
+}
+
+// ===================== IMPRESSÃO — Documento da Ordem de Compra =====================
+// Espelho da OC para enviar ao fornecedor: dados do comprador (Fabasi, via
+// cadastro de Empresa Empregadora), do fornecedor, condições e itens.
+// Segue o mesmo padrão visual/técnico já usado em laudos e O.S. (classes
+// .laudo-*, função imprimir() compartilhada em app.js).
+async function imprimirOrdemCompra(id) {
+  const { data: oc, error } = await db.from('ordens_compra')
+    .select('*, fornecedores(*)')
+    .eq('id', id).single();
+  if (error || !oc) { toast('Não foi possível carregar a Ordem de Compra para impressão.', 'erro'); return; }
+
+  const { data: itens } = await db.from('ordens_compra_itens').select('*').eq('ordem_id', id).order('id');
+
+  // Empregadora ativa cadastrada = os dados da própria Fabasi como compradora.
+  // Se houver mais de uma, usa a primeira — cadastro único é o caso normal.
+  const { data: empregadoras } = await db.from('empresas').select('*').eq('tipo','empregadora').eq('ativa', true).order('razao_social').limit(1);
+  const comprador = (empregadoras && empregadoras[0]) || null;
+
+  const forn = oc.fornecedores || {};
+  const corStatus = { 'Emitida':'#dbeafe', 'Confirmada':'#fef3c7', 'Enviada':'#e0e7ff', 'Recebida Parcial':'#fed7aa', 'Recebida Total':'#d1fae5', 'Cancelada':'#fee2e2' };
+  const txtStatus = { 'Emitida':'#1e40af', 'Confirmada':'#92400e', 'Enviada':'#3730a3', 'Recebida Parcial':'#9a3412', 'Recebida Total':'#065f46', 'Cancelada':'#991b1b' };
+
+  const linhasItens = (itens || []).map(it => `
+    <tr>
+      <td>${escapeHTML(it.descricao)}</td>
+      <td style="text-align:center;">${it.quantidade}</td>
+      <td style="text-align:center;">${escapeHTML(it.unidade || '—')}</td>
+      <td style="text-align:right;">R$ ${Number(it.valor_unitario).toFixed(2).replace('.',',')}</td>
+      <td style="text-align:right;">R$ ${Number(it.valor_total).toFixed(2).replace('.',',')}</td>
+    </tr>`).join('');
+
+  const valorItens = (itens || []).reduce((s,it) => s + Number(it.valor_total || 0), 0);
+
+  const html = `
+  <div class="laudo-wrapper">
+    <div class="laudo-header">
+      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Ordem de Compra</h1><p>Documento para envio ao fornecedor</p></div></div>
+      <div class="laudo-header-meta">
+        <strong>Nº ${escapeHTML(oc.numero)}</strong><br>
+        Emissão: ${fmtDate(oc.data_emissao)}<br>
+        <span class="tag-badge" style="background:${corStatus[oc.status]||'#f1f5f9'};color:${txtStatus[oc.status]||'#4a5568'};">${escapeHTML(oc.status)}</span>
+      </div>
+    </div>
+
+    <div class="laudo-section">
+      <div class="laudo-section-title">Comprador</div>
+      ${comprador ? `
+      <div class="laudo-grid">
+        <div class="laudo-field"><label>Razão Social</label><span>${escapeHTML(comprador.razao_social)}</span></div>
+        <div class="laudo-field"><label>CNPJ</label><span>${escapeHTML(comprador.cnpj || '—')}</span></div>
+        <div class="laudo-field" style="grid-column:span 2;"><label>Endereço</label><span>${escapeHTML(comprador.endereco || '—')}</span></div>
+        <div class="laudo-field"><label>Telefone</label><span>${escapeHTML(comprador.telefone || '—')}</span></div>
+        <div class="laudo-field"><label>E-mail</label><span>${escapeHTML(comprador.email || '—')}</span></div>
+      </div>` : `<p style="font-size:11px;color:#a0aec0;">Nenhuma empresa empregadora ativa cadastrada em Empresas — cadastre a Fabasi lá para esse bloco aparecer preenchido.</p>`}
+    </div>
+
+    <div class="laudo-section">
+      <div class="laudo-section-title">Fornecedor</div>
+      <div class="laudo-grid">
+        <div class="laudo-field"><label>Razão Social</label><span>${escapeHTML(forn.razao_social || '—')}</span></div>
+        <div class="laudo-field"><label>CNPJ</label><span>${escapeHTML(forn.cnpj || '—')}</span></div>
+        <div class="laudo-field" style="grid-column:span 2;"><label>Endereço</label><span>${escapeHTML(forn.endereco || '—')}${forn.cidade ? ' — ' + escapeHTML(forn.cidade) + (forn.uf ? '/' + escapeHTML(forn.uf) : '') : ''}</span></div>
+        <div class="laudo-field"><label>Telefone</label><span>${escapeHTML(forn.telefone || '—')}</span></div>
+        <div class="laudo-field"><label>E-mail</label><span>${escapeHTML(forn.email || '—')}</span></div>
+      </div>
+    </div>
+
+    <div class="laudo-section">
+      <div class="laudo-section-title">Condições da Compra</div>
+      <div class="laudo-grid-3">
+        <div class="laudo-field"><label>Entrega Prevista</label><span>${fmtDate(oc.data_entrega_prevista)}</span></div>
+        <div class="laudo-field"><label>Condição de Pagamento</label><span>${escapeHTML(oc.condicao_pagamento || '—')}</span></div>
+        <div class="laudo-field"><label>Frete</label><span>R$ ${Number(oc.frete||0).toFixed(2).replace('.',',')}</span></div>
+      </div>
+    </div>
+
+    <div class="laudo-section">
+      <div class="laudo-section-title">Itens</div>
+      <table class="laudo-checklist-table">
+        <thead><tr><th>Descrição</th><th style="text-align:center;">Qtd.</th><th style="text-align:center;">Unid.</th><th style="text-align:right;">Valor Unit.</th><th style="text-align:right;">Total</th></tr></thead>
+        <tbody>${linhasItens}</tbody>
+      </table>
+      <div style="text-align:right;margin-top:10px;font-size:12px;">
+        <div>Itens: R$ ${valorItens.toFixed(2).replace('.',',')}</div>
+        <div>Frete: R$ ${Number(oc.frete||0).toFixed(2).replace('.',',')}</div>
+        <div style="font-size:14px;font-weight:700;color:#1a56db;margin-top:4px;">Total Geral: R$ ${Number(oc.valor_total||0).toFixed(2).replace('.',',')}</div>
+      </div>
+    </div>
+
+    ${oc.observacoes ? `
+    <div class="laudo-section">
+      <div class="laudo-section-title">Observações</div>
+      <p style="font-size:12px;line-height:1.7;">${escapeHTML(oc.observacoes)}</p>
+    </div>` : ''}
+
+    <div class="laudo-section">
+      ${oc.aprovado_por_nome ? `<p style="font-size:11px;color:#065f46;margin-bottom:8px;">✓ Aprovado por ${escapeHTML(oc.aprovado_por_nome)} em ${new Date(oc.aprovado_em).toLocaleString('pt-BR')}</p>` : `<p style="font-size:11px;color:#92400e;margin-bottom:8px;">⚠ Documento ainda não aprovado internamente.</p>`}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#a0aec0;">
+        Sistema Fabasi · Documento emitido em ${new Date().toLocaleString('pt-BR')} · ${escapeHTML(oc.numero)}
+      </div>
+    </div>
+  </div>`;
+
+  imprimir('area-oc-impressao', html, 'retrato');
 }
 
 async function excluirOC(id) {

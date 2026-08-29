@@ -270,10 +270,12 @@ function renderizarMapaCotacao() {
   <tr>
     <td colspan="2"></td>
     ${_propostasCotacaoAtual.map(p => `
-      <td style="display:flex;flex-direction:column;gap:4px;">
-        ${!encerrada ? `<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 6px;" onclick="salvarPrecosProposta('${escapeHTML(p.id)}')">💾 Salvar Preços</button>` : ''}
-        ${!encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#b45309;" onclick="marcarPropostaVencedora('${escapeHTML(p.id)}')">🏆 Marcar Vencedora</button>` : ''}
-        ${p.vencedora && encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#1a56db;" onclick="gerarOCDaCotacao('${escapeHTML(p.id)}')">📦 Gerar Ordem de Compra</button>` : ''}
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          ${!encerrada ? `<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 6px;" onclick="salvarPrecosProposta('${escapeHTML(p.id)}')">💾 Salvar Preços</button>` : ''}
+          ${!encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#b45309;" onclick="marcarPropostaVencedora('${escapeHTML(p.id)}')">🏆 Marcar Vencedora</button>` : ''}
+          ${p.vencedora && encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#1a56db;" onclick="gerarOCDaCotacao('${escapeHTML(p.id)}')">📦 Gerar Ordem de Compra</button>` : ''}
+        </div>
       </td>`).join('')}
   </tr>`;
 
@@ -308,6 +310,7 @@ document.getElementById('btn-add-proposta')?.addEventListener('click', async () 
   document.getElementById('cot-prazo').value = '';
   document.getElementById('cot-condicao').value = '';
   msgForm('msg-cotacao','✓ Fornecedor adicionado ao mapa!','green');
+  await carregarCotacoes();   // atualiza a contagem de "Propostas" na listagem de cima
   await abrirDetalheCotacao(_cotacaoAtual.id);
 });
 

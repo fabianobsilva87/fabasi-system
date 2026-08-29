@@ -122,9 +122,104 @@
             </table>
           </div>
         </div>
+
+        <div class="card" id="ficha-fornecedor-painel" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div>
+              <h3 class="card-title" id="ficha-titulo" style="margin-bottom:2px;">Ficha do Fornecedor</h3>
+              <div id="ficha-score-display" style="font-size:13px;"></div>
+            </div>
+            <button type="button" class="btn-secondary" onclick="fecharFichaFornecedor()">✕ Fechar</button>
+          </div>
+
+          <div class="topbar no-print" style="margin:12px 0;">
+            <button type="button" class="btn-refresh" onclick="alternarAbaFicha('classificacao')">🏷️ Classificação</button>
+            <button type="button" class="btn-refresh" style="background:#0d9488;border-color:#0d9488;color:#fff;" onclick="alternarAbaFicha('homologacao')">✅ Homologação</button>
+            <button type="button" class="btn-refresh" style="background:#b45309;border-color:#b45309;color:#fff;" onclick="alternarAbaFicha('avaliacoes')">⭐ Avaliações</button>
+            <button type="button" class="btn-refresh" style="background:#4338ca;border-color:#4338ca;color:#fff;" onclick="alternarAbaFicha('precos')">💰 Histórico de Preços</button>
+            <button type="button" class="btn-refresh" style="background:#dc2626;border-color:#dc2626;color:#fff;" onclick="alternarAbaFicha('alertas')">⚠️ Alertas</button>
+            <button type="button" class="btn-refresh" style="background:#334155;border-color:#334155;color:#fff;" onclick="alternarAbaFicha('auditoria')">🕓 Auditoria</button>
+          </div>
+
+          <!-- ABA: CLASSIFICAÇÃO -->
+          <div id="ficha-aba-classificacao">
+            <p style="font-size:12px;color:#718096;margin-bottom:10px;">Segmentos de atuação e categorias de material que este fornecedor fornece — usado no score e em buscas futuras por categoria.</p>
+            <label style="font-weight:600;font-size:13px;">Segmentos</label>
+            <div id="ficha-segmentos-wrap" style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 16px;font-size:12px;"></div>
+            <label style="font-weight:600;font-size:13px;">Categorias de Material Fornecidas</label>
+            <div id="ficha-categorias-material-wrap" style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 16px;font-size:12px;max-height:160px;overflow-y:auto;"></div>
+            <button type="button" class="btn-primary" onclick="salvarClassificacaoFicha()">💾 Salvar Classificação</button>
+            <p id="msg-ficha-classificacao" class="msg-form"></p>
+          </div>
+
+          <!-- ABA: HOMOLOGAÇÃO -->
+          <div id="ficha-aba-homologacao" style="display:none;">
+            <div class="form-grid">
+              <div class="form-group"><label for="ficha-status-fornecedor">Status do Fornecedor</label>
+                <select id="ficha-status-fornecedor" class="form-input-style">
+                  <option value="Pré-cadastro">Pré-cadastro</option>
+                  <option value="Em análise">Em análise</option>
+                  <option value="Homologado">Homologado</option>
+                  <option value="Ativo">Ativo</option>
+                  <option value="Suspenso">Suspenso</option>
+                  <option value="Bloqueado">Bloqueado</option>
+                  <option value="Inativo">Inativo</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="ficha-responsavel-comercial">Responsável Comercial</label><input type="text" id="ficha-responsavel-comercial"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="ficha-dados-bancarios">Dados Bancários</label><input type="text" id="ficha-dados-bancarios" placeholder="Banco, agência, conta, PIX..."></div>
+            </div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap;margin:12px 0;font-size:13px;">
+              <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ficha-doc-enviada"> Documentação enviada</label>
+              <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ficha-doc-validada"> Documentação validada</label>
+              <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ficha-certidoes-ok"> Certidões OK</label>
+              <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ficha-contrato-assinado"> Contrato assinado</label>
+            </div>
+            <div class="form-grid">
+              <div class="form-group"><label for="ficha-aval-tecnica">Avaliação Técnica</label><input type="text" id="ficha-aval-tecnica"></div>
+              <div class="form-group"><label for="ficha-aval-financeira">Avaliação Financeira</label><input type="text" id="ficha-aval-financeira"></div>
+              <div class="form-group"><label for="ficha-aval-qualidade">Avaliação de Qualidade</label><input type="text" id="ficha-aval-qualidade"></div>
+              <div class="form-group"><label for="ficha-aval-prazo">Avaliação de Prazo</label><input type="text" id="ficha-aval-prazo"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="ficha-homolog-obs">Observações</label><textarea id="ficha-homolog-obs" rows="2"></textarea></div>
+            </div>
+            <button type="button" class="btn-primary" style="background:#0d9488;" onclick="salvarHomologacaoFicha()">💾 Salvar Homologação</button>
+            <p id="msg-ficha-homologacao" class="msg-form"></p>
+          </div>
+
+          <!-- ABA: AVALIAÇÕES -->
+          <div id="ficha-aba-avaliacoes" style="display:none;">
+            <div id="ficha-media-avaliacoes" style="margin-bottom:14px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:13px;"></div>
+            <p style="font-weight:600;font-size:13px;margin-bottom:8px;">Nova Avaliação</p>
+            <div id="ficha-avaliacao-criterios" class="form-grid" style="grid-template-columns:repeat(3,1fr);"></div>
+            <div class="form-group" style="margin-top:10px;"><label for="ficha-avaliacao-obs">Observações</label><textarea id="ficha-avaliacao-obs" rows="2"></textarea></div>
+            <button type="button" class="btn-primary" style="background:#b45309;" onclick="salvarAvaliacaoFicha()">💾 Registrar Avaliação</button>
+            <p id="msg-ficha-avaliacao" class="msg-form"></p>
+            <div id="ficha-lista-avaliacoes" style="margin-top:16px;"></div>
+          </div>
+
+          <!-- ABA: HISTÓRICO DE PREÇOS -->
+          <div id="ficha-aba-precos" style="display:none;">
+            <p style="font-size:12px;color:#718096;margin-bottom:10px;">Alimentado automaticamente sempre que uma Ordem de Compra deste fornecedor é registrada — não é lançamento manual.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>Valor Unit.</th><th>Data</th><th>Origem</th></tr></thead>
+                <tbody id="ficha-tbody-precos"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ABA: ALERTAS -->
+          <div id="ficha-aba-alertas" style="display:none;">
+            <div id="ficha-lista-alertas"></div>
+          </div>
+
+          <!-- ABA: AUDITORIA -->
+          <div id="ficha-aba-auditoria" style="display:none;">
+            <div id="ficha-lista-auditoria"></div>
+          </div>
+        </div>
       </div>
 
-      
       </div>
     </main>
   </div>
@@ -167,6 +262,7 @@ async function carregarFornecedores() {
     <td style="font-size:12px;">${escapeHTML(f.telefone || '')}${f.telefone && f.email ? '<br>' : ''}${escapeHTML(f.email || '')}</td>
     <td>${f.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;background:#4338ca;color:#fff;" onclick="abrirFichaFornecedor('${escapeHTML(f.id)}')">🔎 Ficha</button>
       <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarFornecedor('${escapeHTML(f.id)}')">✏️ Editar</button>
       <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirFornecedor('${escapeHTML(f.id)}')">✕</button>
     </td>
@@ -364,6 +460,229 @@ document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', asyn
   resetarFormFornecedor();
   carregarFornecedores();
 });
+
+// ===================== FICHA DO FORNECEDOR =====================
+let _fichaFornecedorAtual = null;
+
+function alternarAbaFicha(aba) {
+  ['classificacao','homologacao','avaliacoes','precos','alertas','auditoria'].forEach(a => {
+    const el = document.getElementById('ficha-aba-' + a);
+    if (el) el.style.display = a === aba ? 'block' : 'none';
+  });
+}
+
+async function abrirFichaFornecedor(id) {
+  const f = _fornecedoresCache.find(x => x.id === id); if (!f) return;
+  _fichaFornecedorAtual = f;
+
+  document.getElementById('ficha-fornecedor-painel').style.display = 'block';
+  document.getElementById('ficha-titulo').textContent = `📁 ${f.razao_social}`;
+  alternarAbaFicha('classificacao');
+
+  await Promise.all([
+    carregarScoreFicha(id),
+    carregarSegmentosParaFicha(id),
+    carregarCategoriasMaterialParaFicha(id),
+    carregarHomologacaoFicha(id),
+    carregarAvaliacoesFicha(id),
+    carregarPrecosFicha(id),
+    carregarAlertasFicha(id),
+    carregarAuditoriaFicha(id),
+  ]);
+
+  document.getElementById('ficha-fornecedor-painel').scrollIntoView({ behavior: 'smooth' });
+}
+
+function fecharFichaFornecedor() {
+  _fichaFornecedorAtual = null;
+  document.getElementById('ficha-fornecedor-painel').style.display = 'none';
+}
+
+async function carregarScoreFicha(id) {
+  const { data, error } = await db.rpc('calcular_score_fornecedor', { p_fornecedor_id: id });
+  const el = document.getElementById('ficha-score-display');
+  if (error) { el.textContent = 'Score indisponível.'; return; }
+  const score = data ?? 0;
+  const cor = score >= 70 ? '#059669' : score >= 40 ? '#d97706' : '#dc2626';
+  const rotulo = score >= 70 ? 'Excelente fornecedor' : score >= 40 ? 'Fornecedor regular' : 'Atenção necessária';
+  el.innerHTML = `<span style="font-weight:700;color:${cor};">Score: ${score}/100</span> — ${rotulo}`;
+}
+
+// ── Classificação ──────────────────────────────────────────────────────
+async function carregarSegmentosParaFicha(fornecedorId) {
+  const { data: todos } = await db.from('segmentos_fornecedor').select('*').eq('ativo', true).order('nome');
+  const { data: vinculados } = await db.from('fornecedor_segmentos').select('segmento_id').eq('fornecedor_id', fornecedorId);
+  const idsVinculados = new Set((vinculados || []).map(v => v.segmento_id));
+  document.getElementById('ficha-segmentos-wrap').innerHTML = (todos || []).map(s => `
+    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+      <input type="checkbox" class="chk-ficha-segmento" value="${escapeHTML(s.id)}" ${idsVinculados.has(s.id) ? 'checked' : ''}> ${escapeHTML(s.nome)}
+    </label>`).join('');
+}
+
+async function carregarCategoriasMaterialParaFicha(fornecedorId) {
+  const { data: todos } = await db.from('tipos_material').select('*').eq('ativo', true).order('nome');
+  const { data: vinculados } = await db.from('fornecedor_categorias_material').select('tipo_material_id').eq('fornecedor_id', fornecedorId);
+  const idsVinculados = new Set((vinculados || []).map(v => v.tipo_material_id));
+  document.getElementById('ficha-categorias-material-wrap').innerHTML = (todos || []).map(t => `
+    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+      <input type="checkbox" class="chk-ficha-categoria-material" value="${escapeHTML(t.id)}" ${idsVinculados.has(t.id) ? 'checked' : ''}> ${t.prefixo ? '['+escapeHTML(t.prefixo)+'] ' : ''}${escapeHTML(t.nome)}
+    </label>`).join('');
+}
+
+async function salvarClassificacaoFicha() {
+  if (!_fichaFornecedorAtual) return;
+  const fornecedorId = _fichaFornecedorAtual.id;
+  const segmentosIds = Array.from(document.querySelectorAll('.chk-ficha-segmento:checked')).map(c => c.value);
+  const categoriasIds = Array.from(document.querySelectorAll('.chk-ficha-categoria-material:checked')).map(c => c.value);
+
+  await db.from('fornecedor_segmentos').delete().eq('fornecedor_id', fornecedorId);
+  if (segmentosIds.length) await db.from('fornecedor_segmentos').insert(segmentosIds.map(id => ({ fornecedor_id: fornecedorId, segmento_id: id })));
+
+  await db.from('fornecedor_categorias_material').delete().eq('fornecedor_id', fornecedorId);
+  if (categoriasIds.length) await db.from('fornecedor_categorias_material').insert(categoriasIds.map(id => ({ fornecedor_id: fornecedorId, tipo_material_id: id })));
+
+  msgForm('msg-ficha-classificacao', '✓ Classificação salva!', 'green');
+  carregarScoreFicha(fornecedorId); // score depende de compatibilidade de segmento
+}
+
+// ── Homologação ────────────────────────────────────────────────────────
+async function carregarHomologacaoFicha(fornecedorId) {
+  document.getElementById('ficha-status-fornecedor').value = _fichaFornecedorAtual.status_fornecedor || 'Pré-cadastro';
+
+  const { data: h } = await db.from('homologacao_fornecedor').select('*').eq('fornecedor_id', fornecedorId).maybeSingle();
+  document.getElementById('ficha-responsavel-comercial').value = h?.responsavel_comercial || '';
+  document.getElementById('ficha-dados-bancarios').value = h?.dados_bancarios || '';
+  document.getElementById('ficha-doc-enviada').checked = h?.documentacao_enviada || false;
+  document.getElementById('ficha-doc-validada').checked = h?.documentacao_validada || false;
+  document.getElementById('ficha-certidoes-ok').checked = h?.certidoes_ok || false;
+  document.getElementById('ficha-contrato-assinado').checked = h?.contrato_assinado || false;
+  document.getElementById('ficha-aval-tecnica').value = h?.avaliacao_tecnica || '';
+  document.getElementById('ficha-aval-financeira').value = h?.avaliacao_financeira || '';
+  document.getElementById('ficha-aval-qualidade').value = h?.avaliacao_qualidade || '';
+  document.getElementById('ficha-aval-prazo').value = h?.avaliacao_prazo || '';
+  document.getElementById('ficha-homolog-obs').value = h?.observacoes || '';
+}
+
+async function salvarHomologacaoFicha() {
+  if (!_fichaFornecedorAtual) return;
+  const fornecedorId = _fichaFornecedorAtual.id;
+
+  const novoStatus = document.getElementById('ficha-status-fornecedor').value;
+  const { error: errStatus } = await db.from('fornecedores').update({ status_fornecedor: novoStatus }).eq('id', fornecedorId);
+  if (errStatus) { msgForm('msg-ficha-homologacao','Erro ao salvar status: ' + errStatus.message,'red'); return; }
+
+  const payload = {
+    fornecedor_id: fornecedorId,
+    documentacao_enviada: document.getElementById('ficha-doc-enviada').checked,
+    documentacao_validada: document.getElementById('ficha-doc-validada').checked,
+    certidoes_ok: document.getElementById('ficha-certidoes-ok').checked,
+    contrato_assinado: document.getElementById('ficha-contrato-assinado').checked,
+    dados_bancarios: document.getElementById('ficha-dados-bancarios').value.trim() || null,
+    responsavel_comercial: document.getElementById('ficha-responsavel-comercial').value.trim() || null,
+    avaliacao_tecnica: document.getElementById('ficha-aval-tecnica').value.trim() || null,
+    avaliacao_financeira: document.getElementById('ficha-aval-financeira').value.trim() || null,
+    avaliacao_qualidade: document.getElementById('ficha-aval-qualidade').value.trim() || null,
+    avaliacao_prazo: document.getElementById('ficha-aval-prazo').value.trim() || null,
+    observacoes: document.getElementById('ficha-homolog-obs').value.trim() || null,
+    atualizado_por_nome: window._usuarioAtual?.nome || null,
+    atualizado_em: new Date().toISOString(),
+  };
+  // T-padrão do projeto: DELETE+INSERT em vez de upsert.
+  await db.from('homologacao_fornecedor').delete().eq('fornecedor_id', fornecedorId);
+  const { error } = await db.from('homologacao_fornecedor').insert([payload]);
+  if (error) { msgForm('msg-ficha-homologacao','Erro ao salvar: ' + error.message,'red'); return; }
+
+  msgForm('msg-ficha-homologacao', '✓ Homologação salva!', 'green');
+  _fichaFornecedorAtual.status_fornecedor = novoStatus;
+  carregarFornecedores();
+  carregarScoreFicha(fornecedorId);
+}
+
+// ── Avaliações ─────────────────────────────────────────────────────────
+const CRITERIOS_AVALIACAO = [
+  { id: 'qualidade', label: 'Qualidade' }, { id: 'preco', label: 'Preço' }, { id: 'prazo', label: 'Prazo de Entrega' },
+  { id: 'atendimento', label: 'Atendimento' }, { id: 'conformidade', label: 'Conformidade' }, { id: 'pos_venda', label: 'Pós-venda' },
+];
+
+function renderCriteriosAvaliacao() {
+  document.getElementById('ficha-avaliacao-criterios').innerHTML = CRITERIOS_AVALIACAO.map(c => `
+    <div class="form-group"><label for="ficha-crit-${c.id}">${c.label}</label>
+      <select id="ficha-crit-${c.id}" class="form-input-style">
+        <option value="5">5 — Excelente</option><option value="4">4 — Bom</option>
+        <option value="3" selected>3 — Regular</option><option value="2">2 — Ruim</option><option value="1">1 — Péssimo</option>
+      </select>
+    </div>`).join('');
+}
+
+async function carregarAvaliacoesFicha(fornecedorId) {
+  renderCriteriosAvaliacao();
+
+  const { data: media } = await db.from('vw_media_avaliacoes_fornecedor').select('*').eq('fornecedor_id', fornecedorId).maybeSingle();
+  const elMedia = document.getElementById('ficha-media-avaliacoes');
+  elMedia.innerHTML = media
+    ? `<strong>Nota geral: ${media.nota_geral}/5</strong> (${media.total_avaliacoes} avaliações) — Qualidade ${media.media_qualidade} · Preço ${media.media_preco} · Prazo ${media.media_prazo} · Atendimento ${media.media_atendimento} · Conformidade ${media.media_conformidade} · Pós-venda ${media.media_pos_venda}`
+    : 'Nenhuma avaliação registrada ainda.';
+
+  const { data: lista } = await db.from('avaliacoes_fornecedor').select('*').eq('fornecedor_id', fornecedorId).order('created_at', { ascending: false });
+  document.getElementById('ficha-lista-avaliacoes').innerHTML = (lista || []).map(a => `
+    <div style="padding:8px 0;border-bottom:1px solid #edf2f7;font-size:12px;">
+      <strong>${new Date(a.created_at).toLocaleDateString('pt-BR')}</strong> — Q:${a.qualidade} P:${a.preco} Prz:${a.prazo} At:${a.atendimento} Cnf:${a.conformidade} PV:${a.pos_venda}
+      ${a.avaliado_por_nome ? ' · por ' + escapeHTML(a.avaliado_por_nome) : ''}
+      ${a.observacoes ? `<p style="color:#718096;margin-top:2px;">${escapeHTML(a.observacoes)}</p>` : ''}
+    </div>`).join('') || '<p style="font-size:12px;color:#a0aec0;">Nenhuma avaliação registrada ainda.</p>';
+}
+
+async function salvarAvaliacaoFicha() {
+  if (!_fichaFornecedorAtual) return;
+  const payload = { fornecedor_id: _fichaFornecedorAtual.id, avaliado_por_nome: window._usuarioAtual?.nome || null, observacoes: document.getElementById('ficha-avaliacao-obs').value.trim() || null };
+  CRITERIOS_AVALIACAO.forEach(c => payload[c.id] = Number(document.getElementById('ficha-crit-' + c.id).value));
+
+  const { error } = await db.from('avaliacoes_fornecedor').insert([payload]);
+  if (error) { msgForm('msg-ficha-avaliacao','Erro ao salvar: ' + error.message,'red'); return; }
+  msgForm('msg-ficha-avaliacao', '✓ Avaliação registrada!', 'green');
+  document.getElementById('ficha-avaliacao-obs').value = '';
+  await carregarAvaliacoesFicha(_fichaFornecedorAtual.id);
+  carregarScoreFicha(_fichaFornecedorAtual.id);
+}
+
+// ── Histórico de Preços ──────────────────────────────────────────────
+async function carregarPrecosFicha(fornecedorId) {
+  const { data } = await db.from('historico_precos_fornecedor').select('*').eq('fornecedor_id', fornecedorId).order('data_referencia', { ascending: false }).limit(100);
+  const tbody = document.getElementById('ficha-tbody-precos');
+  if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="4" class="td-loading">Nenhum preço registrado ainda — é alimentado automaticamente quando uma Ordem de Compra deste fornecedor é criada.</td></tr>'; return; }
+  tbody.innerHTML = data.map(p => `<tr>
+    <td>${escapeHTML(p.descricao_item)}</td>
+    <td>R$ ${Number(p.valor_unitario).toFixed(2).replace('.',',')}</td>
+    <td>${fmtDate(p.data_referencia)}</td>
+    <td style="font-size:11px;color:#718096;">${p.origem === 'ordem_compra' ? 'Ordem de Compra' : 'Cotação'}</td>
+  </tr>`).join('');
+}
+
+// ── Alertas ────────────────────────────────────────────────────────────
+async function carregarAlertasFicha(fornecedorId) {
+  const { data } = await db.from('vw_alertas_fornecedor').select('*').eq('fornecedor_id', fornecedorId);
+  const el = document.getElementById('ficha-lista-alertas');
+  if (!data || !data.length) { el.innerHTML = '<p style="font-size:12px;color:#059669;">✓ Nenhum alerta ativo para este fornecedor.</p>'; return; }
+  const cor = (sev) => sev === 'alta' ? 'danger' : 'warning';
+  el.innerHTML = data.map(a => `
+    <div class="tag-badge ${cor(a.severidade)}" style="display:block;margin-bottom:6px;padding:8px 12px;font-size:12px;">
+      <strong>${escapeHTML(a.tipo_alerta)}</strong> — ${escapeHTML(a.detalhe)}
+    </div>`).join('');
+}
+
+// ── Auditoria ──────────────────────────────────────────────────────────
+async function carregarAuditoriaFicha(fornecedorId) {
+  const { data } = await db.from('auditoria_fornecedor').select('*').eq('fornecedor_id', fornecedorId).order('criado_em', { ascending: false }).limit(50);
+  const el = document.getElementById('ficha-lista-auditoria');
+  if (!data || !data.length) { el.innerHTML = '<p style="font-size:12px;color:#a0aec0;">Sem histórico registrado.</p>'; return; }
+  el.innerHTML = data.map(a => {
+    const campos = a.alteracoes ? Object.entries(a.alteracoes).map(([campo, [de, para]]) => `${escapeHTML(campo)}: ${escapeHTML(JSON.stringify(de))} → ${escapeHTML(JSON.stringify(para))}`).join('<br>') : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid #edf2f7;font-size:12px;">
+      <strong>${new Date(a.criado_em).toLocaleString('pt-BR')}</strong> — ${a.acao === 'criado' ? '🆕 Cadastro criado' : '✏️ Alterado'}
+      ${campos ? `<div style="color:#718096;margin-top:2px;">${campos}</div>` : ''}
+    </div>`;
+  }).join('');
+}
 
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas

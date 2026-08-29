@@ -245,6 +245,103 @@ function seloAprovacao(nome, em) {
 // unidade cadastrada, mantém esse valor como opção extra em vez de
 // descartar silenciosamente — texto legado não se perde, só fica visível
 // como "fora do padrão".
+// ===================== CNPJService — camada de abstração de consulta CNPJ =====================
+// Arquitetura: qualquer código do sistema chama CNPJService.consultar(cnpj) e
+// nunca fala direto com a BrasilAPI. Trocar de provider no futuro (ex.: SERPRO
+// via Supabase Edge Function, quando exigir credencial paga) é só trocar
+// PROVIDER_ATIVO abaixo — nenhuma tela precisa mudar.
+
+const CNPJ_CACHE_TTL_DIAS = 90;
+
+function limparCNPJ(valor) {
+  // Mantido tolerante a CNPJ alfanumérico (mudança Receita 2026): remove só
+  // pontuação (. / -), NÃO força "somente dígitos" como um CNPJ clássico
+  // exigiria — um CNPJ alfanumérico futuro passa ileso por aqui.
+  return (valor || '').toUpperCase().replace(/[.\-/\s]/g, '');
+}
+
+function formatarCNPJParaExibicao(cnpjLimpo) {
+  // Só aplica a máscara clássica XX.XXX.XXX/XXXX-XX quando o valor for
+  // puramente numérico com 14 dígitos — CNPJ alfanumérico fica sem máscara
+  // (formato ainda não padronizado publicamente pela Receita).
+  if (/^\d{14}$/.test(cnpjLimpo)) {
+    return cnpjLimpo.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  }
+  return cnpjLimpo;
+}
+
+const BrasilAPIProvider = {
+  nome: 'brasilapi',
+  async consultar(cnpjLimpo) {
+    const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+    if (resp.status === 404) throw new Error('CNPJ não encontrado na Receita Federal.');
+    if (!resp.ok) throw new Error(`Serviço de consulta indisponível no momento (HTTP ${resp.status}). Tente novamente.`);
+    return await resp.json();
+  },
+};
+
+// Trocar esta linha no dia de migrar pra SERPRO/Receita Federal oficial —
+// nenhum outro arquivo do sistema referencia BrasilAPIProvider diretamente.
+const PROVIDER_ATIVO = BrasilAPIProvider;
+
+const CNPJService = {
+  async consultar(cnpjOriginal, { forcarNovaConsulta = false } = {}) {
+    const cnpjLimpo = limparCNPJ(cnpjOriginal);
+    if (!cnpjLimpo) throw new Error('Informe um CNPJ.');
+
+    if (!forcarNovaConsulta) {
+      const cache = await this._buscarCache(cnpjLimpo);
+      if (cache) return { dados: cache.dados_brutos, fonte: 'cache', consultadoEm: cache.consultado_em };
+    }
+
+    const dados = await PROVIDER_ATIVO.consultar(cnpjLimpo);
+    await this._salvarCache(cnpjLimpo, dados);
+    return { dados, fonte: 'api', consultadoEm: new Date().toISOString() };
+  },
+
+  async _buscarCache(cnpjLimpo) {
+    const { data } = await db.from('consultas_cnpj').select('*').eq('cnpj', cnpjLimpo).eq('fonte', PROVIDER_ATIVO.nome).maybeSingle();
+    if (!data) return null;
+    const diasDesde = (Date.now() - new Date(data.consultado_em).getTime()) / 86400000;
+    if (diasDesde > CNPJ_CACHE_TTL_DIAS) return null;
+    return data;
+  },
+
+  async _salvarCache(cnpjLimpo, dados) {
+    // T-padrão do projeto: DELETE+INSERT em vez de upsert, mesmo critério
+    // usado no resto do sistema.
+    await db.from('consultas_cnpj').delete().eq('cnpj', cnpjLimpo).eq('fonte', PROVIDER_ATIVO.nome);
+    await db.from('consultas_cnpj').insert([{ cnpj: cnpjLimpo, fonte: PROVIDER_ATIVO.nome, dados_brutos: dados }]);
+  },
+};
+
+// Classificação automática de segmento a partir do CNAE principal (item 4/9
+// do escopo) — regras simples por palavra-chave na descrição do CNAE.
+// Fica num objeto só pra ficar fácil de ajustar/expandir depois.
+const REGRAS_SEGMENTO_CNAE = [
+  { palavras: ['construção de edifícios', 'obras de engenharia', 'incorporação'], segmento: 'Construção Civil' },
+  { palavras: ['instalações elétricas'], segmento: 'Instalações Elétricas' },
+  { palavras: ['instalações hidráulicas', 'sistemas de prevenção contra incêndio', 'instalações de sistemas'], segmento: 'Instalações Hidráulicas' },
+  { palavras: ['comércio', 'varejista', 'atacadista'], segmento: 'Comércio de Materiais' },
+  { palavras: ['aço', 'metalúrgic', 'estruturas metálicas', 'serralheria'], segmento: 'Estruturas Metálicas' },
+  { palavras: ['madeira', 'marcenaria'], segmento: 'Marcenaria' },
+  { palavras: ['pintura'], segmento: 'Pintura' },
+  { palavras: ['climatização', 'ar condicionado', 'refrigeração'], segmento: 'Climatização' },
+  { palavras: ['transporte'], segmento: 'Transporte' },
+  { palavras: ['locação de máquinas', 'aluguel de máquinas', 'locação de equipamentos'], segmento: 'Locação de Equipamentos' },
+  { palavras: ['arquitetura'], segmento: 'Arquitetura' },
+  { palavras: ['engenharia'], segmento: 'Engenharia' },
+  { palavras: ['topografia'], segmento: 'Topografia' },
+  { palavras: ['segurança do trabalho'], segmento: 'Segurança do Trabalho' },
+];
+
+function sugerirSegmentoPorCNAE(descricaoCnaePrincipal) {
+  if (!descricaoCnaePrincipal) return null;
+  const desc = descricaoCnaePrincipal.toLowerCase();
+  const regra = REGRAS_SEGMENTO_CNAE.find(r => r.palavras.some(p => desc.includes(p)));
+  return regra ? regra.segmento : null;
+}
+
 async function carregarSelectsUnidadeMedida() {
   const { data, error } = await db.from('unidades_medida').select('codigo,descricao').eq('ativo', true).order('descricao');
   if (error) { console.warn('Não foi possível carregar unidades de medida:', error.message); return; }

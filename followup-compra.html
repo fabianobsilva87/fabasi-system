@@ -66,7 +66,7 @@
             <h3 class="card-title" style="margin:0;">Ordens de Compra em Aberto</h3>
             <button type="button" class="btn-refresh" onclick="carregarFollowupOCs()">↺ Atualizar</button>
           </div>
-          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Mostra só o que ainda não chegou ao fim (fora "Recebida Total" e "Cancelada"). Mude o status direto na lista ou clique numa ordem pra ver/registrar o histórico dela.</p>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Mostra só o que ainda não chegou ao fim (fora "Recebida Total" e "Cancelada"). O status normal avança sozinho conforme você registra eventos no histórico (Enviado pelo Fornecedor → "Enviada", Entrega Total → "Recebida Total"...) — o dropdown aqui é só pra correção manual ou pra marcar "Cancelada".</p>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Número</th><th>Fornecedor</th><th>Status</th><th>Entrega Prevista</th><th></th><th>Ações</th></tr></thead>
@@ -179,12 +179,23 @@ async function carregarEventos() {
     <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #edf2f7;">
       <div style="font-size:11px;color:#a0aec0;white-space:nowrap;min-width:110px;">${new Date(e.data_evento).toLocaleString('pt-BR')}</div>
       <div>
-        <span class="tag-badge">${escapeHTML(e.tipo_evento)}</span>
+        <span class="tag-badge">${escapeHTML(e.tipo_evento)}</span>${MAPA_EVENTO_STATUS[e.tipo_evento] ? ` <span style="font-size:10px;color:#a0aec0;">→ status "${escapeHTML(MAPA_EVENTO_STATUS[e.tipo_evento])}"</span>` : ''}
         ${e.descricao ? `<p style="font-size:13px;margin-top:4px;color:#4a5568;">${escapeHTML(e.descricao)}</p>` : ''}
       </div>
     </div>
   `).join('');
 }
+
+// Mapa evento → status: registrar certos tipos de evento avança o status
+// da OC automaticamente — não é preciso mexer no dropdown pra cada coisa.
+// Eventos fora desse mapa (Nota Fiscal Recebida, Atraso Reportado,
+// Observação) são só informativos, não mudam o status sozinhos.
+const MAPA_EVENTO_STATUS = {
+  'Confirmação do Fornecedor': 'Confirmada',
+  'Enviado pelo Fornecedor':   'Enviada',
+  'Entrega Parcial':           'Recebida Parcial',
+  'Entrega Total':             'Recebida Total',
+};
 
 document.getElementById('btn-add-evento')?.addEventListener('click', async () => {
   if (!_ocSelecionadaFollowup) return;
@@ -198,9 +209,19 @@ document.getElementById('btn-add-evento')?.addEventListener('click', async () =>
   }]);
 
   if (error) { msgForm('msg-followup','Erro ao registrar evento: ' + error.message,'red'); return; }
-  msgForm('msg-followup','✓ Evento registrado!','green');
+
+  const novoStatus = MAPA_EVENTO_STATUS[tipoEvento];
+  let msgFinal = '✓ Evento registrado!';
+  if (novoStatus) {
+    const { error: errStatus } = await db.from('ordens_compra').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', _ocSelecionadaFollowup);
+    if (errStatus) { msgForm('msg-followup','Evento registrado, mas houve erro ao atualizar o status: ' + errStatus.message,'red'); }
+    else msgFinal = `✓ Evento registrado! Status da OC avançou automaticamente para "${novoStatus}".`;
+  }
+
+  msgForm('msg-followup', msgFinal, 'green');
   document.getElementById('fu-descricao').value = '';
-  carregarEventos();
+  await carregarEventos();
+  await carregarFollowupOCs(); // reflete o novo status na listagem/dropdown de cima
 });
 
 window.addEventListener('DOMContentLoaded', async () => {
