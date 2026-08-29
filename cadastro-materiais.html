@@ -61,8 +61,10 @@
       <div class="topbar no-print">
         <button type="button" class="btn-refresh" onclick="alternarAbaCadastro('materiais')">📦 Catálogo de Materiais</button>
         <button type="button" class="btn-refresh" style="background:#b45309;border-color:#b45309;color:#fff;" onclick="alternarAbaCadastro('tiposmaterial')">🏷️ Tipos de Material</button>
+        <button type="button" class="btn-refresh" style="background:#d97706;border-color:#d97706;color:#fff;" onclick="alternarAbaCadastro('subcategorias')">🔖 Subcategorias</button>
         <button type="button" class="btn-refresh" style="background:#0d9488;border-color:#0d9488;color:#fff;" onclick="alternarAbaCadastro('servicos')">🔧 Catálogo de Serviços</button>
         <button type="button" class="btn-refresh" style="background:#c2410c;border-color:#c2410c;color:#fff;" onclick="alternarAbaCadastro('tiposservico')">🏷️ Tipos de Serviço</button>
+        <button type="button" class="btn-refresh" style="background:#334155;border-color:#334155;color:#fff;" onclick="alternarAbaCadastro('unidades')">📏 Unidades de Medida</button>
       </div>
       <div class="section-content">
 <div id="aba-materiais" class="app-sub-panel">
@@ -74,7 +76,8 @@
             <div class="form-group" style="grid-column:span 2;"><label for="mat-nome">Nome do Material *</label><input type="text" id="mat-nome" placeholder="Ex: Cabo flexível 2,5mm"></div>
             <div class="form-group"><label for="mat-codigo">Código</label><input type="text" id="mat-codigo" readonly placeholder="Gerado ao escolher a família" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
             <div class="form-group"><label for="mat-tipo">Família (Tipo de Material) *</label><select id="mat-tipo" class="form-input-style" onchange="aoEscolherTipoMaterial()"><option value="">-- Selecione --</option></select></div>
-            <div class="form-group"><label for="mat-unidade">Unidade</label><input type="text" id="mat-unidade" placeholder="Ex: un, m, kg, cx"></div>
+            <div class="form-group"><label for="mat-subcategoria">Subcategoria (opcional)</label><select id="mat-subcategoria" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+            <div class="form-group"><label for="mat-unidade">Unidade</label><select id="mat-unidade" class="form-input-style select-unidade-medida"><option value="">-- Selecione --</option></select></div>
             <div class="form-group"><label for="mat-ncm">NCM</label><input type="text" id="mat-ncm" placeholder="0000.00.00" maxlength="10"></div>
             <div class="form-group"><label for="mat-valor">Valor de Referência (R$)</label><input type="number" id="mat-valor" step="0.01" placeholder="0,00"></div>
             <div class="form-group" style="grid-column:span 2;"><label for="mat-observacoes">Observações</label><textarea id="mat-observacoes" rows="2"></textarea></div>
@@ -94,8 +97,8 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Código</th><th>Nome</th><th>Unidade</th><th>Tipo</th><th>NCM</th><th>Valor Referência</th><th>Status</th><th>Ações</th></tr></thead>
-              <tbody id="tbody-materiais"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+              <thead><tr><th>Código</th><th>Nome</th><th>Unidade</th><th>Tipo</th><th>Subcategoria</th><th>NCM</th><th>Valor Referência</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-materiais"><tr><td colspan="9" class="td-loading">Carregando...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -135,6 +138,40 @@
         </div>
       </div>
 
+      <div id="aba-subcategorias" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🔖 Nova Subcategoria</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Pertence a um Tipo de Material. Prefixo é opcional — só combine com o da categoria se quiser uma numeração separada (ex: ACO-INOX-0001).</p>
+          <input type="hidden" id="sub-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="sub-tipo">Tipo de Material *</label><select id="sub-tipo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+            <div class="form-group"><label for="sub-nome">Nome da Subcategoria *</label><input type="text" id="sub-nome" placeholder="Ex: Inox, Carbono"></div>
+            <div class="form-group"><label for="sub-prefixo">Prefixo (opcional)</label><input type="text" id="sub-prefixo" placeholder="Ex: INOX" maxlength="8" style="text-transform:uppercase;"></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-subcategoria" class="btn-primary" style="background:#d97706;">💾 Registrar Subcategoria</button>
+            <button type="button" id="btn-cancelar-subcategoria" class="btn-secondary" style="display:none;" onclick="resetarFormSubcategoria()">✕ Cancelar</button>
+          </div>
+          <p id="msg-subcategoria" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Subcategorias Cadastradas</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="filtro-tipo-subcategoria" class="form-input-style" style="font-size:12px;width:auto;" onchange="carregarSubcategorias()"><option value="">Todas as categorias</option></select>
+              <button type="button" class="btn-refresh" onclick="carregarSubcategorias()">↺ Atualizar</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Categoria</th><th>Subcategoria</th><th>Prefixo</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-subcategorias"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       
 <div id="aba-servicos" class="app-sub-panel" style="display:none;">
         <div class="card">
@@ -143,7 +180,7 @@
           <input type="hidden" id="serv-id-edicao" value="">
           <div class="form-grid">
             <div class="form-group" style="grid-column:span 2;"><label for="serv-nome">Nome do Serviço *</label><input type="text" id="serv-nome" placeholder="Ex: Recarga de gás R410A"></div>
-            <div class="form-group"><label for="serv-unidade">Unidade</label><input type="text" id="serv-unidade" placeholder="Ex: h, un, m², diária, visita"></div>
+            <div class="form-group"><label for="serv-unidade">Unidade</label><select id="serv-unidade" class="form-input-style select-unidade-medida"><option value="">-- Selecione --</option></select></div>
             <div class="form-group"><label for="serv-tipo">Tipo de Serviço</label><select id="serv-tipo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
             <div class="form-group"><label for="serv-codigo">Código Fiscal (opcional)</label><input type="text" id="serv-codigo" placeholder="LC116/NBS — futuro"></div>
             <div class="form-group"><label for="serv-valor">Valor de Referência (R$)</label><input type="number" id="serv-valor" step="0.01" placeholder="0,00"></div>
@@ -201,7 +238,34 @@
         </div>
       </div>
 
-      
+      <div id="aba-unidades" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">📏 Nova Unidade de Medida</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Já vem populado com as unidades mais comuns — cadastre novas só quando precisar de algo fora da lista padrão.</p>
+          <input type="hidden" id="um-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="um-codigo">Código *</label><input type="text" id="um-codigo" placeholder="Ex: un, kg, m²" maxlength="10"></div>
+            <div class="form-group"><label for="um-descricao">Descrição *</label><input type="text" id="um-descricao" placeholder="Ex: Unidade, Quilograma, Metro quadrado"></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-unidade" class="btn-primary" style="background:#334155;">💾 Registrar Unidade</button>
+            <button type="button" id="btn-cancelar-unidade" class="btn-secondary" style="display:none;" onclick="resetarFormUnidade()">✕ Cancelar</button>
+          </div>
+          <p id="msg-unidade" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Unidades Cadastradas</h3>
+            <button type="button" class="btn-refresh" onclick="carregarUnidadesMedida()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Descrição</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-unidades"><tr><td colspan="4" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
     </main>
@@ -210,7 +274,7 @@
 <script>
 // ===================== ABAS =====================
 function alternarAbaCadastro(aba) {
-  ['materiais','tiposmaterial','servicos','tiposservico'].forEach(a => {
+  ['materiais','tiposmaterial','subcategorias','servicos','tiposservico','unidades'].forEach(a => {
     const el = document.getElementById('aba-' + a);
     if (el) el.style.display = a === aba ? 'block' : 'none';
   });
@@ -225,6 +289,7 @@ async function carregarTiposMaterial() {
   if (error) { toast('Erro ao carregar tipos de material: ' + error.message, 'erro'); return; }
   _tiposMaterialCache = data || [];
   await atualizarSelectTiposMaterial();
+  await atualizarSelectTiposParaSubcategoria();
   if (!_tiposMaterialCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum tipo cadastrado.</td></tr>'; return; }
   tbody.innerHTML = _tiposMaterialCache.map(t => `<tr>
     <td><span class="tag-badge" style="font-family:monospace;background:#fef3c7;color:#92400e;">${escapeHTML(t.prefixo || '—')}</span></td>
@@ -356,6 +421,8 @@ function aoEscolherTipoMaterial() {
   if (opt && opt.dataset.ncmPadrao && !ncmField.value.trim()) {
     ncmField.value = opt.dataset.ncmPadrao;
   }
+  // Recarrega o select de subcategoria pra mostrar só as dessa família.
+  atualizarSelectSubcategoriaMaterial(sel.value);
 }
 
 // ===================== CATÁLOGO DE MATERIAIS =====================
@@ -363,16 +430,17 @@ let _materiaisCache = [];
 
 async function carregarMateriais() {
   const tbody = document.getElementById('tbody-materiais'); if (!tbody) return;
-  const { data, error } = await db.from('materiais').select('*, tipos_material(nome)').order('ativo', {ascending:false}).order('nome');
+  const { data, error } = await db.from('materiais').select('*, tipos_material(nome), subcategorias_material(nome)').order('ativo', {ascending:false}).order('nome');
   if (error) { toast('Erro ao carregar materiais: ' + error.message, 'erro'); return; }
   _materiaisCache = data || [];
   await carregarMateriaisParaSelectItem();
-  if (!_materiaisCache.length) { tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Nenhum material cadastrado.</td></tr>'; return; }
+  if (!_materiaisCache.length) { tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Nenhum material cadastrado.</td></tr>'; return; }
   tbody.innerHTML = _materiaisCache.map(m => `<tr>
     <td style="font-family:monospace;font-weight:600;">${escapeHTML(m.codigo || '—')}</td>
     <td><strong>${escapeHTML(m.nome)}</strong></td>
     <td>${escapeHTML(m.unidade || '—')}</td>
     <td>${escapeHTML(m.tipos_material?.nome || '—')}</td>
+    <td>${escapeHTML(m.subcategorias_material?.nome || '—')}</td>
     <td style="font-family:monospace;font-size:12px;">${escapeHTML(m.ncm || '—')}</td>
     <td>${m.valor_referencia != null ? 'R$ ' + Number(m.valor_referencia).toFixed(2).replace('.',',') : '—'}</td>
     <td>${m.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
@@ -388,11 +456,14 @@ function editarMaterial(id) {
   document.getElementById('mat-id-edicao').value = id;
   document.getElementById('mat-nome').value       = m.nome || '';
   document.getElementById('mat-codigo').value     = m.codigo || '';
-  document.getElementById('mat-unidade').value    = m.unidade || '';
+  definirUnidadeComFallback(document.getElementById('mat-unidade'), m.unidade || '');
   document.getElementById('mat-tipo').value       = m.tipo_material_id || '';
   document.getElementById('mat-ncm').value        = m.ncm || '';
   document.getElementById('mat-valor').value      = m.valor_referencia ?? '';
   document.getElementById('mat-observacoes').value = m.observacoes || '';
+  atualizarSelectSubcategoriaMaterial(m.tipo_material_id).then(() => {
+    document.getElementById('mat-subcategoria').value = m.subcategoria_material_id || '';
+  });
   const btn = document.getElementById('btn-salvar-material');
   btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
   document.getElementById('btn-cancelar-material').style.display = 'inline-block';
@@ -403,6 +474,7 @@ function resetarFormMaterial() {
   ['mat-id-edicao','mat-nome','mat-codigo','mat-unidade','mat-tipo','mat-ncm','mat-valor','mat-observacoes'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  document.getElementById('mat-subcategoria').innerHTML = '<option value="">-- Nenhuma --</option>';
   const btn = document.getElementById('btn-salvar-material');
   btn.textContent = '💾 Registrar Material'; btn.style.background = '';
   document.getElementById('btn-cancelar-material').style.display = 'none';
@@ -422,6 +494,7 @@ document.getElementById('btn-salvar-material')?.addEventListener('click', async 
 
   const tipoId = document.getElementById('mat-tipo').value;
   if (!tipoId) { msgForm('msg-material','Selecione a família (Tipo de Material) — o código do item nasce do prefixo dela.','red'); return; }
+  const subcategoriaId = document.getElementById('mat-subcategoria').value || null;
 
   const ncm = document.getElementById('mat-ncm').value.replace(/\D/g,'');
   if (ncm && ncm.length !== 8) { msgForm('msg-material','NCM precisa ter 8 dígitos (ou deixe em branco).','red'); return; }
@@ -430,34 +503,42 @@ document.getElementById('btn-salvar-material')?.addEventListener('click', async 
   const idEd = document.getElementById('mat-id-edicao').value;
 
   if (idEd) {
-    // Edição: código já existe e não muda, mesmo que a família seja trocada
+    // Edição: código já existe e não muda, mesmo que família/subcategoria mudem
     // (trocar de família não deve "renumerar" um item que já está em uso).
     const payload = {
       nome,
-      unidade:          document.getElementById('mat-unidade').value.trim() || null,
-      tipo_material_id: tipoId,
-      ncm:              ncm || null,
-      valor_referencia: valorRaw ? Number(valorRaw) : null,
-      observacoes:      document.getElementById('mat-observacoes').value.trim() || null,
+      unidade:                    document.getElementById('mat-unidade').value.trim() || null,
+      tipo_material_id:           tipoId,
+      subcategoria_material_id:   subcategoriaId,
+      ncm:                        ncm || null,
+      valor_referencia:           valorRaw ? Number(valorRaw) : null,
+      observacoes:                document.getElementById('mat-observacoes').value.trim() || null,
     };
     const { error } = await db.from('materiais').update(payload).eq('id', idEd);
     if (error) { msgForm('msg-material','Erro ao salvar: ' + error.message,'red'); return; }
   } else {
-    // Novo: gera o código a partir do prefixo da família escolhida.
+    // Novo: código nasce do prefixo da família + (se houver) o da subcategoria.
     const tipo = _tiposMaterialCache.find(t => t.id === tipoId);
     if (!tipo?.prefixo) { msgForm('msg-material','Essa família ainda não tem prefixo cadastrado — edite o Tipo de Material antes.','red'); return; }
 
-    const { data: codigo, error: errCod } = await db.rpc('gerar_codigo_item', { p_prefixo: tipo.prefixo });
+    let prefixoEfetivo = tipo.prefixo;
+    if (subcategoriaId) {
+      const sub = (_subcategoriasCache || []).find(s => s.id === subcategoriaId);
+      if (sub?.prefixo) prefixoEfetivo = `${tipo.prefixo}-${sub.prefixo}`;
+    }
+
+    const { data: codigo, error: errCod } = await db.rpc('gerar_codigo_item', { p_prefixo: prefixoEfetivo });
     if (errCod) { msgForm('msg-material','Erro ao gerar código do material: ' + errCod.message,'red'); return; }
 
     const payload = {
       nome,
       codigo,
-      unidade:          document.getElementById('mat-unidade').value.trim() || null,
-      tipo_material_id: tipoId,
-      ncm:              ncm || null,
-      valor_referencia: valorRaw ? Number(valorRaw) : null,
-      observacoes:      document.getElementById('mat-observacoes').value.trim() || null,
+      unidade:                    document.getElementById('mat-unidade').value.trim() || null,
+      tipo_material_id:           tipoId,
+      subcategoria_material_id:   subcategoriaId,
+      ncm:                        ncm || null,
+      valor_referencia:           valorRaw ? Number(valorRaw) : null,
+      observacoes:                document.getElementById('mat-observacoes').value.trim() || null,
     };
     const { error } = await db.from('materiais').insert([payload]);
     if (error) { msgForm('msg-material','Erro ao salvar: ' + error.message,'red'); return; }
@@ -469,6 +550,107 @@ document.getElementById('btn-salvar-material')?.addEventListener('click', async 
   resetarFormMaterial();
   carregarMateriais();
 });
+
+// ===================== SUBCATEGORIAS DE MATERIAL =====================
+let _subcategoriasCache = [];
+
+async function atualizarSelectTiposParaSubcategoria() {
+  const sel = document.getElementById('sub-tipo');
+  const filtro = document.getElementById('filtro-tipo-subcategoria');
+  const ativos = _tiposMaterialCache.length ? _tiposMaterialCache.filter(t => t.ativo) : (await db.from('tipos_material').select('id,nome,prefixo').eq('ativo', true).order('nome')).data || [];
+  const opcoes = ativos.map(t => `<option value="${escapeHTML(t.id)}">${t.prefixo ? '['+escapeHTML(t.prefixo)+'] ' : ''}${escapeHTML(t.nome)}</option>`).join('');
+  if (sel)    { const atual = sel.value;    sel.innerHTML    = '<option value="">-- Selecione --</option>' + opcoes;    sel.value    = atual; }
+  if (filtro) { const atual = filtro.value; filtro.innerHTML = '<option value="">Todas as categorias</option>' + opcoes; filtro.value = atual; }
+}
+
+// Select cascata usado no formulário de Materiais: mostra só as
+// subcategorias do Tipo escolhido ali.
+async function atualizarSelectSubcategoriaMaterial(tipoId) {
+  const sel = document.getElementById('mat-subcategoria'); if (!sel) return;
+  if (!tipoId) { sel.innerHTML = '<option value="">-- Nenhuma --</option>'; return; }
+  const { data, error } = await db.from('subcategorias_material').select('id,nome').eq('tipo_material_id', tipoId).eq('ativo', true).order('nome');
+  if (error) { console.warn('Não foi possível carregar subcategorias:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Nenhuma --</option>' + (data || []).map(s => `<option value="${escapeHTML(s.id)}">${escapeHTML(s.nome)}</option>`).join('');
+}
+
+async function carregarSubcategorias() {
+  const tbody = document.getElementById('tbody-subcategorias'); if (!tbody) return;
+  const filtroTipo = document.getElementById('filtro-tipo-subcategoria')?.value || '';
+
+  let query = db.from('subcategorias_material').select('*, tipos_material(nome,prefixo)').order('ativo', {ascending:false}).order('nome');
+  if (filtroTipo) query = query.eq('tipo_material_id', filtroTipo);
+
+  const { data, error } = await query;
+  if (error) { toast('Erro ao carregar subcategorias: ' + error.message, 'erro'); return; }
+  _subcategoriasCache = data || [];
+
+  if (!_subcategoriasCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma subcategoria cadastrada.</td></tr>'; return; }
+
+  tbody.innerHTML = _subcategoriasCache.map(s => `<tr>
+    <td>${s.tipos_material?.prefixo ? '['+escapeHTML(s.tipos_material.prefixo)+'] ' : ''}${escapeHTML(s.tipos_material?.nome || '—')}</td>
+    <td><strong>${escapeHTML(s.nome)}</strong></td>
+    <td style="font-family:monospace;">${escapeHTML(s.prefixo || '— (sem numeração própria)')}</td>
+    <td>${s.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarSubcategoria('${escapeHTML(s.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirSubcategoria('${escapeHTML(s.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarSubcategoria(id) {
+  const s = _subcategoriasCache.find(x => x.id === id); if (!s) return;
+  document.getElementById('sub-id-edicao').value = id;
+  document.getElementById('sub-tipo').value       = s.tipo_material_id || '';
+  document.getElementById('sub-nome').value       = s.nome || '';
+  document.getElementById('sub-prefixo').value    = s.prefixo || '';
+  const btn = document.getElementById('btn-salvar-subcategoria');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-subcategoria').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormSubcategoria() {
+  ['sub-id-edicao','sub-tipo','sub-nome','sub-prefixo'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-subcategoria');
+  btn.textContent = '💾 Registrar Subcategoria'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-subcategoria').style.display = 'none';
+}
+
+async function excluirSubcategoria(id) {
+  const nome = _subcategoriasCache.find(x => x.id === id)?.nome || 'esta subcategoria';
+  if (!confirm(`Excluir "${nome}"? Materiais já vinculados a ela ficam sem subcategoria, mas não são excluídos.`)) return;
+  const { error } = await db.from('subcategorias_material').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarSubcategorias();
+}
+
+document.getElementById('btn-salvar-subcategoria')?.addEventListener('click', async () => {
+  const tipoId = document.getElementById('sub-tipo').value;
+  const nome = document.getElementById('sub-nome').value.trim();
+  const prefixo = document.getElementById('sub-prefixo').value.trim().toUpperCase() || null;
+  if (!tipoId) { msgForm('msg-subcategoria','Selecione o Tipo de Material (categoria).','red'); return; }
+  if (!nome)   { msgForm('msg-subcategoria','Informe o nome da subcategoria.','red'); return; }
+  if (prefixo && !/^[A-Z0-9]{2,8}$/.test(prefixo)) { msgForm('msg-subcategoria','Prefixo deve ter de 2 a 8 letras/números, sem espaço ou símbolo.','red'); return; }
+
+  const payload = { tipo_material_id: tipoId, nome, prefixo };
+  const idEd = document.getElementById('sub-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('subcategorias_material').update(payload).eq('id', idEd)
+    : await db.from('subcategorias_material').insert([payload]);
+
+  if (error) {
+    const msg = error.code === '23505' ? 'Já existe uma subcategoria com esse nome ou prefixo nessa categoria.' : error.message;
+    msgForm('msg-subcategoria','Erro ao salvar: ' + msg,'red');
+    return;
+  }
+  msgForm('msg-subcategoria', idEd ? '✓ Subcategoria atualizada!' : '✓ Subcategoria registrada!', 'green');
+  resetarFormSubcategoria();
+  carregarSubcategorias();
+});
+
 // ===================== TIPOS DE SERVIÇO =====================
 let _tiposServicoCache = [];
 
@@ -576,7 +758,7 @@ function editarServico(id) {
   const s = _servicosCache.find(x => x.id === id); if (!s) return;
   document.getElementById('serv-id-edicao').value = id;
   document.getElementById('serv-nome').value       = s.nome || '';
-  document.getElementById('serv-unidade').value    = s.unidade || '';
+  definirUnidadeComFallback(document.getElementById('serv-unidade'), s.unidade || '');
   document.getElementById('serv-tipo').value       = s.tipo_servico_id || '';
   document.getElementById('serv-codigo').value     = s.codigo_servico || '';
   document.getElementById('serv-valor').value      = s.valor_referencia ?? '';
@@ -630,10 +812,82 @@ document.getElementById('btn-salvar-servico')?.addEventListener('click', async (
 });
 
 
+// ===================== UNIDADES DE MEDIDA =====================
+let _unidadesMedidaCache = [];
+
+async function carregarUnidadesMedida() {
+  const tbody = document.getElementById('tbody-unidades'); if (!tbody) return;
+  const { data, error } = await db.from('unidades_medida').select('*').order('ativo', {ascending:false}).order('descricao');
+  if (error) { toast('Erro ao carregar unidades de medida: ' + error.message, 'erro'); return; }
+  _unidadesMedidaCache = data || [];
+  await carregarSelectsUnidadeMedida();
+  if (!_unidadesMedidaCache.length) { tbody.innerHTML = '<tr><td colspan="4" class="td-loading">Nenhuma unidade cadastrada.</td></tr>'; return; }
+  tbody.innerHTML = _unidadesMedidaCache.map(u => `<tr>
+    <td style="font-family:monospace;font-weight:600;">${escapeHTML(u.codigo)}</td>
+    <td>${escapeHTML(u.descricao)}</td>
+    <td>${u.ativo ? '<span class="tag-badge success">✅ Ativa</span>' : '<span class="tag-badge">Inativa</span>'}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarUnidadeMedida('${escapeHTML(u.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirUnidadeMedida('${escapeHTML(u.id)}')">✕</button>
+    </td>
+  </tr>`).join('');
+}
+
+function editarUnidadeMedida(id) {
+  const u = _unidadesMedidaCache.find(x => x.id === id); if (!u) return;
+  document.getElementById('um-id-edicao').value = id;
+  document.getElementById('um-codigo').value     = u.codigo || '';
+  document.getElementById('um-descricao').value  = u.descricao || '';
+  const btn = document.getElementById('btn-salvar-unidade');
+  btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
+  document.getElementById('btn-cancelar-unidade').style.display = 'inline-block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetarFormUnidade() {
+  ['um-id-edicao','um-codigo','um-descricao'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const btn = document.getElementById('btn-salvar-unidade');
+  btn.textContent = '💾 Registrar Unidade'; btn.style.background = '#334155';
+  document.getElementById('btn-cancelar-unidade').style.display = 'none';
+}
+
+async function excluirUnidadeMedida(id) {
+  const codigo = _unidadesMedidaCache.find(x => x.id === id)?.codigo || 'esta unidade';
+  if (!confirm(`Excluir "${codigo}"? Itens que já usam esse texto de unidade não são afetados, só some da lista pra novos cadastros.`)) return;
+  const { error } = await db.from('unidades_medida').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarUnidadesMedida();
+}
+
+document.getElementById('btn-salvar-unidade')?.addEventListener('click', async () => {
+  const codigo = document.getElementById('um-codigo').value.trim();
+  const descricao = document.getElementById('um-descricao').value.trim();
+  if (!codigo)    { msgForm('msg-unidade','Informe o código (ex: un, kg, m).','red'); return; }
+  if (!descricao) { msgForm('msg-unidade','Informe a descrição.','red'); return; }
+
+  const payload = { codigo, descricao };
+  const idEd = document.getElementById('um-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('unidades_medida').update(payload).eq('id', idEd)
+    : await db.from('unidades_medida').insert([payload]);
+
+  if (error) {
+    const msg = error.code === '23505' ? `Já existe uma unidade com o código "${codigo}".` : error.message;
+    msgForm('msg-unidade','Erro ao salvar: ' + msg,'red');
+    return;
+  }
+  msgForm('msg-unidade', idEd ? '✓ Unidade atualizada!' : '✓ Unidade registrada!', 'green');
+  resetarFormUnidade();
+  carregarUnidadesMedida();
+});
+
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
-  await Promise.all([carregarTiposMaterial(), carregarTiposServico()]);
-  await Promise.all([carregarMateriais(), carregarServicos()]);
+  await Promise.all([carregarTiposMaterial(), carregarTiposServico(), carregarUnidadesMedida()]);
+  await atualizarSelectTiposParaSubcategoria();
+  await Promise.all([carregarMateriais(), carregarServicos(), carregarSubcategorias()]);
 });
 </script>
 </body>

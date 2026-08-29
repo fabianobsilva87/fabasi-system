@@ -144,17 +144,18 @@ function adicionarLinhaItemReqMaterial(itemExistente = null) {
     <td><select class="select-material-item form-input-style" style="font-size:12px;" onchange="aoEscolherMaterialItemRM('${linhaId}')"><option value="">-- item avulso --</option></select></td>
     <td><input type="text" class="form-input-style item-descricao" style="font-size:12px;" placeholder="Descrição"></td>
     <td><input type="number" class="form-input-style item-qtd" style="font-size:12px;width:70px;" value="1" min="0" step="0.001"></td>
-    <td><input type="text" class="form-input-style item-unidade" style="font-size:12px;width:60px;"></td>
+    <td><select class="form-input-style select-unidade-medida item-unidade" style="font-size:12px;width:75px;"><option value="">--</option></select></td>
     <td><button type="button" class="btn-excluir" style="padding:2px 8px;font-size:11px;" onclick="document.getElementById('${linhaId}').remove();">✕</button></td>
   `;
   tbody.appendChild(tr);
   carregarMateriaisParaSelectItem();
+  carregarSelectsUnidadeMedida();
 
   if (itemExistente) {
     tr.querySelector('.select-material-item').value = itemExistente.material_id || '';
     tr.querySelector('.item-descricao').value = itemExistente.descricao || '';
     tr.querySelector('.item-qtd').value = itemExistente.quantidade ?? 1;
-    tr.querySelector('.item-unidade').value = itemExistente.unidade || '';
+    definirUnidadeComFallback(tr.querySelector('.item-unidade'), itemExistente.unidade || '');
   }
 }
 
@@ -164,7 +165,7 @@ function aoEscolherMaterialItemRM(linhaId) {
   const opt = sel.options[sel.selectedIndex];
   if (opt && opt.value) {
     tr.querySelector('.item-descricao').value = opt.textContent;
-    tr.querySelector('.item-unidade').value = opt.dataset.unidade || '';
+    definirUnidadeComFallback(tr.querySelector('.item-unidade'), opt.dataset.unidade || '');
   }
 }
 

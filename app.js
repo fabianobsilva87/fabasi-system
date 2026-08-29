@@ -238,6 +238,43 @@ function seloAprovacao(nome, em) {
 // Ordem de Compra e Cotação: preenche todo <select class="select-material-item">
 // já renderizado na página com o catálogo ativo de materiais. Cada página
 // chama isso de novo depois de adicionar uma linha de item dinâmica.
+// ── Compartilhado entre Cadastro de Materiais/Serviços e as páginas do
+// fluxo de Compras: preenche todo <select class="select-unidade-medida">
+// já renderizado na página com o catálogo de unidades. Se o <select> já
+// tinha um valor (edição de registro antigo) que não bate com nenhuma
+// unidade cadastrada, mantém esse valor como opção extra em vez de
+// descartar silenciosamente — texto legado não se perde, só fica visível
+// como "fora do padrão".
+async function carregarSelectsUnidadeMedida() {
+  const { data, error } = await db.from('unidades_medida').select('codigo,descricao').eq('ativo', true).order('descricao');
+  if (error) { console.warn('Não foi possível carregar unidades de medida:', error.message); return; }
+  const unidades = data || [];
+  document.querySelectorAll('.select-unidade-medida').forEach(sel => {
+    const atual = sel.value || sel.dataset.valorAtual || '';
+    const existeNoCatalogo = unidades.some(u => u.codigo === atual);
+    sel.innerHTML = '<option value="">-- Selecione --</option>' +
+      unidades.map(u => `<option value="${escapeHTML(u.codigo)}">${escapeHTML(u.codigo)} — ${escapeHTML(u.descricao)}</option>`).join('') +
+      (atual && !existeNoCatalogo ? `<option value="${escapeHTML(atual)}">${escapeHTML(atual)} (fora do padrão)</option>` : '');
+    sel.value = atual;
+  });
+}
+
+// Define o valor de um <select class="select-unidade-medida"> preservando
+// texto legado que não bate com nenhuma unidade do catálogo (em vez de
+// deixar em branco silenciosamente) — usado ao copiar a unidade de um
+// material do catálogo pra uma linha de item dinâmica.
+function definirUnidadeComFallback(selectEl, valor) {
+  if (!selectEl) return;
+  if (!valor) { selectEl.value = ''; return; }
+  const existeOpcao = Array.from(selectEl.options).some(o => o.value === valor);
+  if (!existeOpcao) {
+    const opt = document.createElement('option');
+    opt.value = valor; opt.textContent = `${valor} (fora do padrão)`;
+    selectEl.appendChild(opt);
+  }
+  selectEl.value = valor;
+}
+
 async function carregarMateriaisParaSelectItem() {
   const { data, error } = await db.from('materiais').select('id,nome,unidade,valor_referencia').eq('ativo', true).order('nome');
   if (error) { console.warn('Não foi possível carregar catálogo de materiais:', error.message); return; }
