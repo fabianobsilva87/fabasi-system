@@ -55,11 +55,13 @@
           <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
           <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
           <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+          <div class="nav-item" onclick="location.href='clientes.html'"><span>🤝</span> Clientes</div>
         </div>
         <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
         <div class="nav-section-items" id="nav-section-administracao">
           <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
-          <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+          <div class="nav-item" onclick="location.href='empresas.html'"><span>🦺</span> Resp. de Segurança</div>
+          <div class="nav-item" onclick="location.href='empresa-master.html'"><span>🏛️</span> Empresa Master</div>
           <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
           <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
         </div>
@@ -81,6 +83,13 @@
             <div class="form-group"><label for="rm-numero">Número</label><input type="text" id="rm-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
             <div class="form-group"><label for="rm-solicitante">Solicitante *</label><input type="text" id="rm-solicitante" placeholder="Nome de quem solicita"></div>
             <div class="form-group"><label for="rm-os">O.S. Vinculada (opcional)</label><select id="rm-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+            <div class="form-group"><label for="rm-modo-faturamento">Faturamento</label>
+              <select id="rm-modo-faturamento" class="form-input-style" onchange="aoTrocarModoFaturamentoRM()">
+                <option value="Direto">Direto (Fabasi)</option>
+                <option value="Pela Empresa Contratada">Pela Empresa Contratada</option>
+              </select>
+            </div>
+            <div class="form-group" id="rm-cliente-wrap" style="display:none;"><label for="rm-cliente">Cliente</label><select id="rm-cliente" class="form-input-style"><option value="">-- Selecione --</option></select></div>
             <div class="form-group" style="grid-column:span 3;"><label for="rm-observacoes">Observações</label><textarea id="rm-observacoes" rows="2" placeholder="Detalhes do pedido..."></textarea></div>
           </div>
 
@@ -259,6 +268,7 @@ async function editarReqMaterial(id) {
   document.getElementById('rm-numero').value      = r.numero || '';
   document.getElementById('rm-solicitante').value = r.solicitante || '';
   document.getElementById('rm-observacoes').value = r.observacoes || '';
+  document.getElementById('rm-modo-faturamento').value = r.modo_faturamento || 'Direto';
 
   const info = document.getElementById('rm-autor-info');
   if (r.criado_por_nome) { info.style.display = 'block'; info.textContent = `Criada por ${r.criado_por_nome}${r.status === 'Aprovada' ? ' · ' : ''}`; if (r.status === 'Aprovada') info.innerHTML += seloAprovacao(r.aprovado_por_nome, r.aprovado_em); }
@@ -266,6 +276,10 @@ async function editarReqMaterial(id) {
 
   await atualizarSelectOSParaReqMaterial();
   document.getElementById('rm-os').value = r.os_id || '';
+
+  await atualizarSelectClienteRM();
+  document.getElementById('rm-cliente').value = r.cliente_id || '';
+  aoTrocarModoFaturamentoRM();
 
   limparLinhasItensReqMaterial();
   const { data: itens } = await db.from('requisicoes_material_itens').select('*').eq('requisicao_id', id).order('id');
@@ -277,11 +291,27 @@ async function editarReqMaterial(id) {
   document.getElementById('foco-formulario-reqmaterial').scrollIntoView({ behavior:'smooth' });
 }
 
+// Cliente só faz sentido quando o faturamento é "Pela Empresa Contratada"
+// — some/aparece pra não confundir num pedido de faturamento Direto.
+function aoTrocarModoFaturamentoRM() {
+  const ehContratada = document.getElementById('rm-modo-faturamento').value === 'Pela Empresa Contratada';
+  document.getElementById('rm-cliente-wrap').style.display = ehContratada ? 'block' : 'none';
+}
+
+async function atualizarSelectClienteRM() {
+  const sel = document.getElementById('rm-cliente'); if (!sel) return;
+  const { data } = await db.from('empresas').select('id,razao_social').eq('tipo','contratante').eq('ativa', true).order('razao_social');
+  sel.innerHTML = '<option value="">-- Selecione --</option>' + (data || []).map(e => `<option value="${escapeHTML(e.id)}">${escapeHTML(e.razao_social)}</option>`).join('');
+}
+
 function resetarFormReqMaterial() {
   ['rm-id-edicao','rm-numero','rm-solicitante','rm-observacoes'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('rm-os').value = '';
+  document.getElementById('rm-modo-faturamento').value = 'Direto';
+  document.getElementById('rm-cliente').value = '';
+  document.getElementById('rm-cliente-wrap').style.display = 'none';
   document.getElementById('rm-autor-info').style.display = 'none';
   limparLinhasItensReqMaterial();
   const btn = document.getElementById('btn-salvar-reqmaterial');
@@ -307,12 +337,18 @@ document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', asy
   const idEd = document.getElementById('rm-id-edicao').value;
   let requisicaoId = idEd;
 
+  const modoFaturamento = document.getElementById('rm-modo-faturamento').value;
+  const clienteId = modoFaturamento === 'Pela Empresa Contratada' ? (document.getElementById('rm-cliente').value || null) : null;
+  if (modoFaturamento === 'Pela Empresa Contratada' && !clienteId) { msgForm('msg-reqmaterial','Selecione o cliente para faturamento pela empresa contratada.','red'); return; }
+
   if (idEd) {
     // Edição: número já existe e não muda — só os outros campos.
     const payload = {
       solicitante,
       os_id:        document.getElementById('rm-os').value || null,
       observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+      modo_faturamento: modoFaturamento,
+      cliente_id:   clienteId,
     };
     const { error } = await db.from('requisicoes_material').update(payload).eq('id', idEd);
     if (error) { msgForm('msg-reqmaterial','Erro ao salvar: ' + error.message,'red'); return; }
@@ -328,6 +364,8 @@ document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', asy
       solicitante,
       os_id:        document.getElementById('rm-os').value || null,
       observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+      modo_faturamento: modoFaturamento,
+      cliente_id:   clienteId,
       criado_por_nome: window._usuarioAtual?.nome || null,
     };
     const { data, error } = await db.from('requisicoes_material').insert([payload]).select('id').single();
@@ -369,6 +407,7 @@ async function aplicarVerDaURL() {
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await atualizarSelectOSParaReqMaterial();
+  await atualizarSelectClienteRM();
   await carregarReqMateriais();
   await aplicarVerDaURL();
 });

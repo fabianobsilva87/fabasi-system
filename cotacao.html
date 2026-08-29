@@ -55,11 +55,13 @@
           <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
           <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
           <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+          <div class="nav-item" onclick="location.href='clientes.html'"><span>🤝</span> Clientes</div>
         </div>
         <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
         <div class="nav-section-items" id="nav-section-administracao">
           <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
-          <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+          <div class="nav-item" onclick="location.href='empresas.html'"><span>🦺</span> Resp. de Segurança</div>
+          <div class="nav-item" onclick="location.href='empresa-master.html'"><span>🏛️</span> Empresa Master</div>
           <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
           <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
         </div>
@@ -189,6 +191,7 @@ async function aplicarOrigemRcDaURL() {
 
   const { data: nova, error: errNova } = await db.from('cotacoes').insert([{
     numero, requisicao_compra_id: origemRc, criado_por_nome: window._usuarioAtual?.nome || null,
+    modo_faturamento: rc.modo_faturamento || 'Direto', cliente_id: rc.cliente_id || null,
   }]).select('id').single();
   if (errNova) { toast('Erro ao criar cotação: ' + errNova.message, 'erro'); return; }
 

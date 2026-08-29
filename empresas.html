@@ -1,20 +1,18 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Cadastro de empresas executantes, contratantes e responsáveis técnicos — Fabasi Engenharia & Construção.">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cadastro do responsável técnico que assina documentos de EPI e certificados NR.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
-  <title>Fabasi — Cadastro de Empresas</title>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <script src="config.js"></script>
+    <title>Fabasi — Responsável de Segurança</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script>
-    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
-       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
     document.documentElement.classList.add('sessao-pendente');
     setTimeout(function () {
       document.documentElement.classList.remove('sessao-pendente');
@@ -22,13 +20,12 @@
   </script>
 </head>
 <body>
-<div class="app-container">
-  <aside class="sidebar no-print">
-    <div class="sidebar-header">
-      <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
-        
-      <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
-    </div>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
       <nav>
         <div class="nav-label" onclick="alternarSecaoMenu('visaogeral')">Visão Geral <span class="nav-chevron" id="nav-chevron-visaogeral">▾</span></div>
         <div class="nav-section-items" id="nav-section-visaogeral">
@@ -56,242 +53,26 @@
           <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
           <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
           <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+          <div class="nav-item" onclick="location.href='clientes.html'"><span>🤝</span> Clientes</div>
         </div>
         <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
         <div class="nav-section-items" id="nav-section-administracao">
           <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
-          <div class="nav-item active" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+          <div class="nav-item active" onclick="location.href='empresas.html'"><span>🦺</span> Resp. de Segurança</div>
+          <div class="nav-item" onclick="location.href='empresa-master.html'"><span>🏛️</span> Empresa Master</div>
           <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
           <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
         </div>
       </nav>
-    <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
-  </aside>
-
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
   <main class="main-content">
     <div class="topbar no-print">
-      <button type="button" class="btn-refresh" onclick="alternarAba('empregadora')">🏛️ Empresa Empregadora</button>
-      <button type="button" class="btn-refresh" style="background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="alternarAba('contratante')">🤝 Empresas Contratantes</button>
-      <button type="button" class="btn-refresh" style="background:#0891b2;border-color:#0891b2;color:#fff;" onclick="alternarAba('responsavel')">👷 Resp. de Segurança</button>
+      <h1 style="font-size:16px;color:#1a202c;">🦺 Responsável de Segurança</h1>
     </div>
 
     <div class="section-content">
-
-      <!-- ===== ABA: EMPRESA EMPREGADORA ===== -->
-      <div id="aba-empregadora" class="app-sub-panel">
-        <div class="card">
-          <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-            <h2>🏛️ Empresa Empregadora — Vínculo Empregatício</h2>
-            <p style="font-size:12px;opacity:.8;margin-top:4px;">Esta é a empresa que assina a CTPS e aparece nos documentos de registro, fichas de EPI e certificados NR.</p>
-          </div>
-
-          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#1e40af;">
-            ℹ️ <strong>Atenção:</strong> Apenas <strong>uma</strong> empresa empregadora pode estar ativa por vez. Ao ativar outra, a anterior é desativada automaticamente.
-          </div>
-
-          <input type="hidden" id="emp-id-edicao" value="">
-          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
-            <div class="form-group" style="grid-column:span 2;">
-              <label for="emp-razao">Razão Social *</label>
-              <input type="text" id="emp-razao" placeholder="Nome completo da empresa">
-            </div>
-            <div class="form-group">
-              <label for="emp-fantasia">Nome Fantasia</label>
-              <input type="text" id="emp-fantasia" placeholder="Nome fantasia (opcional)">
-            </div>
-            <div class="form-group">
-              <label for="emp-cnpj">CNPJ *</label>
-              <input type="text" id="emp-cnpj" placeholder="00.000.000/0000-00" maxlength="18">
-            </div>
-            <div class="form-group">
-              <label for="emp-ie">Inscrição Estadual</label>
-              <input type="text" id="emp-ie" placeholder="000.000.000.000">
-            </div>
-            <div class="form-group">
-              <label for="emp-tel">Telefone</label>
-              <input type="text" id="emp-tel" placeholder="(65) 99999-9999">
-            </div>
-            <div class="form-group" style="grid-column:span 3;">
-              <label for="emp-end">Endereço Completo *</label>
-              <input type="text" id="emp-end" placeholder="Rua, Nº, Bairro, Cidade – UF, CEP">
-            </div>
-            <div class="form-group">
-              <label for="emp-email">E-mail Corporativo</label>
-              <input type="email" id="emp-email" placeholder="contato@empresa.com.br">
-            </div>
-            <div class="form-group">
-              <label for="emp-site">Site / URL</label>
-              <input type="text" id="emp-site" placeholder="www.empresa.com.br">
-            </div>
-            <div class="form-group">
-              <label for="emp-cnae">CNAE Principal</label>
-              <input type="text" id="emp-cnae" placeholder="Ex: 4322-3/01">
-            </div>
-            <div class="form-group">
-              <label for="emp-logo-input">Logo (aparece na Ordem de Compra)</label>
-              <input type="file" id="emp-logo-input" accept="image/*" onchange="preVisualizarLogo('emp-logo-input','emp-logo-preview')">
-              <img id="emp-logo-preview" style="display:none;max-height:50px;margin-top:6px;border:1px solid #e2e8f0;border-radius:4px;padding:2px;">
-              <input type="hidden" id="emp-logo-url">
-            </div>
-          </div>
-
-          <div class="btn-row" style="margin-top:6px;">
-            <button type="button" id="btn-salvar-empresa" class="btn-primary" style="background:#1a56db;">💾 Salvar Empresa Empregadora</button>
-            <button type="button" id="btn-cancelar-empresa" class="btn-secondary" style="display:none;" onclick="limparFormEmpresa()">✕ Cancelar</button>
-          </div>
-          <p id="msg-empresa" class="msg-form"></p>
-        </div>
-
-        <!-- Listagem -->
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <h3 class="card-title" style="margin:0;">Empresas Empregadoras Cadastradas</h3>
-            <button type="button" class="btn-refresh" onclick="carregarEmpresas('empregadora')">↺ Atualizar</button>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Razão Social</th><th>CNPJ</th><th>Endereço</th><th>Status</th><th>Ações</th></tr>
-              </thead>
-              <tbody id="tbody-empregadoras">
-                <tr><td colspan="5" class="td-loading">Carregando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ===== ABA: EMPRESAS CONTRATANTES ===== -->
-      <div id="aba-contratante" class="app-sub-panel" style="display:none;">
-        <div class="card">
-          <div class="card-header-admin" style="background:linear-gradient(135deg,#5b21b6,#7c3aed);">
-            <h2>🤝 Empresa Contratante — Vínculo de Atividades</h2>
-            <p style="font-size:12px;opacity:.8;margin-top:4px;">Clientes ou tomadores de serviço onde os colaboradores executam atividades. Vinculada às Ordens de Serviço e PMOC.</p>
-          </div>
-
-          <input type="hidden" id="cont-id-edicao" value="">
-          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
-            <div class="form-group" style="grid-column:span 2;">
-              <label for="cont-razao">Razão Social *</label>
-              <input type="text" id="cont-razao" placeholder="Nome completo da empresa contratante">
-            </div>
-            <div class="form-group">
-              <label for="cont-fantasia">Nome Fantasia / Apelido</label>
-              <input type="text" id="cont-fantasia" placeholder="Como é conhecida">
-            </div>
-            <div class="form-group">
-              <label for="cont-cnpj">CNPJ</label>
-              <div style="display:flex;gap:6px;">
-                <input type="text" id="cont-cnpj" placeholder="00.000.000/0000-00 (ou alfanumérico)" maxlength="20" style="flex:1;">
-                <button type="button" id="btn-buscar-cnpj-cont" class="btn-refresh" style="white-space:nowrap;font-size:12px;" onclick="buscarDadosCNPJCliente()">🔍 Buscar</button>
-              </div>
-              <p id="cont-cnpj-cache-info" style="font-size:10px;color:#a0aec0;margin-top:3px;"></p>
-            </div>
-            <div class="form-group"><label for="cont-cep">CEP</label><input type="text" id="cont-cep" placeholder="00000-000"></div>
-            <div class="form-group"><label for="cont-cidade">Cidade</label><input type="text" id="cont-cidade"></div>
-            <div class="form-group"><label for="cont-uf">UF</label><input type="text" id="cont-uf" maxlength="2" style="text-transform:uppercase;"></div>
-            <div class="form-group">
-              <label for="cont-contato">Responsável / Contato</label>
-              <input type="text" id="cont-contato" placeholder="Nome do contato na empresa">
-            </div>
-            <div class="form-group">
-              <label for="cont-tel">Telefone do Contato</label>
-              <input type="text" id="cont-tel" placeholder="(65) 99999-9999">
-            </div>
-            <div class="form-group" style="grid-column:span 3;">
-              <label for="cont-end">Endereço / Localização da Obra ou Sede</label>
-              <input type="text" id="cont-end" placeholder="Rua, Nº, Bairro, Cidade – UF">
-            </div>
-            <div class="form-group">
-              <label for="cont-segmento">Segmento / Tipo de Contrato</label>
-              <select id="cont-segmento" class="form-input-style">
-                <option value="Construção Civil">Construção Civil</option>
-                <option value="Indústria">Indústria</option>
-                <option value="Comércio">Comércio</option>
-                <option value="Serviços">Serviços</option>
-                <option value="Condomínio">Condomínio / Facilities</option>
-                <option value="Saúde">Saúde / Hospital</option>
-                <option value="Educação">Educação</option>
-                <option value="Outro">Outro</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="cont-status">Status do Contrato</label>
-              <select id="cont-status" class="form-input-style">
-                <option value="Ativo">Ativo</option>
-                <option value="Suspenso">Suspenso</option>
-                <option value="Encerrado">Encerrado</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="cont-obs">Observações</label>
-              <input type="text" id="cont-obs" placeholder="Ex: Contrato anual renovável">
-            </div>
-            <div class="form-group">
-              <label for="cont-logo-input">Logo (aparece na Ordem de Compra quando for o cliente da cotação)</label>
-              <input type="file" id="cont-logo-input" accept="image/*" onchange="preVisualizarLogo('cont-logo-input','cont-logo-preview')">
-              <img id="cont-logo-preview" style="display:none;max-height:50px;margin-top:6px;border:1px solid #e2e8f0;border-radius:4px;padding:2px;">
-              <input type="hidden" id="cont-logo-url">
-            </div>
-          </div>
-
-          <div id="cont-analise-automatica" style="display:none;margin-top:16px;padding:14px 16px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;">
-            <p style="font-weight:700;font-size:12px;color:#3730a3;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;">📋 Análise Automática (Receita Federal)</p>
-            <div id="cont-analise-conteudo" style="font-size:12px;color:#3730a3;"></div>
-          </div>
-
-          <div class="btn-row" style="margin-top:16px;">
-            <button type="button" id="btn-salvar-contratante" class="btn-primary" style="background:#7c3aed;">💾 Salvar Empresa Contratante</button>
-            <button type="button" id="btn-cancelar-contratante" class="btn-secondary" style="display:none;" onclick="limparFormContratante()">✕ Cancelar</button>
-          </div>
-          <p id="msg-contratante" class="msg-form"></p>
-        </div>
-
-        <!-- Contas a Receber por cliente -->
-        <div class="card" id="cliente-financeiro-painel" style="display:none;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <h3 class="card-title" id="cliente-financeiro-titulo" style="margin:0;">💰 Contas a Receber</h3>
-            <button type="button" class="btn-secondary" onclick="fecharFinanceiroCliente()">✕ Fechar</button>
-          </div>
-          <p style="font-size:12px;color:#718096;margin-bottom:12px;">Lançamento manual por enquanto — ainda não existe Contrato/Medição no sistema pra gerar isso sozinho. Base pronta pro módulo de Financeiro consultar quando existir.</p>
-
-          <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr;">
-            <div class="form-group"><label for="rec-descricao">Descrição</label><input type="text" id="rec-descricao" placeholder="Ex: Medição 01 — Fevereiro/2026"></div>
-            <div class="form-group"><label for="rec-valor">Valor (R$)</label><input type="number" id="rec-valor" step="0.01" min="0"></div>
-            <div class="form-group"><label for="rec-vencimento">Vencimento</label><input type="date" id="rec-vencimento"></div>
-          </div>
-          <div class="btn-row"><button type="button" class="btn-primary" style="background:#059669;" onclick="adicionarParcelaReceber()">➕ Adicionar Parcela</button></div>
-          <p id="msg-receber" class="msg-form"></p>
-
-          <div class="table-wrap" style="margin-top:14px;">
-            <table>
-              <thead><tr><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
-              <tbody id="tbody-parcelas-receber"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Listagem -->
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <h3 class="card-title" style="margin:0;">Empresas Contratantes Cadastradas</h3>
-            <button type="button" class="btn-refresh" onclick="carregarEmpresas('contratante')">↺ Atualizar</button>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Razão Social / Fantasia</th><th>CNPJ</th><th>Contato</th><th>Segmento</th><th>Status</th><th>Ações</th></tr>
-              </thead>
-              <tbody id="tbody-contratantes">
-                <tr><td colspan="6" class="td-loading">Carregando...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ===== ABA: RESPONSÁVEL DE SEGURANÇA ===== -->
-      <div id="aba-responsavel" class="app-sub-panel" style="display:none;">
+      <div class="app-sub-panel">
         <div class="card">
           <div class="card-header-admin" style="background:linear-gradient(135deg,#065f46,#0891b2);">
             <h2>👷 Responsável Técnico de Segurança</h2>
@@ -355,477 +136,12 @@
           </div>
         </div>
       </div>
-
     </div>
   </main>
 </div>
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 <script>
-
-// ===== MÁSCARAS =====
-function mascaraCNPJ(v) {
-  v = v.replace(/\D/g,'').slice(0,14);
-  if (v.length > 12) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
-  else if (v.length > 8) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d+)/,'$1.$2.$3/$4');
-  else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d+)/,'$1.$2.$3');
-  else if (v.length > 2) v = v.replace(/(\d{2})(\d+)/,'$1.$2');
-  return v;
-}
-['emp-cnpj','cont-cnpj'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('input', () => { el.value = mascaraCNPJ(el.value); });
-});
-
-// ===== PREVIEW AO VIVO DO RESPONSÁVEL NO PDF =====
-['resp-nome','resp-cargo','resp-registro'].forEach(id => {
-  document.getElementById(id)?.addEventListener('input', atualizarPreviewResp);
-});
-function atualizarPreviewResp() {
-  const nome = document.getElementById('resp-nome').value || '—';
-  const cargo = document.getElementById('resp-cargo').value || '';
-  const reg = document.getElementById('resp-registro').value || '';
-  document.getElementById('preview-resp-pdf').textContent =
-    `${nome}${cargo ? '\n' + cargo : ''}${reg ? '\n' + reg : ''}`;
-}
-
-// ===== ALTERNÂNCIA DE ABAS =====
-function alternarAba(aba) {
-  ['empregadora','contratante','responsavel'].forEach(a => {
-    const el = document.getElementById('aba-' + a);
-    if (el) el.style.display = a === aba ? 'block' : 'none';
-  });
-}
-
-// ===== EMPRESA EMPREGADORA =====
-let _empregadorasCache = [];
-
-async function carregarEmpresas(tipo) {
-  if (tipo === 'empregadora') {
-    const tbody = document.getElementById('tbody-empregadoras'); if (!tbody) return;
-    const { data } = await db.from('empresas').select('*').eq('tipo','empregadora').order('ativa', {ascending:false}).order('razao_social');
-    _empregadorasCache = data || [];
-    if (!_empregadorasCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma empresa cadastrada.</td></tr>'; return; }
-    tbody.innerHTML = _empregadorasCache.map(e => `<tr>
-      <td><strong>${escapeHTML(e.razao_social)}</strong>${e.fantasia ? `<br><small style="color:#718096">${escapeHTML(e.fantasia)}</small>` : ''}</td>
-      <td style="font-family:monospace;">${escapeHTML(e.cnpj || '—')}</td>
-      <td style="font-size:12px;">${escapeHTML(e.endereco || '—')}</td>
-      <td>${e.ativa
-        ? '<span class="tag-badge success">✅ Ativa</span>'
-        : '<span class="tag-badge">Inativa</span>'}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap;">
-        ${!e.ativa ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="ativarEmpresa('${escapeHTML(e.id)}')">✓ Ativar</button>` : ''}
-        <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarEmpresa('${escapeHTML(e.id)}')">✏️ Editar</button>
-        <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirEmpresa('${escapeHTML(e.id)}')">✕</button>
-      </td>
-    </tr>`).join('');
-  } else {
-    await carregarContratantes();
-  }
-}
-
-async function ativarEmpresa(id) {
-  // Desativa todas, ativa só a escolhida
-  await db.from('empresas').update({ ativa: false }).eq('tipo','empregadora');
-  await db.from('empresas').update({ ativa: true }).eq('id', id);
-  carregarEmpresas('empregadora');
-  msgForm('msg-empresa','✓ Empresa ativada com sucesso!','green');
-}
-
-function editarEmpresa(id) {
-  const e = _empregadorasCache.find(x => x.id === id); if (!e) return;
-  document.getElementById('emp-id-edicao').value = id;
-  document.getElementById('emp-razao').value    = e.razao_social || '';
-  document.getElementById('emp-fantasia').value = e.fantasia || '';
-  document.getElementById('emp-cnpj').value     = e.cnpj || '';
-  document.getElementById('emp-ie').value       = e.ie || '';
-  document.getElementById('emp-tel').value      = e.telefone || '';
-  document.getElementById('emp-end').value      = e.endereco || '';
-  document.getElementById('emp-email').value    = e.email || '';
-  document.getElementById('emp-site').value     = e.site || '';
-  document.getElementById('emp-cnae').value     = e.cnae || '';
-  document.getElementById('emp-logo-url').value = e.logo_url || '';
-  const preview = document.getElementById('emp-logo-preview');
-  if (e.logo_url) { preview.src = e.logo_url; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
-  document.getElementById('btn-cancelar-empresa').style.display = 'inline-flex';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function limparFormEmpresa() {
-  ['emp-id-edicao','emp-razao','emp-fantasia','emp-cnpj','emp-ie','emp-tel','emp-end','emp-email','emp-site','emp-cnae','emp-logo-url'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  document.getElementById('emp-logo-preview').style.display = 'none';
-  document.getElementById('emp-logo-input').value = '';
-  document.getElementById('btn-cancelar-empresa').style.display = 'none';
-}
-
-async function excluirEmpresa(id) {
-  // T1.3 — o nome deixou de trafegar pelo atributo onclick (vetor de XSS) e passa
-  // a ser resolvido pelo cache. confirm() renderiza texto puro, não HTML.
-  const nome = _empregadorasCache.find(x => x.id === id)?.razao_social || 'esta empresa';
-  if (!confirm(`Excluir empresa "${nome}"?`)) return;
-  await db.from('empresas').delete().eq('id', id);
-  carregarEmpresas('empregadora');
-}
-
-// Pré-visualização local (sem subir nada ainda) assim que o usuário escolhe o arquivo.
-function preVisualizarLogo(inputId, previewId) {
-  const input = document.getElementById(inputId);
-  const file = input.files?.[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const preview = document.getElementById(previewId);
-    preview.src = ev.target.result;
-    preview.style.display = 'block';
-  };
-  reader.readAsDataURL(file);
-}
-
-// Faz o upload de verdade (reaproveita uploadFoto() do app.js, mesmo bucket
-// já usado pelas fotos de PMOC/O.S., só numa subpasta própria) — chamado só
-// no momento de salvar, não a cada troca de arquivo.
-async function uploadLogoSeHouver(inputId, urlAtualInputId) {
-  const input = document.getElementById(inputId);
-  const file = input.files?.[0];
-  if (!file) return document.getElementById(urlAtualInputId).value || null;
-  const url = await uploadFoto(file, 'logos-empresas', null);
-  return url || document.getElementById(urlAtualInputId).value || null;
-}
-
-document.getElementById('btn-salvar-empresa')?.addEventListener('click', async () => {
-  const razao = document.getElementById('emp-razao').value.trim();
-  const cnpj  = document.getElementById('emp-cnpj').value.trim();
-  const end   = document.getElementById('emp-end').value.trim();
-  if (!razao) { msgForm('msg-empresa','Informe a Razão Social.','red'); return; }
-
-  msgForm('msg-empresa','Salvando...','blue');
-  const logoUrl = await uploadLogoSeHouver('emp-logo-input','emp-logo-url');
-
-  const payload = {
-    tipo: 'empregadora',
-    razao_social: razao,
-    fantasia:  document.getElementById('emp-fantasia').value.trim(),
-    cnpj,
-    ie:        document.getElementById('emp-ie').value.trim(),
-    telefone:  document.getElementById('emp-tel').value.trim(),
-    endereco:  end,
-    email:     document.getElementById('emp-email').value.trim(),
-    site:      document.getElementById('emp-site').value.trim(),
-    cnae:      document.getElementById('emp-cnae').value.trim(),
-    logo_url:  logoUrl,
-    ativa:     true,
-  };
-
-  const idEd = document.getElementById('emp-id-edicao').value;
-
-  if (idEd) {
-    const { error } = await db.from('empresas').update(payload).eq('id', idEd);
-    if (error) { msgForm('msg-empresa','Erro: '+error.message,'red'); return; }
-  } else {
-    // Ao criar nova ativa, desativa as demais
-    await db.from('empresas').update({ ativa: false }).eq('tipo','empregadora');
-    const { error } = await db.from('empresas').insert([payload]);
-    if (error) { msgForm('msg-empresa','Erro: '+error.message,'red'); return; }
-  }
-
-  msgForm('msg-empresa','✓ Empresa salva com sucesso!','green');
-  limparFormEmpresa();
-  carregarEmpresas('empregadora');
-});
-
-// ===== EMPRESAS CONTRATANTES =====
-let _contratantesCache = [];
-
-async function carregarContratantes() {
-  const tbody = document.getElementById('tbody-contratantes'); if (!tbody) return;
-  const { data } = await db.from('empresas').select('*').eq('tipo','contratante').order('razao_social');
-  _contratantesCache = data || [];
-  if (!_contratantesCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma empresa contratante cadastrada.</td></tr>'; return; }
-  const statusCor = { Ativo:'success', Suspenso:'andamento', Encerrado:'' };
-  tbody.innerHTML = _contratantesCache.map(e => `<tr>
-    <td><strong>${escapeHTML(e.razao_social)}</strong>${e.fantasia ? `<br><small style="color:#718096">${escapeHTML(e.fantasia)}</small>` : ''}</td>
-    <td style="font-family:monospace;">${escapeHTML(e.cnpj || '—')}</td>
-    <td style="font-size:12px;">${e.contato ? `${escapeHTML(e.contato)}${e.telefone ? '<br><small>'+escapeHTML(e.telefone)+'</small>' : ''}` : '—'}</td>
-    <td><span class="tag-badge">${escapeHTML(e.segmento || '—')}</span></td>
-    <td><span class="tag-badge ${statusCor[e.status_contrato]||''}">${escapeHTML(e.status_contrato || 'Ativo')}</span></td>
-    <td style="display:flex;gap:4px;">
-      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;background:#059669;color:#fff;" onclick="abrirFinanceiroCliente('${escapeHTML(e.id)}')">💰 Financeiro</button>
-      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContratante('${escapeHTML(e.id)}')">✏️ Editar</button>
-      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContratante('${escapeHTML(e.id)}')">✕</button>
-    </td>
-  </tr>`).join('');
-}
-
-function editarContratante(id) {
-  const e = _contratantesCache.find(x => x.id === id); if (!e) return;
-  document.getElementById('cont-id-edicao').value    = id;
-  document.getElementById('cont-razao').value        = e.razao_social || '';
-  document.getElementById('cont-fantasia').value     = e.fantasia || '';
-  document.getElementById('cont-cnpj').value         = formatarCNPJParaExibicao(e.cnpj || '');
-  document.getElementById('cont-contato').value      = e.contato || '';
-  document.getElementById('cont-tel').value          = e.telefone || '';
-  document.getElementById('cont-end').value          = e.endereco || '';
-  document.getElementById('cont-cep').value          = e.cep || '';
-  document.getElementById('cont-cidade').value       = e.cidade || '';
-  document.getElementById('cont-uf').value           = e.uf || '';
-  document.getElementById('cont-segmento').value     = e.segmento || 'Construção Civil';
-  document.getElementById('cont-status').value       = e.status_contrato || 'Ativo';
-  document.getElementById('cont-obs').value          = e.observacoes || '';
-  document.getElementById('cont-logo-url').value     = e.logo_url || '';
-  const preview = document.getElementById('cont-logo-preview');
-  if (e.logo_url) { preview.src = e.logo_url; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
-  renderizarAnaliseAutomaticaCliente(e);
-  document.getElementById('btn-cancelar-contratante').style.display = 'inline-flex';
-  alternarAba('contratante');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function limparFormContratante() {
-  ['cont-id-edicao','cont-razao','cont-fantasia','cont-cnpj','cont-contato','cont-tel','cont-end','cont-cep','cont-cidade','cont-uf','cont-obs','cont-logo-url'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  document.getElementById('cont-segmento').value = 'Construção Civil';
-  document.getElementById('cont-status').value   = 'Ativo';
-  document.getElementById('cont-logo-preview').style.display = 'none';
-  document.getElementById('cont-logo-input').value = '';
-  document.getElementById('cont-cnpj-cache-info').textContent = '';
-  document.getElementById('cont-analise-automatica').style.display = 'none';
-  window._contAnaliseAtual = null;
-  document.getElementById('btn-cancelar-contratante').style.display = 'none';
-}
-
-async function excluirContratante(id) {
-  // T1.3 — nome resolvido pelo cache, não mais via atributo onclick.
-  const nome = _contratantesCache.find(x => x.id === id)?.razao_social || 'esta contratante';
-  if (!confirm(`Excluir empresa contratante "${nome}"?`)) return;
-  await db.from('empresas').delete().eq('id', id);
-  carregarContratantes();
-}
-
-// ===================== ANÁLISE AUTOMÁTICA (Cliente) =====================
-function renderizarAnaliseAutomaticaCliente(e) {
-  const wrap = document.getElementById('cont-analise-automatica');
-  const conteudo = document.getElementById('cont-analise-conteudo');
-  if (!e || (!e.situacao_cadastral && !e.cnae_principal_descricao)) { wrap.style.display = 'none'; return; }
-
-  const socios = Array.isArray(e.socios) ? e.socios : [];
-  const secundarios = Array.isArray(e.cnaes_secundarios) ? e.cnaes_secundarios : [];
-
-  conteudo.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:10px;">
-      <div><strong>Situação:</strong> ${e.situacao_cadastral === 'ATIVA' ? '🟢' : '🔴'} ${escapeHTML(e.situacao_cadastral || '—')}</div>
-      <div><strong>Tipo:</strong> ${escapeHTML(e.tipo_estabelecimento || '—')}</div>
-      <div><strong>Porte:</strong> ${escapeHTML(e.porte || '—')}</div>
-      <div><strong>Abertura:</strong> ${fmtDate(e.data_abertura)}</div>
-      <div><strong>Natureza Jurídica:</strong> ${escapeHTML(e.natureza_juridica || '—')}</div>
-      <div><strong>Capital Social:</strong> ${e.capital_social != null ? 'R$ ' + Number(e.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</div>
-    </div>
-    ${e.segmento_sugerido ? `<p style="margin-bottom:6px;"><strong>Segmento identificado:</strong> ${escapeHTML(e.segmento_sugerido)}</p>` : ''}
-    ${e.cnae_principal_descricao ? `<p style="margin-bottom:6px;"><strong>CNAE principal:</strong> ${escapeHTML(e.cnae_principal_codigo || '')} — ${escapeHTML(e.cnae_principal_descricao)}</p>` : ''}
-    ${secundarios.length ? `<p style="margin-bottom:6px;"><strong>CNAEs secundários:</strong> ${secundarios.map(c => escapeHTML(c.descricao || c.text || '')).filter(Boolean).join('; ')}</p>` : ''}
-    ${socios.length ? `<p style="margin-bottom:0;"><strong>Sócios/Administradores:</strong> ${socios.map(s => escapeHTML(s.nome_socio || s.nome || '')).filter(Boolean).join(', ')}</p>` : ''}
-  `;
-  wrap.style.display = 'block';
-}
-
-// ===================== BUSCA POR CNPJ (Cliente) — via CNPJService ==================
-async function verificarCnpjDuplicadoEmpresas(cnpjLimpo, idEdAtual) {
-  if (!cnpjLimpo) return null;
-  let query = db.from('empresas').select('id,razao_social,tipo').eq('cnpj', cnpjLimpo);
-  if (idEdAtual) query = query.neq('id', idEdAtual);
-  const { data } = await query.maybeSingle();
-  return data || null;
-}
-
-async function buscarDadosCNPJCliente(forcarNovaConsulta = false) {
-  const cnpjDigitado = document.getElementById('cont-cnpj').value.trim();
-  if (!cnpjDigitado) { msgForm('msg-contratante','Informe um CNPJ antes de buscar.','red'); return; }
-
-  const idEd = document.getElementById('cont-id-edicao').value;
-  const duplicado = await verificarCnpjDuplicadoEmpresas(limparCNPJ(cnpjDigitado), idEd);
-  if (duplicado) {
-    const msgEl = document.getElementById('msg-contratante');
-    msgEl.style.color = '#dc2626';
-    msgEl.innerHTML = `⚠️ Este CNPJ já está cadastrado (${duplicado.tipo}): <a href="#" onclick="event.preventDefault(); editarContratante('${duplicado.id}');" style="color:#1a56db;font-weight:600;">abrir ${escapeHTML(duplicado.razao_social)}</a>`;
-    return;
-  }
-
-  const btn = document.getElementById('btn-buscar-cnpj-cont');
-  const textoOriginal = btn.textContent;
-  btn.textContent = '⏳ Buscando...'; btn.disabled = true;
-
-  try {
-    const { dados: d, fonte, consultadoEm } = await CNPJService.consultar(cnpjDigitado, { forcarNovaConsulta });
-
-    const setSeVazio = (id, valor) => {
-      const el = document.getElementById(id);
-      if (el && !el.value.trim() && valor) el.value = valor;
-    };
-
-    setSeVazio('cont-razao', d.razao_social);
-    setSeVazio('cont-fantasia', d.nome_fantasia);
-    if (d.ddd_telefone_1) setSeVazio('cont-tel', `(${d.ddd_telefone_1.slice(0,2)}) ${d.ddd_telefone_1.slice(2)}`);
-    setSeVazio('cont-cep', d.cep);
-    setSeVazio('cont-cidade', d.municipio);
-    setSeVazio('cont-uf', d.uf);
-    const enderecoComposto = [d.logradouro, d.numero, d.complemento, d.bairro].filter(Boolean).join(', ');
-    setSeVazio('cont-end', enderecoComposto);
-    document.getElementById('cont-cnpj').value = formatarCNPJParaExibicao(limparCNPJ(cnpjDigitado));
-
-    const segmentoSugerido = sugerirSegmentoPorCNAE(d.cnae_fiscal_descricao);
-    window._contAnaliseAtual = {
-      situacao_cadastral: d.descricao_situacao_cadastral,
-      data_situacao_cadastral: d.data_situacao_cadastral,
-      data_abertura: d.data_inicio_atividade,
-      natureza_juridica: d.natureza_juridica,
-      porte: d.descricao_porte,
-      capital_social: d.capital_social,
-      tipo_estabelecimento: d.descricao_identificador_matriz_filial,
-      cnae_principal_codigo: d.cnae_fiscal,
-      cnae_principal_descricao: d.cnae_fiscal_descricao,
-      cnaes_secundarios: d.cnaes_secundarios || [],
-      socios: d.qsa || [],
-      segmento_sugerido: segmentoSugerido,
-    };
-    renderizarAnaliseAutomaticaCliente(window._contAnaliseAtual);
-    if (segmentoSugerido) {
-      const segSel = document.getElementById('cont-segmento');
-      if (Array.from(segSel.options).some(o => o.value === segmentoSugerido)) segSel.value = segmentoSugerido;
-    }
-
-    document.getElementById('cont-cnpj-cache-info').innerHTML =
-      fonte === 'cache'
-        ? `Dado em cache — última atualização: ${new Date(consultadoEm).toLocaleDateString('pt-BR')}. <a href="#" onclick="event.preventDefault(); buscarDadosCNPJCliente(true);" style="color:#1a56db;">🔄 forçar nova consulta</a>`
-        : `Consultado agora na Receita Federal.`;
-
-    msgForm('msg-contratante', `✓ Dados encontrados: ${d.razao_social}${d.descricao_situacao_cadastral ? ' — situação: ' + d.descricao_situacao_cadastral : ''}`, 'green');
-  } catch (e) {
-    msgForm('msg-contratante', e.message || 'Erro ao consultar CNPJ.', 'red');
-  } finally {
-    btn.textContent = textoOriginal; btn.disabled = false;
-  }
-}
-
-document.getElementById('btn-salvar-contratante')?.addEventListener('click', async () => {
-  const razao = document.getElementById('cont-razao').value.trim();
-  if (!razao) { msgForm('msg-contratante','Informe a Razão Social.','red'); return; }
-
-  const idEd = document.getElementById('cont-id-edicao').value;
-  const cnpjLimpo = limparCNPJ(document.getElementById('cont-cnpj').value);
-  const duplicado = await verificarCnpjDuplicadoEmpresas(cnpjLimpo, idEd);
-  if (duplicado) {
-    const msgEl = document.getElementById('msg-contratante');
-    msgEl.style.color = '#dc2626';
-    msgEl.innerHTML = `⚠️ Este CNPJ já está cadastrado (${duplicado.tipo}): <a href="#" onclick="event.preventDefault(); editarContratante('${duplicado.id}');" style="color:#1a56db;font-weight:600;">abrir ${escapeHTML(duplicado.razao_social)}</a>`;
-    return;
-  }
-
-  msgForm('msg-contratante','Salvando...','blue');
-  const logoUrl = await uploadLogoSeHouver('cont-logo-input','cont-logo-url');
-  const analise = window._contAnaliseAtual || {};
-
-  const payload = {
-    tipo: 'contratante',
-    razao_social:    razao,
-    fantasia:        document.getElementById('cont-fantasia').value.trim(),
-    cnpj:            cnpjLimpo || null,
-    contato:         document.getElementById('cont-contato').value.trim(),
-    telefone:        document.getElementById('cont-tel').value.trim(),
-    endereco:        document.getElementById('cont-end').value.trim(),
-    cep:             document.getElementById('cont-cep').value.trim() || null,
-    cidade:          document.getElementById('cont-cidade').value.trim() || null,
-    uf:              document.getElementById('cont-uf').value.trim().toUpperCase() || null,
-    segmento:        document.getElementById('cont-segmento').value,
-    status_contrato: document.getElementById('cont-status').value,
-    observacoes:     document.getElementById('cont-obs').value.trim(),
-    logo_url:        logoUrl,
-    ativa:           true,
-    ...analise,
-  };
-
-  const { error } = idEd
-    ? await db.from('empresas').update(payload).eq('id', idEd)
-    : await db.from('empresas').insert([payload]);
-  if (error) { msgForm('msg-contratante','Erro: '+error.message,'red'); return; }
-
-  msgForm('msg-contratante','✓ Empresa contratante salva!','green');
-  window._contAnaliseAtual = null;
-  limparFormContratante();
-  carregarContratantes();
-});
-
-// ===================== FINANCEIRO DO CLIENTE — Contas a Receber =====================
-let _clienteFinanceiroAtual = null;
-
-async function abrirFinanceiroCliente(id) {
-  const c = _contratantesCache.find(x => x.id === id); if (!c) return;
-  _clienteFinanceiroAtual = c;
-  document.getElementById('cliente-financeiro-painel').style.display = 'block';
-  document.getElementById('cliente-financeiro-titulo').textContent = `💰 Contas a Receber — ${c.razao_social}`;
-  await carregarParcelasReceber(id);
-  document.getElementById('cliente-financeiro-painel').scrollIntoView({ behavior: 'smooth' });
-}
-
-function fecharFinanceiroCliente() {
-  _clienteFinanceiroAtual = null;
-  document.getElementById('cliente-financeiro-painel').style.display = 'none';
-}
-
-async function carregarParcelasReceber(clienteId) {
-  const { data } = await db.from('parcelas_a_receber').select('*').eq('cliente_id', clienteId).order('data_vencimento');
-  const tbody = document.getElementById('tbody-parcelas-receber');
-  if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma parcela lançada ainda.</td></tr>'; return; }
-  const corStatus = { Pendente:'#fef3c7', Paga:'#d1fae5', Atrasada:'#fee2e2', Cancelada:'#f1f5f9' };
-  const txtStatus = { Pendente:'#92400e', Paga:'#065f46', Atrasada:'#991b1b', Cancelada:'#4a5568' };
-  tbody.innerHTML = data.map(p => `<tr>
-    <td>${escapeHTML(p.descricao)}</td>
-    <td>R$ ${Number(p.valor).toFixed(2).replace('.',',')}</td>
-    <td>${fmtDate(p.data_vencimento)}</td>
-    <td>
-      <select class="form-input-style" style="font-size:11px;padding:3px 6px;" onchange="mudarStatusParcelaReceber('${escapeHTML(p.id)}', this.value)">
-        ${['Pendente','Paga','Atrasada','Cancelada'].map(s => `<option value="${s}" ${s===p.status?'selected':''} style="background:${corStatus[s]};color:${txtStatus[s]};">${s}</option>`).join('')}
-      </select>
-    </td>
-    <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirParcelaReceber('${escapeHTML(p.id)}')">✕</button></td>
-  </tr>`).join('');
-}
-
-async function mudarStatusParcelaReceber(id, novoStatus) {
-  const { error } = await db.from('parcelas_a_receber').update({ status: novoStatus }).eq('id', id);
-  if (error) { toast('Erro ao atualizar: ' + error.message, 'erro'); return; }
-  carregarParcelasReceber(_clienteFinanceiroAtual.id);
-}
-
-async function excluirParcelaReceber(id) {
-  if (!confirm('Excluir esta parcela?')) return;
-  await db.from('parcelas_a_receber').delete().eq('id', id);
-  carregarParcelasReceber(_clienteFinanceiroAtual.id);
-}
-
-async function adicionarParcelaReceber() {
-  if (!_clienteFinanceiroAtual) return;
-  const descricao = document.getElementById('rec-descricao').value.trim();
-  const valor = Number(document.getElementById('rec-valor').value);
-  const vencimento = document.getElementById('rec-vencimento').value;
-  if (!descricao) { msgForm('msg-receber','Informe a descrição.','red'); return; }
-  if (!valor || valor <= 0) { msgForm('msg-receber','Informe um valor válido.','red'); return; }
-  if (!vencimento) { msgForm('msg-receber','Informe o vencimento.','red'); return; }
-
-  const { error } = await db.from('parcelas_a_receber').insert([{
-    cliente_id: _clienteFinanceiroAtual.id, descricao, valor, data_vencimento: vencimento,
-    criado_por_nome: window._usuarioAtual?.nome || null,
-  }]);
-  if (error) { msgForm('msg-receber','Erro ao salvar: ' + error.message,'red'); return; }
-
-  msgForm('msg-receber','✓ Parcela adicionada!','green');
-  document.getElementById('rec-descricao').value = '';
-  document.getElementById('rec-valor').value = '';
-  document.getElementById('rec-vencimento').value = '';
-  carregarParcelasReceber(_clienteFinanceiroAtual.id);
-}
-
-// ===== RESPONSÁVEL DE SEGURANÇA =====
+// ===================== RESPONSÁVEL DE SEGURANÇA =====================
 let _respCache = [];
 
 async function carregarResponsaveis() {
@@ -864,7 +180,6 @@ function editarResponsavel(id) {
   document.getElementById('resp-email').value     = r.email || '';
   document.getElementById('resp-crea').value      = r.crea || '';
   atualizarPreviewResp();
-  alternarAba('responsavel');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -910,12 +225,10 @@ document.getElementById('btn-salvar-responsavel')?.addEventListener('click', asy
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([
-    carregarEmpresas('empregadora'),
-    carregarContratantes(),
-    carregarResponsaveis(),
-  ]);
+  await window.sessaoPronta;
+  await carregarResponsaveis();
 });
+
 </script>
 </body>
 </html>

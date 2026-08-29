@@ -55,11 +55,13 @@
           <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
           <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
           <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+          <div class="nav-item" onclick="location.href='clientes.html'"><span>🤝</span> Clientes</div>
         </div>
         <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
         <div class="nav-section-items" id="nav-section-administracao">
           <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
-          <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+          <div class="nav-item" onclick="location.href='empresas.html'"><span>🦺</span> Resp. de Segurança</div>
+          <div class="nav-item" onclick="location.href='empresa-master.html'"><span>🏛️</span> Empresa Master</div>
           <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
           <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
         </div>
@@ -93,6 +95,13 @@
             </div>
             <div class="form-group"><label for="oc-data-entrega">Entrega Prevista</label><input type="date" id="oc-data-entrega"></div>
             <div class="form-group"><label for="oc-condicao-pagamento">Condição de Pagamento</label><input type="text" id="oc-condicao-pagamento" placeholder="Ex: 30/60/90, à vista, boleto 28 dias"></div>
+            <div class="form-group"><label for="oc-modo-faturamento">Faturamento</label>
+              <select id="oc-modo-faturamento" class="form-input-style" onchange="aoTrocarModoFaturamentoOC()">
+                <option value="Direto">Direto (Fabasi)</option>
+                <option value="Pela Empresa Contratada">Pela Empresa Contratada</option>
+              </select>
+            </div>
+            <div class="form-group" id="oc-cliente-wrap" style="display:none;"><label for="oc-cliente-id">Cliente</label><select id="oc-cliente-id" class="form-input-style"><option value="">-- Selecione --</option></select></div>
             <div class="form-group"><label for="oc-frete">Frete (R$)</label><input type="number" id="oc-frete" step="0.01" value="0"></div>
             <div class="form-group" style="grid-column:span 3;"><label for="oc-observacoes">Observações</label><textarea id="oc-observacoes" rows="2"></textarea></div>
           </div>
@@ -169,6 +178,20 @@
   <script src="app.js"></script>
 <script>
 // ===================== FORNECEDORES — select desta página =====================
+// Cliente só faz sentido quando o faturamento é "Pela Empresa Contratada".
+function aoTrocarModoFaturamentoOC() {
+  const ehContratada = document.getElementById('oc-modo-faturamento').value === 'Pela Empresa Contratada';
+  document.getElementById('oc-cliente-wrap').style.display = ehContratada ? 'block' : 'none';
+}
+
+async function atualizarSelectClienteOC() {
+  const sel = document.getElementById('oc-cliente-id'); if (!sel) return;
+  const atual = sel.value;
+  const { data } = await db.from('empresas').select('id,razao_social').eq('tipo','contratante').eq('ativa', true).order('razao_social');
+  sel.innerHTML = '<option value="">-- Selecione --</option>' + (data || []).map(e => `<option value="${escapeHTML(e.id)}">${escapeHTML(e.razao_social)}</option>`).join('');
+  sel.value = atual;
+}
+
 async function atualizarSelectFornecedoresOC() {
   const sel = document.getElementById('oc-fornecedor'); if (!sel) return;
   const atual = sel.value;
@@ -326,6 +349,10 @@ async function editarOC(id) {
   document.getElementById('oc-condicao-pagamento').value = o.condicao_pagamento || '';
   document.getElementById('oc-frete').value = o.frete ?? 0;
   document.getElementById('oc-observacoes').value = o.observacoes || '';
+  document.getElementById('oc-modo-faturamento').value = o.modo_faturamento || 'Direto';
+  await atualizarSelectClienteOC();
+  document.getElementById('oc-cliente-id').value = o.cliente_id || '';
+  aoTrocarModoFaturamentoOC();
 
   const info = document.getElementById('oc-origem-info');
   const partes = [];
@@ -356,6 +383,9 @@ function resetarFormOC() {
   ['oc-id-edicao','oc-origem-rc','oc-origem-cotacao','oc-numero','oc-data-entrega','oc-condicao-pagamento','oc-observacoes'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  document.getElementById('oc-modo-faturamento').value = 'Direto';
+  document.getElementById('oc-cliente-id').value = '';
+  aoTrocarModoFaturamentoOC();
   document.getElementById('oc-fornecedor').value = '';
   document.getElementById('oc-status').value = 'Emitida';
   document.getElementById('oc-frete').value = 0;
@@ -382,10 +412,17 @@ async function imprimirOrdemCompra(id) {
 
   const { data: itens } = await db.from('ordens_compra_itens').select('*').eq('ordem_id', id).order('id');
 
-  // Empregadora ativa cadastrada = os dados da própria Fabasi como compradora.
-  // Se houver mais de uma, usa a primeira — cadastro único é o caso normal.
-  const { data: empregadoras } = await db.from('empresas').select('*').eq('tipo','empregadora').eq('ativa', true).order('razao_social').limit(1);
-  const comprador = (empregadoras && empregadoras[0]) || null;
+  // Comprador varia com o modo de faturamento: Direto usa a Empresa Master
+  // (Fabasi); Pela Empresa Contratada usa o cliente vinculado — puxado lá
+  // de trás desde a Requisição de Materiais, atravessando todo o funil.
+  let comprador = null;
+  if (oc.modo_faturamento === 'Pela Empresa Contratada' && oc.cliente_id) {
+    const { data: cliente } = await db.from('empresas').select('*').eq('id', oc.cliente_id).maybeSingle();
+    comprador = cliente || null;
+  } else {
+    const { data: master } = await db.from('empresa_master').select('*').limit(1).maybeSingle();
+    comprador = master || null;
+  }
 
   const forn = oc.fornecedores || {};
   const corStatus = { 'Emitida':'#dbeafe', 'Confirmada':'#fef3c7', 'Enviada':'#e0e7ff', 'Recebida Parcial':'#fed7aa', 'Recebida Total':'#d1fae5', 'Cancelada':'#fee2e2' };
@@ -414,7 +451,7 @@ async function imprimirOrdemCompra(id) {
     </div>
 
     <div class="laudo-section">
-      <div class="laudo-section-title">Comprador</div>
+      <div class="laudo-section-title">Comprador${oc.modo_faturamento === 'Pela Empresa Contratada' ? ' (faturamento pela empresa contratada)' : ''}</div>
       ${comprador ? `
       <div class="laudo-grid">
         <div class="laudo-field"><label>Razão Social</label><span>${escapeHTML(comprador.razao_social)}</span></div>
@@ -422,7 +459,9 @@ async function imprimirOrdemCompra(id) {
         <div class="laudo-field" style="grid-column:span 2;"><label>Endereço</label><span>${escapeHTML(comprador.endereco || '—')}</span></div>
         <div class="laudo-field"><label>Telefone</label><span>${escapeHTML(comprador.telefone || '—')}</span></div>
         <div class="laudo-field"><label>E-mail</label><span>${escapeHTML(comprador.email || '—')}</span></div>
-      </div>` : `<p style="font-size:11px;color:#a0aec0;">Nenhuma empresa empregadora ativa cadastrada em Empresas — cadastre a Fabasi lá para esse bloco aparecer preenchido.</p>`}
+      </div>` : oc.modo_faturamento === 'Pela Empresa Contratada'
+          ? `<p style="font-size:11px;color:#a0aec0;">Cliente vinculado não encontrado — confira o cadastro em Clientes.</p>`
+          : `<p style="font-size:11px;color:#a0aec0;">Empresa Master ainda não cadastrada — preencha em "Empresa Master" para esse bloco aparecer preenchido.</p>`}
     </div>
 
     <div class="laudo-section">
@@ -601,6 +640,8 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
       observacoes:                document.getElementById('oc-observacoes').value.trim() || null,
       valor_total:                 valorTotal,
       updated_at:                   new Date().toISOString(),
+      modo_faturamento:              document.getElementById('oc-modo-faturamento').value || 'Direto',
+      cliente_id:                    document.getElementById('oc-cliente-id').value || null,
     };
     const { error } = await db.from('ordens_compra').update(payload).eq('id', idEd);
     if (error) { msgForm('msg-oc','Erro ao salvar: ' + error.message,'red'); return; }
@@ -619,6 +660,8 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
       observacoes:                document.getElementById('oc-observacoes').value.trim() || null,
       valor_total:                 valorTotal,
       criado_por_nome:              window._usuarioAtual?.nome || null,
+      modo_faturamento:              document.getElementById('oc-modo-faturamento').value || 'Direto',
+      cliente_id:                    document.getElementById('oc-cliente-id').value || null,
     };
     if (origemRc) payload.requisicao_compra_id = origemRc;
     if (origemCotacao) payload.cotacao_id = origemCotacao;
@@ -663,6 +706,10 @@ async function aplicarOrigemRcDaURL() {
 
   resetarFormOC();
   document.getElementById('oc-origem-rc').value = origemRc;
+  document.getElementById('oc-modo-faturamento').value = r.modo_faturamento || 'Direto';
+  await atualizarSelectClienteOC();
+  document.getElementById('oc-cliente-id').value = r.cliente_id || '';
+  aoTrocarModoFaturamentoOC();
   await atualizarSelectFornecedoresOC();
   document.getElementById('oc-fornecedor').value = r.fornecedor_id || '';
 
@@ -699,6 +746,10 @@ async function aplicarOrigemCotacaoDaURL() {
 
   resetarFormOC();
   document.getElementById('oc-origem-cotacao').value = origemCotacao;
+  document.getElementById('oc-modo-faturamento').value = cot.modo_faturamento || 'Direto';
+  await atualizarSelectClienteOC();
+  document.getElementById('oc-cliente-id').value = cot.cliente_id || '';
+  aoTrocarModoFaturamentoOC();
   await atualizarSelectFornecedoresOC();
   document.getElementById('oc-fornecedor').value = prop.fornecedor_id || '';
   document.getElementById('oc-condicao-pagamento').value = prop.condicao_pagamento || '';
@@ -733,6 +784,7 @@ async function aplicarVerDaURL() {
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await atualizarSelectFornecedoresOC();
+  await atualizarSelectClienteOC();
   await carregarOrdensCompra();
   await aplicarOrigemRcDaURL();
   await aplicarOrigemCotacaoDaURL();

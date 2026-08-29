@@ -487,6 +487,31 @@ async function uploadFoto(file, pasta, msgId) {
 
 // ===================== MÚLTIPLAS FOTOS (laudo PMOC / OS) =====================
 // Faz upload de várias imagens e retorna um array de URLs públicas.
+// Pré-visualização local de logo (sem subir nada ainda) assim que o usuário
+// escolhe o arquivo — usado em Empresa Master, Clientes e Fornecedores.
+function preVisualizarLogo(inputId, previewId) {
+  const input = document.getElementById(inputId);
+  const file = input.files?.[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const preview = document.getElementById(previewId);
+    preview.src = ev.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// Faz o upload de verdade (mesmo bucket já usado pelas fotos de PMOC/O.S.,
+// só numa subpasta própria) — chamado só no momento de salvar, não a cada
+// troca de arquivo.
+async function uploadLogoSeHouver(inputId, urlAtualInputId) {
+  const input = document.getElementById(inputId);
+  const file = input.files?.[0];
+  if (!file) return document.getElementById(urlAtualInputId).value || null;
+  const url = await uploadFoto(file, 'logos-empresas', null);
+  return url || document.getElementById(urlAtualInputId).value || null;
+}
+
 async function uploadFotos(fileList, pasta, msgId) {
   const files = Array.from(fileList || []).filter(Boolean);
   if (!files.length) return [];

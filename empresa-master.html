@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Cadastro único da empresa dona do sistema (Fabasi) — usada como comprador padrão nos documentos.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Empresa Master</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label" onclick="alternarSecaoMenu('visaogeral')">Visão Geral <span class="nav-chevron" id="nav-chevron-visaogeral">▾</span></div>
+        <div class="nav-section-items" id="nav-section-visaogeral">
+          <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('refrigeracao')">Refrigeração <span class="nav-chevron" id="nav-chevron-refrigeracao">▾</span></div>
+        <div class="nav-section-items" id="nav-section-refrigeracao">
+          <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+          <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+          <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+          <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+          <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+          <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('manutencao')">Manutenção <span class="nav-chevron" id="nav-chevron-manutencao">▾</span></div>
+        <div class="nav-section-items" id="nav-section-manutencao">
+          <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('compras')">Compras <span class="nav-chevron" id="nav-chevron-compras">▾</span></div>
+        <div class="nav-section-items" id="nav-section-compras">
+          <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+          <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+          <div class="nav-item" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
+          <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+          <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+          <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+          <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+          <div class="nav-item" onclick="location.href='clientes.html'"><span>🤝</span> Clientes</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
+        <div class="nav-section-items" id="nav-section-administracao">
+          <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+          <div class="nav-item" onclick="location.href='empresas.html'"><span>🦺</span> Resp. de Segurança</div>
+          <div class="nav-item active" onclick="location.href='empresa-master.html'"><span>🏛️</span> Empresa Master</div>
+          <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+          <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+        </div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+  <main class="main-content">
+    <div class="topbar no-print">
+      <h1 style="font-size:16px;color:#1a202c;">🏛️ Empresa Master</h1>
+    </div>
+
+    <div class="section-content">
+      <div class="app-sub-panel">
+        <div class="card">
+          <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
+            <h2>🏛️ Empresa Master — Dono do Sistema</h2>
+            <p style="font-size:12px;opacity:.8;margin-top:4px;">Cadastro único (não é uma lista de clientes ou fornecedores) — é a própria Fabasi. Usada como "Comprador" nos documentos de Ordem de Compra sempre que o faturamento for Direto, e nos registros de CTPS/EPI/certificados NR.</p>
+          </div>
+
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#1e40af;">
+            ℹ️ Só existe <strong>um</strong> cadastro aqui — diferente de Clientes e Fornecedores, que são listas. Se você está cadastrando um cliente ou parceiro, use as páginas <a href="clientes.html" style="color:#1a56db;font-weight:600;">Clientes</a> ou <a href="fornecedores.html" style="color:#1a56db;font-weight:600;">Fornecedores</a>.
+          </div>
+
+          <input type="hidden" id="mst-id-edicao" value="">
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+            <div class="form-group" style="grid-column:span 2;">
+              <label for="mst-razao">Razão Social *</label>
+              <input type="text" id="mst-razao" placeholder="Nome completo da empresa">
+            </div>
+            <div class="form-group">
+              <label for="mst-fantasia">Nome Fantasia</label>
+              <input type="text" id="mst-fantasia" placeholder="Nome fantasia (opcional)">
+            </div>
+            <div class="form-group">
+              <label for="mst-cnpj">CNPJ</label>
+              <div style="display:flex;gap:6px;">
+                <input type="text" id="mst-cnpj" placeholder="00.000.000/0000-00 (ou alfanumérico)" maxlength="20" style="flex:1;">
+                <button type="button" id="btn-buscar-cnpj-mst" class="btn-refresh" style="white-space:nowrap;font-size:12px;" onclick="buscarDadosCNPJMaster()">🔍 Buscar</button>
+              </div>
+              <p id="mst-cnpj-cache-info" style="font-size:10px;color:#a0aec0;margin-top:3px;"></p>
+            </div>
+            <div class="form-group">
+              <label for="mst-ie">Inscrição Estadual</label>
+              <input type="text" id="mst-ie" placeholder="000.000.000.000">
+            </div>
+            <div class="form-group">
+              <label for="mst-tel">Telefone</label>
+              <input type="text" id="mst-tel" placeholder="(65) 99999-9999">
+            </div>
+            <div class="form-group">
+              <label for="mst-email">E-mail Corporativo</label>
+              <input type="email" id="mst-email" placeholder="contato@empresa.com.br">
+            </div>
+            <div class="form-group" style="grid-column:span 3;">
+              <label for="mst-logradouro">Logradouro</label>
+              <input type="text" id="mst-logradouro" placeholder="Preenchido automaticamente ao buscar o CNPJ">
+            </div>
+            <div class="form-group"><label for="mst-numero">Número</label><input type="text" id="mst-numero"></div>
+            <div class="form-group"><label for="mst-complemento">Complemento</label><input type="text" id="mst-complemento"></div>
+            <div class="form-group"><label for="mst-bairro">Bairro</label><input type="text" id="mst-bairro"></div>
+            <div class="form-group"><label for="mst-cep">CEP</label><input type="text" id="mst-cep" placeholder="00000-000"></div>
+            <div class="form-group"><label for="mst-cidade">Cidade</label><input type="text" id="mst-cidade"></div>
+            <div class="form-group"><label for="mst-uf">UF</label><input type="text" id="mst-uf" maxlength="2" style="text-transform:uppercase;"></div>
+            <div class="form-group">
+              <label for="mst-site">Site / URL</label>
+              <input type="text" id="mst-site" placeholder="www.empresa.com.br">
+            </div>
+            <div class="form-group" style="grid-column:span 2;">
+              <label for="mst-logo-input">Logo (aparece na Ordem de Compra)</label>
+              <input type="file" id="mst-logo-input" accept="image/*" onchange="preVisualizarLogo('mst-logo-input','mst-logo-preview')">
+              <img id="mst-logo-preview" style="display:none;max-height:50px;margin-top:6px;border:1px solid #e2e8f0;border-radius:4px;padding:2px;">
+              <input type="hidden" id="mst-logo-url">
+            </div>
+          </div>
+
+          <div id="mst-analise-automatica" style="display:none;margin-top:16px;padding:14px 16px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;">
+            <p style="font-weight:700;font-size:12px;color:#3730a3;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;">📋 Análise Automática (Receita Federal)</p>
+            <div id="mst-analise-conteudo" style="font-size:12px;color:#3730a3;"></div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-master" class="btn-primary" style="background:#1a56db;">💾 Salvar Empresa Master</button>
+          </div>
+          <p id="msg-master" class="msg-form"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+// ===================== EMPRESA MASTER (cadastro único) =====================
+let _masterAtual = null;
+
+async function carregarEmpresaMaster() {
+  const { data, error } = await db.from('empresa_master').select('*').limit(1).maybeSingle();
+  if (error) { toast('Erro ao carregar Empresa Master: ' + error.message, 'erro'); return; }
+  _masterAtual = data || null;
+  if (!_masterAtual) return; // ainda não cadastrada — formulário fica em branco
+
+  const m = _masterAtual;
+  document.getElementById('mst-id-edicao').value = m.id;
+  document.getElementById('mst-razao').value       = m.razao_social || '';
+  document.getElementById('mst-fantasia').value    = m.fantasia || '';
+  document.getElementById('mst-cnpj').value        = formatarCNPJParaExibicao(m.cnpj || '');
+  document.getElementById('mst-ie').value          = m.ie || '';
+  document.getElementById('mst-tel').value         = m.telefone || '';
+  document.getElementById('mst-email').value       = m.email || '';
+  document.getElementById('mst-logradouro').value  = m.logradouro || '';
+  document.getElementById('mst-numero').value      = m.numero || '';
+  document.getElementById('mst-complemento').value = m.complemento || '';
+  document.getElementById('mst-bairro').value      = m.bairro || '';
+  document.getElementById('mst-cep').value         = m.cep || '';
+  document.getElementById('mst-cidade').value      = m.cidade || '';
+  document.getElementById('mst-uf').value          = m.uf || '';
+  document.getElementById('mst-site').value        = m.site || '';
+  document.getElementById('mst-logo-url').value    = m.logo_url || '';
+  const preview = document.getElementById('mst-logo-preview');
+  if (m.logo_url) { preview.src = m.logo_url; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
+  renderizarAnaliseAutomaticaMaster(m);
+  document.getElementById('btn-salvar-master').textContent = '💾 Salvar Alterações';
+}
+
+function renderizarAnaliseAutomaticaMaster(m) {
+  const wrap = document.getElementById('mst-analise-automatica');
+  const conteudo = document.getElementById('mst-analise-conteudo');
+  if (!m || (!m.situacao_cadastral && !m.cnae_principal_descricao)) { wrap.style.display = 'none'; return; }
+  const socios = Array.isArray(m.socios) ? m.socios : [];
+  const secundarios = Array.isArray(m.cnaes_secundarios) ? m.cnaes_secundarios : [];
+  conteudo.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:10px;">
+      <div><strong>Situação:</strong> ${m.situacao_cadastral === 'ATIVA' ? '🟢' : '🔴'} ${escapeHTML(m.situacao_cadastral || '—')}</div>
+      <div><strong>Tipo:</strong> ${escapeHTML(m.tipo_estabelecimento || '—')}</div>
+      <div><strong>Porte:</strong> ${escapeHTML(m.porte || '—')}</div>
+      <div><strong>Abertura:</strong> ${fmtDate(m.data_abertura)}</div>
+      <div><strong>Natureza Jurídica:</strong> ${escapeHTML(m.natureza_juridica || '—')}</div>
+      <div><strong>Capital Social:</strong> ${m.capital_social != null ? 'R$ ' + Number(m.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</div>
+    </div>
+    ${m.cnae_principal_descricao ? `<p style="margin-bottom:6px;"><strong>CNAE principal:</strong> ${escapeHTML(m.cnae_principal_codigo || '')} — ${escapeHTML(m.cnae_principal_descricao)}</p>` : ''}
+    ${secundarios.length ? `<p style="margin-bottom:6px;"><strong>CNAEs secundários:</strong> ${secundarios.map(c => escapeHTML(c.descricao || c.text || '')).filter(Boolean).join('; ')}</p>` : ''}
+    ${socios.length ? `<p style="margin-bottom:0;"><strong>Sócios/Administradores:</strong> ${socios.map(s => escapeHTML(s.nome_socio || s.nome || '')).filter(Boolean).join(', ')}</p>` : ''}
+  `;
+  wrap.style.display = 'block';
+}
+
+async function buscarDadosCNPJMaster(forcarNovaConsulta = false) {
+  const cnpjDigitado = document.getElementById('mst-cnpj').value.trim();
+  if (!cnpjDigitado) { msgForm('msg-master','Informe um CNPJ antes de buscar.','red'); return; }
+
+  const btn = document.getElementById('btn-buscar-cnpj-mst');
+  const textoOriginal = btn.textContent;
+  btn.textContent = '⏳ Buscando...'; btn.disabled = true;
+
+  try {
+    const { dados: d, fonte, consultadoEm } = await CNPJService.consultar(cnpjDigitado, { forcarNovaConsulta });
+
+    const setSeVazio = (id, valor) => {
+      const el = document.getElementById(id);
+      if (el && !el.value.trim() && valor) el.value = valor;
+    };
+    setSeVazio('mst-razao', d.razao_social);
+    setSeVazio('mst-fantasia', d.nome_fantasia);
+    if (d.ddd_telefone_1) setSeVazio('mst-tel', `(${d.ddd_telefone_1.slice(0,2)}) ${d.ddd_telefone_1.slice(2)}`);
+    setSeVazio('mst-email', d.email);
+    setSeVazio('mst-cep', d.cep);
+    setSeVazio('mst-cidade', d.municipio);
+    setSeVazio('mst-uf', d.uf);
+    setSeVazio('mst-logradouro', d.logradouro);
+    setSeVazio('mst-numero', d.numero);
+    setSeVazio('mst-complemento', d.complemento);
+    setSeVazio('mst-bairro', d.bairro);
+    document.getElementById('mst-cnpj').value = formatarCNPJParaExibicao(limparCNPJ(cnpjDigitado));
+
+    window._masterAnaliseAtual = {
+      situacao_cadastral: d.descricao_situacao_cadastral,
+      data_situacao_cadastral: d.data_situacao_cadastral,
+      data_abertura: d.data_inicio_atividade,
+      natureza_juridica: d.natureza_juridica,
+      porte: d.descricao_porte,
+      capital_social: d.capital_social,
+      tipo_estabelecimento: d.descricao_identificador_matriz_filial,
+      cnae_principal_codigo: d.cnae_fiscal,
+      cnae_principal_descricao: d.cnae_fiscal_descricao,
+      cnaes_secundarios: d.cnaes_secundarios || [],
+      socios: d.qsa || [],
+    };
+    renderizarAnaliseAutomaticaMaster(window._masterAnaliseAtual);
+
+    document.getElementById('mst-cnpj-cache-info').innerHTML =
+      fonte === 'cache'
+        ? `Dado em cache — última atualização: ${new Date(consultadoEm).toLocaleDateString('pt-BR')}. <a href="#" onclick="event.preventDefault(); buscarDadosCNPJMaster(true);" style="color:#1a56db;">🔄 forçar nova consulta</a>`
+        : `Consultado agora na Receita Federal.`;
+
+    msgForm('msg-master', `✓ Dados encontrados: ${d.razao_social}${d.descricao_situacao_cadastral ? ' — situação: ' + d.descricao_situacao_cadastral : ''}`, 'green');
+  } catch (e) {
+    msgForm('msg-master', e.message || 'Erro ao consultar CNPJ.', 'red');
+  } finally {
+    btn.textContent = textoOriginal; btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-salvar-master')?.addEventListener('click', async () => {
+  const razao = document.getElementById('mst-razao').value.trim();
+  if (!razao) { msgForm('msg-master','Informe a Razão Social.','red'); return; }
+
+  msgForm('msg-master','Salvando...','blue');
+  const logoUrl = await uploadLogoSeHouver('mst-logo-input','mst-logo-url');
+  const analise = window._masterAnaliseAtual || {};
+
+  const enderecoComposto = [
+    document.getElementById('mst-logradouro').value.trim(),
+    document.getElementById('mst-numero').value.trim(),
+    document.getElementById('mst-complemento').value.trim(),
+    document.getElementById('mst-bairro').value.trim(),
+  ].filter(Boolean).join(', ') || null;
+
+  const payload = {
+    razao_social: razao,
+    fantasia:    document.getElementById('mst-fantasia').value.trim() || null,
+    cnpj:        limparCNPJ(document.getElementById('mst-cnpj').value) || null,
+    ie:          document.getElementById('mst-ie').value.trim() || null,
+    telefone:    document.getElementById('mst-tel').value.trim() || null,
+    email:       document.getElementById('mst-email').value.trim() || null,
+    site:        document.getElementById('mst-site').value.trim() || null,
+    logradouro:  document.getElementById('mst-logradouro').value.trim() || null,
+    numero:      document.getElementById('mst-numero').value.trim() || null,
+    complemento: document.getElementById('mst-complemento').value.trim() || null,
+    bairro:      document.getElementById('mst-bairro').value.trim() || null,
+    cep:         document.getElementById('mst-cep').value.trim() || null,
+    cidade:      document.getElementById('mst-cidade').value.trim() || null,
+    uf:          document.getElementById('mst-uf').value.trim().toUpperCase() || null,
+    endereco:    enderecoComposto,
+    logo_url:    logoUrl,
+    updated_at:  new Date().toISOString(),
+    ...analise,
+  };
+
+  const idEd = document.getElementById('mst-id-edicao').value;
+  const { error } = idEd
+    ? await db.from('empresa_master').update(payload).eq('id', idEd)
+    : await db.from('empresa_master').insert([payload]);
+
+  if (error) { msgForm('msg-master','Erro: '+error.message,'red'); return; }
+  msgForm('msg-master','✓ Empresa Master salva!','green');
+  window._masterAnaliseAtual = null;
+  carregarEmpresaMaster();
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await carregarEmpresaMaster();
+});
+</script>
+</body>
+</html>

@@ -55,11 +55,13 @@
           <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
           <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
           <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+          <div class="nav-item" onclick="location.href='clientes.html'"><span>🤝</span> Clientes</div>
         </div>
         <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
         <div class="nav-section-items" id="nav-section-administracao">
           <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
-          <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+          <div class="nav-item" onclick="location.href='empresas.html'"><span>🦺</span> Resp. de Segurança</div>
+          <div class="nav-item" onclick="location.href='empresa-master.html'"><span>🏛️</span> Empresa Master</div>
           <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
           <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
         </div>
@@ -75,6 +77,8 @@
           <h3 class="card-title">🛒 Nova Solicitação de Compra</h3>
           <p id="rc-origem-info" style="display:none;font-size:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:8px 12px;border-radius:6px;margin-bottom:12px;"></p>
           <input type="hidden" id="req-id-edicao" value="">
+          <input type="hidden" id="req-modo-faturamento" value="Direto">
+          <input type="hidden" id="req-cliente-id" value="">
 
           <div class="form-grid">
             <div class="form-group"><label for="req-numero">Número</label><input type="text" id="req-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
@@ -317,14 +321,17 @@ async function editarRequisicao(id) {
   document.getElementById('req-status').value         = r.status || 'Solicitado';
   document.getElementById('req-data-necessidade').value = r.data_necessidade || '';
   document.getElementById('req-observacoes').value    = r.observacoes || '';
+  document.getElementById('req-modo-faturamento').value = r.modo_faturamento || 'Direto';
+  document.getElementById('req-cliente-id').value = r.cliente_id || '';
 
   const info = document.getElementById('rc-origem-info');
+  const faturamentoTxt = r.modo_faturamento === 'Pela Empresa Contratada' ? ' · Faturamento: Pela Empresa Contratada' : ' · Faturamento: Direto';
   if (r.requisicao_material_id) {
     info.style.display = 'block';
-    info.innerHTML = `↳ Gerada a partir da Requisição de Material <a href="requisicao-materiais.html?ver=${escapeHTML(r.requisicao_material_id)}" target="_blank" style="color:#065f46;font-weight:600;">${escapeHTML(r.requisicoes_material?.numero || '')}</a>${r.criado_por_nome ? ' · criada por ' + escapeHTML(r.criado_por_nome) : ''}`;
+    info.innerHTML = `↳ Gerada a partir da Requisição de Material <a href="requisicao-materiais.html?ver=${escapeHTML(r.requisicao_material_id)}" target="_blank" style="color:#065f46;font-weight:600;">${escapeHTML(r.requisicoes_material?.numero || '')}</a>${r.criado_por_nome ? ' · criada por ' + escapeHTML(r.criado_por_nome) : ''}${faturamentoTxt}`;
   } else {
-    info.style.display = r.criado_por_nome ? 'block' : 'none';
-    info.innerHTML = r.criado_por_nome ? `Criada por ${escapeHTML(r.criado_por_nome)}` : '';
+    info.style.display = 'block';
+    info.innerHTML = (r.criado_por_nome ? `Criada por ${escapeHTML(r.criado_por_nome)}` : '') + faturamentoTxt;
   }
 
   await Promise.all([atualizarSelectOSParaRequisicao(), atualizarSelectFornecedores()]);
@@ -349,6 +356,8 @@ function resetarFormRequisicao() {
   document.getElementById('req-status').value = 'Solicitado';
   document.getElementById('req-os').value = '';
   document.getElementById('req-fornecedor').value = '';
+  document.getElementById('req-modo-faturamento').value = 'Direto';
+  document.getElementById('req-cliente-id').value = '';
   delete document.getElementById('req-id-edicao').dataset.origemRm;
   const info = document.getElementById('rc-origem-info');
   info.style.display = 'none'; info.textContent = '';
@@ -410,6 +419,8 @@ document.getElementById('btn-salvar-requisicao')?.addEventListener('click', asyn
       valor_total:         valorTotal,
       updated_at:           new Date().toISOString(),
       criado_por_nome:       window._usuarioAtual?.nome || null,
+      modo_faturamento:      document.getElementById('req-modo-faturamento').value || 'Direto',
+      cliente_id:            document.getElementById('req-cliente-id').value || null,
     };
     if (origemRm) payload.requisicao_material_id = origemRm;
 
@@ -468,6 +479,8 @@ async function aplicarOrigemRmDaURL() {
   resetarFormRequisicao();
   document.getElementById('req-solicitante').value = r.solicitante;
   document.getElementById('req-observacoes').value = r.observacoes || '';
+  document.getElementById('req-modo-faturamento').value = r.modo_faturamento || 'Direto';
+  document.getElementById('req-cliente-id').value = r.cliente_id || '';
   await atualizarSelectOSParaRequisicao();
   document.getElementById('req-os').value = r.os_id || '';
 
@@ -480,7 +493,8 @@ async function aplicarOrigemRmDaURL() {
   document.getElementById('req-id-edicao').dataset.origemRm = origemRm; // lido no submit
   const info = document.getElementById('rc-origem-info');
   info.style.display = 'block';
-  info.innerHTML = `↳ Gerada a partir da Requisição de Material <a href="requisicao-materiais.html?ver=${escapeHTML(origemRm)}" target="_blank" style="color:#065f46;font-weight:600;">${escapeHTML(r.numero)}</a>${r.criado_por_nome ? ' (criada por ' + escapeHTML(r.criado_por_nome) + ')' : ''}. Complete o fornecedor e os valores antes de registrar.`;
+  const faturamentoTxt = r.modo_faturamento === 'Pela Empresa Contratada' ? ' · Faturamento: Pela Empresa Contratada' : ' · Faturamento: Direto';
+  info.innerHTML = `↳ Gerada a partir da Requisição de Material <a href="requisicao-materiais.html?ver=${escapeHTML(origemRm)}" target="_blank" style="color:#065f46;font-weight:600;">${escapeHTML(r.numero)}</a>${r.criado_por_nome ? ' (criada por ' + escapeHTML(r.criado_por_nome) + ')' : ''}${faturamentoTxt}. Complete o fornecedor e os valores antes de registrar.`;
 
   document.getElementById('foco-formulario-requisicao').scrollIntoView({ behavior:'smooth' });
 }
