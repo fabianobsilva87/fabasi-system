@@ -25,7 +25,7 @@
   <div class="app-container">
     <aside class="sidebar no-print">
       <div class="sidebar-header">
-        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
       <nav>
@@ -337,7 +337,7 @@ function exportarMapaCotacao() {
   const html = `
   <div class="laudo-wrapper">
     <div class="laudo-header">
-      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;"><div><h1 style="font-size:16px;">Mapa de Cotação</h1><p>Comparativo de fornecedores</p></div></div>
+      <div style="display:flex;align-items:center;gap:14px;"><img src="${LOGO_ETIQUETA}" alt="Logo" style="height:40px;width:auto;display:block;filter:brightness(0) invert(1);"><div><h1 style="font-size:16px;">Mapa de Cotação</h1><p>Comparativo de fornecedores</p></div></div>
       <div class="laudo-header-meta"><strong>Nº ${escapeHTML(_cotacaoAtual.numero)}</strong><br>Origem: ${escapeHTML(_cotacaoAtual.requisicoes_compra?.numero || '')}</div>
     </div>
     <div class="laudo-section">
