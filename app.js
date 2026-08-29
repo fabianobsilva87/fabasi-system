@@ -664,6 +664,40 @@ function inicializarCanvasAssinatura() {
 function limparCanvasAssinatura() { canvasFiscal?.limpar(); }
 
 // ===================== SESSÃO & ROTEAMENTO =====================
+// ===================== MENU LATERAL RECOLHÍVEL =====================
+// Cada seção (Refrigeração, Compras, Administração...) pode ser fechada
+// clicando no cabeçalho — estado lembrado por navegador via localStorage,
+// então persiste ao trocar de página (cada página é um load completo,
+// não é SPA). A seção que contém o item ativo nunca começa fechada,
+// mesmo que o usuário tenha fechado ela antes — senão a pessoa "se perde"
+// sem entender por que sumiu o item em que ela estava.
+function alternarSecaoMenu(id) {
+  const el = document.getElementById('nav-section-' + id);
+  const chevron = document.getElementById('nav-chevron-' + id);
+  if (!el) return;
+  const estaAberta = el.style.display !== 'none';
+  el.style.display = estaAberta ? 'none' : '';
+  if (chevron) chevron.style.transform = estaAberta ? 'rotate(-90deg)' : 'rotate(0deg)';
+  try { localStorage.setItem('fabasiNavSecao_' + id, estaAberta ? 'fechada' : 'aberta'); } catch(e) { /* localStorage indisponível — ignora, some sem lembrar */ }
+}
+
+function inicializarMenuRecolhivel() {
+  document.querySelectorAll('.nav-section-items').forEach(el => {
+    const id = el.id.replace('nav-section-', '');
+    const temAtivo = el.querySelector('.nav-item.active') !== null;
+    if (temAtivo) return; // nunca esconde a seção da página atual
+
+    let estado = null;
+    try { estado = localStorage.getItem('fabasiNavSecao_' + id); } catch(e) {}
+    if (estado === 'fechada') {
+      el.style.display = 'none';
+      const chevron = document.getElementById('nav-chevron-' + id);
+      if (chevron) chevron.style.transform = 'rotate(-90deg)';
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', inicializarMenuRecolhivel);
+
 async function verificarSessaoGlobal() {
   const pag = window.location.pathname.split('/').pop();
   const ehPaginaLogin   = (pag === '' || pag === 'index.html');
@@ -5784,29 +5818,8 @@ if ($('btn-cancelar-edicao-osg')) {
   });
 }
 
-// ===================== NAVEGAÇÃO — Central de Impressões =====================
-// Insere o item "🖨️ Central de Impressões" na sidebar de todas as páginas, logo após
-// "Programação PMOC", sem precisar editar o HTML de cada uma. Marca o item como ativo
-// quando a página corrente for impressoes.html.
-document.addEventListener('DOMContentLoaded', () => {
-  const nav = document.querySelector('.sidebar nav');
-  if (!nav || nav.querySelector('[data-nav="impressoes"]')) return;
-
-  const item = document.createElement('div');
-  item.className = 'nav-item';
-  item.dataset.nav = 'impressoes';
-  item.setAttribute('onclick', "location.href='impressoes.html'");
-  item.innerHTML = '<span>🖨️</span> Central de Impressões';
-  if (location.pathname.endsWith('impressoes.html')) {
-    item.classList.add('active');
-    nav.querySelectorAll('.nav-item.active').forEach(el => {
-      if (el !== item) el.classList.remove('active');
-    });
-  }
-
-  const ancora = Array.from(nav.querySelectorAll('.nav-item'))
-    .find(el => (el.getAttribute('onclick') || '').includes('programacao-pmoc.html'));
-
-  if (ancora) ancora.insertAdjacentElement('afterend', item);
-  else nav.appendChild(item);
-});
+// ===================== SIDEBAR — GRUPOS COLAPSÁVEIS (versão anterior, morta) =====================
+// REMOVIDO em 29/08/2026: essa implementação usava .nav-group/data-group,
+// que nunca chegou a existir em nenhuma página — nunca rodou de verdade.
+// Substituída por alternarSecaoMenu()/inicializarMenuRecolhivel(), que usa
+// .nav-section-items (a estrutura real gerada em todas as sidebars agora).

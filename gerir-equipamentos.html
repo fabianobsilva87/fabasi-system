@@ -31,31 +31,41 @@
         
         <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
       </div>
-            <nav>
-        <div class="nav-label">Visão Geral</div>
-        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
-        <div class="nav-label">Refrigeração</div>
-        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
-        <div class="nav-item active" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
-        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
-        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
-        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
-        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
-        <div class="nav-label">Manutenção</div>
-        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
-        <div class="nav-label">Compras</div>
-        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
-        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
-        <div class="nav-item" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
-        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
-        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
-        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
-        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
-        <div class="nav-label">Administração</div>
-        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
-        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
-        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
-        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      <nav>
+        <div class="nav-label" onclick="alternarSecaoMenu('visaogeral')">Visão Geral <span class="nav-chevron" id="nav-chevron-visaogeral">▾</span></div>
+        <div class="nav-section-items" id="nav-section-visaogeral">
+          <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('refrigeracao')">Refrigeração <span class="nav-chevron" id="nav-chevron-refrigeracao">▾</span></div>
+        <div class="nav-section-items" id="nav-section-refrigeracao">
+          <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+          <div class="nav-item active" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+          <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+          <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+          <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+          <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('manutencao')">Manutenção <span class="nav-chevron" id="nav-chevron-manutencao">▾</span></div>
+        <div class="nav-section-items" id="nav-section-manutencao">
+          <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('compras')">Compras <span class="nav-chevron" id="nav-chevron-compras">▾</span></div>
+        <div class="nav-section-items" id="nav-section-compras">
+          <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+          <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+          <div class="nav-item" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
+          <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+          <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+          <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+          <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        </div>
+        <div class="nav-label" onclick="alternarSecaoMenu('administracao')">Administração <span class="nav-chevron" id="nav-chevron-administracao">▾</span></div>
+        <div class="nav-section-items" id="nav-section-administracao">
+          <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+          <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+          <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+          <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+        </div>
       </nav>
       <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
     </aside>

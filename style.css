@@ -135,7 +135,15 @@ body {
 .sidebar nav::-webkit-scrollbar-track { background: transparent; }
 .sidebar nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 3px; }
 .sidebar nav::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.25); }
-.nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.3); padding: 14px 16px 4px; font-weight: 600; }
+.nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.3); padding: 14px 16px 4px; font-weight: 600; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+.nav-label:hover { color: rgba(255,255,255,.55); }
+.nav-chevron { font-size: 9px; transition: transform .15s; display: inline-block; }
+.nav-label.nav-label-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; padding-right: 14px; }
+.nav-label.nav-label-toggle:hover { color: rgba(255,255,255,.55); }
+.nav-chevron { font-size: 9px; transition: transform .2s ease; display: inline-block; }
+.nav-group.collapsed .nav-chevron { transform: rotate(-90deg); }
+.nav-group-items { overflow: hidden; max-height: 600px; transition: max-height .25s ease; }
+.nav-group.collapsed .nav-group-items { max-height: 0; }
 .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 16px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,.6); border-left: 2px solid transparent; transition: all .15s; user-select: none; }
 .nav-item:hover { background: rgba(255,255,255,.06); color: rgba(255,255,255,.9); }
 .nav-item.active { background: rgba(59,130,246,.2); color: #93c5fd; border-left-color: #3b82f6; font-weight: 600; }
@@ -307,6 +315,7 @@ tbody tr:hover td { background: var(--gray-50); }
   .sidebar nav { display: flex; flex-wrap: wrap; width: 100%; flex: none; overflow: visible; }
   .nav-item { font-size: 12px; padding: 8px 12px; }
   .nav-label { display: none; }
+  .nav-section-items { display: contents !important; }
   .sidebar-footer { width: 100%; }
   .form-grid { grid-template-columns: 1fr !important; }
   .form-grid.thirds { grid-template-columns: 1fr !important; }
