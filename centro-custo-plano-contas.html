@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Centros de custo (administrativo e por obra) e plano de contas gerencial — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Centro de Custo e Plano de Contas</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <button type="button" class="btn-refresh" onclick="alternarAbaFinCC('centroscusto')">🏷️ Centros de Custo</button>
+        <button type="button" class="btn-refresh" style="background:#4338ca;border-color:#4338ca;color:#fff;" onclick="alternarAbaFinCC('planocontas')">📊 Plano de Contas</button>
+      </div>
+      <div class="section-content">
+
+<div id="aba-centroscusto" class="app-sub-panel">
+        <div class="card">
+          <h3 class="card-title">🏷️ Novo Centro de Custo Administrativo</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Centros de custo de obra são criados automaticamente ao cadastrar uma obra — aqui você cadastra só os administrativos (Diretoria, RH, Comercial, etc.).</p>
+          <input type="hidden" id="cc-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="cc-codigo">Código *</label><input type="text" id="cc-codigo" placeholder="Ex: CC-ADM-001"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="cc-nome">Nome *</label><input type="text" id="cc-nome" placeholder="Ex: Diretoria, RH, Comercial, TI"></div>
+            <div class="form-group" style="grid-column:span 3;"><label for="cc-descricao">Descrição</label><textarea id="cc-descricao" rows="2"></textarea></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-cc" class="btn-primary">💾 Registrar Centro de Custo</button>
+            <button type="button" id="btn-cancelar-cc" class="btn-secondary" style="display:none;" onclick="resetarFormCentroCusto()">✕ Cancelar</button>
+          </div>
+          <p id="msg-cc" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Centros de Custo Cadastrados</h3>
+            <button type="button" class="btn-refresh" onclick="carregarCentrosCusto()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Obra Vinculada</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-centroscusto"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+<div id="aba-planocontas" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">📊 Nova Conta</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Plano de contas gerencial (para acompanhar margem por obra/categoria) — não é o plano contábil fiscal da contabilidade.</p>
+          <input type="hidden" id="pc-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="pc-codigo">Código *</label><input type="text" id="pc-codigo" placeholder="Ex: 2.08"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="pc-nome">Nome *</label><input type="text" id="pc-nome" placeholder="Ex: Combustível de Obra"></div>
+            <div class="form-group"><label for="pc-tipo">Tipo *</label>
+              <select id="pc-tipo" class="form-input-style">
+                <option value="receita">Receita</option>
+                <option value="custo">Custo (direto de obra)</option>
+                <option value="despesa">Despesa (administrativa)</option>
+              </select>
+            </div>
+            <div class="form-group"><label for="pc-conta-pai">Conta Pai (grupo)</label><select id="pc-conta-pai" class="form-input-style"><option value="">-- Conta de grupo (nível 1) --</option></select></div>
+            <div class="form-group"><label for="pc-cc-sugerido">Centro de Custo Sugerido</label>
+              <select id="pc-cc-sugerido" class="form-input-style">
+                <option value="">-- Sem sugestão --</option>
+                <option value="obra">Obra</option>
+                <option value="administrativo">Administrativo</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-pc" class="btn-primary" style="background:#4338ca;">💾 Registrar Conta</button>
+            <button type="button" id="btn-cancelar-pc" class="btn-secondary" style="display:none;" onclick="resetarFormPlanoContas()">✕ Cancelar</button>
+          </div>
+          <p id="msg-pc" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Plano de Contas</h3>
+            <button type="button" class="btn-refresh" onclick="carregarPlanoContas()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Sugestão de C.C.</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-planocontas"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    function alternarAbaFinCC(aba) {
+      ['centroscusto','planocontas'].forEach(a => {
+        const el = document.getElementById('aba-' + a);
+        if (el) el.style.display = a === aba ? 'block' : 'none';
+      });
+    }
+
+    // ===================== CENTROS DE CUSTO =====================
+    let _centrosCustoCache = [];
+
+    async function salvarCentroCusto() {
+      const codigo = document.getElementById('cc-codigo').value.trim();
+      const nome = document.getElementById('cc-nome').value.trim();
+      if (!codigo || !nome) { msgForm('msg-cc', 'Informe código e nome.', 'red'); return; }
+
+      const payload = {
+        codigo, nome, tipo: 'administrativo',
+        descricao: document.getElementById('cc-descricao').value.trim() || null,
+      };
+
+      const idEd = document.getElementById('cc-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('centros_custo').update(payload).eq('id', idEd)
+        : await db.from('centros_custo').insert([payload]);
+
+      if (error) { msgForm('msg-cc', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-cc', '✓ Centro de custo salvo!', 'green');
+      resetarFormCentroCusto();
+      await carregarCentrosCusto();
+    }
+
+    function resetarFormCentroCusto() {
+      document.getElementById('cc-id-edicao').value = '';
+      ['cc-codigo','cc-nome','cc-descricao'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('btn-salvar-cc').textContent = '💾 Registrar Centro de Custo';
+      document.getElementById('btn-cancelar-cc').style.display = 'none';
+    }
+
+    function editarCentroCusto(id) {
+      const cc = _centrosCustoCache.find(x => x.id === id); if (!cc) return;
+      if (cc.tipo === 'obra') { toast('Centros de custo de obra são editados em Cadastro de Obra (só o nome da obra é sincronizado automaticamente).', 'info'); return; }
+      document.getElementById('cc-id-edicao').value = id;
+      document.getElementById('cc-codigo').value = cc.codigo || '';
+      document.getElementById('cc-nome').value = cc.nome || '';
+      document.getElementById('cc-descricao').value = cc.descricao || '';
+      document.getElementById('btn-salvar-cc').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-cc').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirCentroCusto(id, nome, tipo) {
+      if (tipo === 'obra') { toast('Centros de custo de obra são removidos junto com a exclusão da obra correspondente.', 'info'); return; }
+      if (!confirm(`Excluir o centro de custo "${nome}"?`)) return;
+      const { error } = await db.from('centros_custo').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarCentrosCusto();
+    }
+
+    async function carregarCentrosCusto() {
+      const tbody = document.getElementById('tbody-centroscusto'); if (!tbody) return;
+      const { data, error } = await db.from('centros_custo').select('*, obras(nome)').order('tipo').order('codigo');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _centrosCustoCache = data || [];
+      if (!_centrosCustoCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum centro de custo cadastrado ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _centrosCustoCache.map(cc => `<tr>
+        <td style="font-family:monospace;">${escapeHTML(cc.codigo)}</td>
+        <td>${escapeHTML(cc.nome)}</td>
+        <td><span class="tag-badge ${cc.tipo === 'obra' ? 'andamento' : ''}">${cc.tipo === 'obra' ? '🏗️ Obra' : '🏢 Administrativo'}</span></td>
+        <td>${escapeHTML(cc.obras?.nome || '—')}</td>
+        <td><span class="tag-badge ${cc.ativo ? 'success' : 'danger'}">${cc.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarCentroCusto('${escapeHTML(cc.id)}')">✏️ Editar</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirCentroCusto('${escapeHTML(cc.id)}','${escapeHTML(cc.nome)}','${cc.tipo}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== PLANO DE CONTAS =====================
+    let _planoContasCache = [];
+    const TIPO_CONTA_LABEL = { receita: '💰 Receita', custo: '🏗️ Custo', despesa: '🏢 Despesa' };
+
+    async function atualizarSelectContaPai() {
+      const sel = document.getElementById('pc-conta-pai');
+      const atual = sel.value;
+      const grupos = _planoContasCache.filter(c => c.nivel === 1);
+      sel.innerHTML = '<option value="">-- Conta de grupo (nível 1) --</option>' + grupos.map(g => `<option value="${escapeHTML(g.id)}">${escapeHTML(g.codigo)} — ${escapeHTML(g.nome)}</option>`).join('');
+      sel.value = atual;
+    }
+
+    async function salvarPlanoContas() {
+      const codigo = document.getElementById('pc-codigo').value.trim();
+      const nome = document.getElementById('pc-nome').value.trim();
+      if (!codigo || !nome) { msgForm('msg-pc', 'Informe código e nome.', 'red'); return; }
+
+      const contaPaiId = document.getElementById('pc-conta-pai').value || null;
+      const payload = {
+        codigo, nome,
+        tipo: document.getElementById('pc-tipo').value,
+        conta_pai_id: contaPaiId,
+        nivel: contaPaiId ? 2 : 1,
+        centro_custo_tipo_sugerido: document.getElementById('pc-cc-sugerido').value || null,
+      };
+
+      const idEd = document.getElementById('pc-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('plano_contas').update(payload).eq('id', idEd)
+        : await db.from('plano_contas').insert([payload]);
+
+      if (error) { msgForm('msg-pc', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-pc', '✓ Conta salva!', 'green');
+      resetarFormPlanoContas();
+      await carregarPlanoContas();
+    }
+
+    function resetarFormPlanoContas() {
+      document.getElementById('pc-id-edicao').value = '';
+      ['pc-codigo','pc-nome'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('pc-tipo').value = 'despesa';
+      document.getElementById('pc-conta-pai').value = '';
+      document.getElementById('pc-cc-sugerido').value = '';
+      document.getElementById('btn-salvar-pc').textContent = '💾 Registrar Conta';
+      document.getElementById('btn-cancelar-pc').style.display = 'none';
+    }
+
+    function editarPlanoContas(id) {
+      const c = _planoContasCache.find(x => x.id === id); if (!c) return;
+      document.getElementById('pc-id-edicao').value = id;
+      document.getElementById('pc-codigo').value = c.codigo || '';
+      document.getElementById('pc-nome').value = c.nome || '';
+      document.getElementById('pc-tipo').value = c.tipo || 'despesa';
+      document.getElementById('pc-conta-pai').value = c.conta_pai_id || '';
+      document.getElementById('pc-cc-sugerido').value = c.centro_custo_tipo_sugerido || '';
+      document.getElementById('btn-salvar-pc').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-pc').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirPlanoContas(id, nome) {
+      if (!confirm(`Excluir a conta "${nome}"? Contas-filhas ficarão sem grupo — ajuste antes se necessário.`)) return;
+      const { error } = await db.from('plano_contas').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarPlanoContas();
+    }
+
+    async function carregarPlanoContas() {
+      const tbody = document.getElementById('tbody-planocontas'); if (!tbody) return;
+      const { data, error } = await db.from('plano_contas').select('*').order('codigo');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _planoContasCache = data || [];
+      await atualizarSelectContaPai();
+      if (!_planoContasCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma conta cadastrada ainda.</td></tr>'; return; }
+
+      const ccLabel = { obra: '🏗️ Obra', administrativo: '🏢 Administrativo' };
+      tbody.innerHTML = _planoContasCache.map(c => `<tr>
+        <td style="font-family:monospace;${c.nivel === 1 ? 'font-weight:700;' : 'padding-left:20px;'}">${escapeHTML(c.codigo)}</td>
+        <td${c.nivel === 1 ? ' style="font-weight:700;"' : ''}>${escapeHTML(c.nome)}</td>
+        <td><span class="tag-badge">${TIPO_CONTA_LABEL[c.tipo] || escapeHTML(c.tipo)}</span></td>
+        <td>${ccLabel[c.centro_custo_tipo_sugerido] || '—'}</td>
+        <td><span class="tag-badge ${c.ativo ? 'success' : 'danger'}">${c.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarPlanoContas('${escapeHTML(c.id)}')">✏️ Editar</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirPlanoContas('${escapeHTML(c.id)}','${escapeHTML(c.nome)}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    document.getElementById('btn-salvar-cc').addEventListener('click', salvarCentroCusto);
+    document.getElementById('btn-salvar-pc').addEventListener('click', salvarPlanoContas);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarCentrosCusto();
+      await carregarPlanoContas();
+    });
+  </script>
+</body>
+</html>

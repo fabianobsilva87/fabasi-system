@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Cadastro central de obras — status, responsável, prazo, cliente e centro de custo.">
+    <meta name="description" content="Cadastro central de obras — status, responsável, prazo, cliente e centro de custo — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,187 @@
       <div class="topbar no-print"><h2>🏗️ Cadastro de Obra</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>🏗️ Cadastro de Obra</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Obras — entidade central do ciclo de vida da obra (planejamento → execução → conclusão).</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> status (Planejamento/Mobilização/Em execução/Pausada/Concluída/Encerrada), cliente, endereço, responsável, prazo, centro de custo. Referência obrigatória para Requisição de Materiais, Contratos, Orçamento e Medição.
+          <div class="card">
+            <h3 class="card-title">🏗️ Nova Obra</h3>
+            <p style="font-size:12px;color:#718096;margin-bottom:14px;">Ao registrar, um centro de custo é criado automaticamente para esta obra (usado no Financeiro e no Fiscal).</p>
+            <input type="hidden" id="obra-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="obra-nome">Nome da Obra *</label><input type="text" id="obra-nome" placeholder="Ex: Reforma Galpão Industrial — Univag"></div>
+              <div class="form-group"><label for="obra-cliente">Cliente (Contratante)</label><select id="obra-cliente" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="obra-responsavel">Responsável</label><select id="obra-responsavel" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="obra-status">Status</label>
+                <select id="obra-status" class="form-input-style">
+                  <option value="planejamento">Planejamento</option>
+                  <option value="mobilizacao">Mobilização</option>
+                  <option value="em_execucao">Em Execução</option>
+                  <option value="pausada">Pausada</option>
+                  <option value="concluida">Concluída</option>
+                  <option value="encerrada">Encerrada</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="obra-valor-contrato">Valor do Contrato (R$)</label><input type="number" id="obra-valor-contrato" step="0.01" placeholder="0,00"></div>
+              <div class="form-group" style="grid-column:span 2;"><label for="obra-endereco">Endereço</label><input type="text" id="obra-endereco" placeholder="Logradouro, número"></div>
+              <div class="form-group"><label for="obra-cidade">Cidade</label><input type="text" id="obra-cidade"></div>
+              <div class="form-group"><label for="obra-uf">UF</label><input type="text" id="obra-uf" maxlength="2" style="text-transform:uppercase;"></div>
+              <div class="form-group"><label for="obra-data-inicio">Início Previsto</label><input type="date" id="obra-data-inicio"></div>
+              <div class="form-group"><label for="obra-data-termino">Término Previsto</label><input type="date" id="obra-data-termino"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="obra-observacoes">Observações</label><textarea id="obra-observacoes" rows="2"></textarea></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-obra" class="btn-primary">💾 Registrar Obra</button>
+              <button type="button" id="btn-cancelar-obra" class="btn-secondary" style="display:none;" onclick="resetarFormObra()">✕ Cancelar</button>
+            </div>
+            <p id="msg-obra" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Obras Cadastradas</h3>
+              <button type="button" class="btn-refresh" onclick="carregarObras()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Obra</th><th>Cliente</th><th>Responsável</th><th>Status</th><th>Prazo</th><th>Centro de Custo</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-obras"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
             </div>
           </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _obrasCache = [];
+    let _clientesContratantesCache = [];
+    let _colaboradoresCache = [];
+
+    const STATUS_OBRA_LABEL = {
+      planejamento: 'Planejamento', mobilizacao: 'Mobilização', em_execucao: 'Em Execução',
+      pausada: 'Pausada', concluida: 'Concluída', encerrada: 'Encerrada',
+    };
+    const STATUS_OBRA_COR = {
+      planejamento: '', mobilizacao: 'andamento', em_execucao: 'warning',
+      pausada: 'danger', concluida: 'success', encerrada: '',
+    };
+
+    async function carregarSelectsObra() {
+      const { data: clientes } = await db.from('empresas').select('id,razao_social').eq('tipo', 'contratante').eq('ativa', true).order('razao_social');
+      _clientesContratantesCache = clientes || [];
+      const selCliente = document.getElementById('obra-cliente');
+      const atualCliente = selCliente.value;
+      selCliente.innerHTML = '<option value="">-- Selecione --</option>' + _clientesContratantesCache.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.razao_social)}</option>`).join('');
+      selCliente.value = atualCliente;
+
+      const { data: colabs } = await db.from('colaboradores').select('id,nome').order('nome');
+      _colaboradoresCache = colabs || [];
+      const selResp = document.getElementById('obra-responsavel');
+      const atualResp = selResp.value;
+      selResp.innerHTML = '<option value="">-- Selecione --</option>' + _colaboradoresCache.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.nome)}</option>`).join('');
+      selResp.value = atualResp;
+    }
+
+    async function salvarObra() {
+      const nome = document.getElementById('obra-nome').value.trim();
+      if (!nome) { msgForm('msg-obra', 'Informe o nome da obra.', 'red'); return; }
+
+      const payload = {
+        nome,
+        cliente_id: document.getElementById('obra-cliente').value || null,
+        responsavel_id: document.getElementById('obra-responsavel').value || null,
+        status: document.getElementById('obra-status').value,
+        valor_contrato: document.getElementById('obra-valor-contrato').value || null,
+        endereco: document.getElementById('obra-endereco').value.trim() || null,
+        cidade: document.getElementById('obra-cidade').value.trim() || null,
+        uf: document.getElementById('obra-uf').value.trim().toUpperCase() || null,
+        data_inicio: document.getElementById('obra-data-inicio').value || null,
+        data_prevista_termino: document.getElementById('obra-data-termino').value || null,
+        observacoes: document.getElementById('obra-observacoes').value.trim() || null,
+      };
+
+      const idEd = document.getElementById('obra-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('obras').update(payload).eq('id', idEd)
+        : await db.from('obras').insert([payload]);
+
+      if (error) { msgForm('msg-obra', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-obra', idEd ? '✓ Obra atualizada!' : '✓ Obra registrada! Centro de custo criado automaticamente.', 'green');
+      resetarFormObra();
+      await carregarObras();
+    }
+
+    function resetarFormObra() {
+      document.getElementById('obra-id-edicao').value = '';
+      ['obra-nome','obra-endereco','obra-cidade','obra-uf','obra-data-inicio','obra-data-termino','obra-valor-contrato','obra-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('obra-cliente').value = '';
+      document.getElementById('obra-responsavel').value = '';
+      document.getElementById('obra-status').value = 'planejamento';
+      document.getElementById('btn-salvar-obra').textContent = '💾 Registrar Obra';
+      document.getElementById('btn-cancelar-obra').style.display = 'none';
+    }
+
+    function editarObra(id) {
+      const o = _obrasCache.find(x => x.id === id); if (!o) return;
+      document.getElementById('obra-id-edicao').value = id;
+      document.getElementById('obra-nome').value = o.nome || '';
+      document.getElementById('obra-cliente').value = o.cliente_id || '';
+      document.getElementById('obra-responsavel').value = o.responsavel_id || '';
+      document.getElementById('obra-status').value = o.status || 'planejamento';
+      document.getElementById('obra-valor-contrato').value = o.valor_contrato || '';
+      document.getElementById('obra-endereco').value = o.endereco || '';
+      document.getElementById('obra-cidade').value = o.cidade || '';
+      document.getElementById('obra-uf').value = o.uf || '';
+      document.getElementById('obra-data-inicio').value = o.data_inicio || '';
+      document.getElementById('obra-data-termino').value = o.data_prevista_termino || '';
+      document.getElementById('obra-observacoes').value = o.observacoes || '';
+      document.getElementById('btn-salvar-obra').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-obra').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirObra(id, nome) {
+      if (!confirm(`Excluir a obra "${nome}"? O centro de custo vinculado também será removido.`)) return;
+      const { error } = await db.from('obras').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarObras();
+    }
+
+    async function carregarObras() {
+      const tbody = document.getElementById('tbody-obras'); if (!tbody) return;
+      const { data, error } = await db.from('obras')
+        .select('*, empresas(razao_social), colaboradores(nome), centros_custo(codigo)')
+        .order('created_at', { ascending: false });
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _obrasCache = data || [];
+      if (!_obrasCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma obra cadastrada ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _obrasCache.map(o => {
+        const cc = Array.isArray(o.centros_custo) ? o.centros_custo[0] : o.centros_custo;
+        return `<tr>
+          <td><strong>${escapeHTML(o.nome)}</strong></td>
+          <td>${escapeHTML(o.empresas?.razao_social || '—')}</td>
+          <td>${escapeHTML(o.colaboradores?.nome || '—')}</td>
+          <td><span class="tag-badge ${STATUS_OBRA_COR[o.status] || ''}">${STATUS_OBRA_LABEL[o.status] || escapeHTML(o.status || '—')}</span></td>
+          <td style="font-size:12px;">${fmtDate(o.data_inicio)} → ${fmtDate(o.data_prevista_termino)}</td>
+          <td style="font-family:monospace;font-size:12px;">${escapeHTML(cc?.codigo || '—')}</td>
+          <td style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarObra('${escapeHTML(o.id)}')">✏️ Editar</button>
+            <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirObra('${escapeHTML(o.id)}','${escapeHTML(o.nome)}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('btn-salvar-obra').addEventListener('click', salvarObra);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsObra();
+      await carregarObras();
+    });
+  </script>
 </body>
 </html>

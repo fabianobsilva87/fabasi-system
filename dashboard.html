@@ -200,19 +200,33 @@
 
         </div>
 
-        <!-- ===== NOVOS NÚCLEOS DO ERP (Obras/Estoque/Financeiro/Bancário/Governança) ===== -->
+        <!-- ===== KPI: OBRAS ===== -->
+        <!-- Etapa 14.1 — obras.html deixou de ser placeholder; centro de
+             custo é criado automaticamente a cada obra cadastrada. -->
+        <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 10px;">OBRAS</p>
+        <div class="dash-cards-grid" style="grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;">
+
+          <div class="dash-card" style="cursor:pointer;" onclick="location.href='obras.html'">
+            <div class="dash-card-icon">🏗️</div>
+            <p class="dash-card-title">Obras Ativas</p>
+            <h3 id="dash-txt-obras-ativas" class="dash-card-value">—</h3>
+          </div>
+
+          <div class="dash-card" style="cursor:pointer;" onclick="location.href='centro-custo-plano-contas.html'">
+            <div class="dash-card-icon">🏷️</div>
+            <p class="dash-card-title">Centros de Custo Ativos</p>
+            <h3 id="dash-txt-centros-custo-ativos" class="dash-card-value">—</h3>
+          </div>
+
+        </div>
+
+        <!-- ===== NOVOS NÚCLEOS DO ERP (Estoque/Financeiro/Governança) ===== -->
         <!-- Sem consulta ao banco ainda: os núcleos abaixo são placeholders de
              arquitetura (sem tabelas criadas). Assim que cada um ganhar schema
              e dados reais, estes cards passam a exibir KPIs de verdade, no
-             mesmo padrão dos cards de Compras/Fiscal acima. -->
+             mesmo padrão dos cards de Compras/Fiscal/Obras acima. -->
         <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 10px;">NOVOS NÚCLEOS DO ERP — EM CONSTRUÇÃO</p>
-        <div class="dash-cards-grid" style="grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
-
-          <div class="dash-card" style="cursor:pointer;opacity:.75;" onclick="location.href='obras.html'">
-            <div class="dash-card-icon">🏗️</div>
-            <p class="dash-card-title">Obras</p>
-            <h3 class="dash-card-value" style="font-size:13px;">Em construção</h3>
-          </div>
+        <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
 
           <div class="dash-card" style="cursor:pointer;opacity:.75;" onclick="location.href='estoque.html'">
             <div class="dash-card-icon">📦</div>
@@ -372,6 +386,7 @@
         carregarAlertasVencimento();
         carregarKPIsExtras();
         carregarKpisFiscalDashboard();
+        carregarKpiObrasDashboard();
         carregarInventarioGas();
         carregarDistribuicaoCategoria();
         carregarConformidadeFiltros();

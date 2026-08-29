@@ -760,6 +760,7 @@ const MENU_SECTIONS = [
     { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
     { icon: '🦺', label: 'Resp. de Segurança', href: 'empresas.html' },
     { icon: '📍', label: 'Locais', href: 'locais.html' },
+    { icon: '📊', label: 'Centro de Custo e Plano de Contas', href: 'centro-custo-plano-contas.html' },
   ]},
   // NÚCLEO FINANCEIRO — inclui Bancário (mesclado a pedido: na prática as
   // duas coisas operam juntas — pagar/receber e conciliar extrato são
@@ -5620,6 +5621,19 @@ async function carregarKpisFiscalDashboard() {
   if ($('dash-txt-fiscal-nfse'))      $('dash-txt-fiscal-nfse').textContent      = totalNfse ?? 0;
   if ($('dash-txt-fiscal-pendentes')) $('dash-txt-fiscal-pendentes').textContent = totalPendentes ?? 0;
   if ($('dash-txt-fiscal-erro'))      $('dash-txt-fiscal-erro').textContent      = totalErro ?? 0;
+}
+
+// ===================== DASHBOARD — OBRAS / CENTROS DE CUSTO (Etapa 14.1) =====================
+async function carregarKpiObrasDashboard() {
+  if (!$('dash-txt-obras-ativas')) return;
+
+  const [{ count: obrasAtivas }, { count: centrosAtivos }] = await Promise.all([
+    db.from('obras').select('id', { count: 'exact', head: true }).not('status', 'in', '(concluida,encerrada)'),
+    db.from('centros_custo').select('id', { count: 'exact', head: true }).eq('ativo', true),
+  ]);
+
+  if ($('dash-txt-obras-ativas'))         $('dash-txt-obras-ativas').textContent         = obrasAtivas ?? 0;
+  if ($('dash-txt-centros-custo-ativos')) $('dash-txt-centros-custo-ativos').textContent = centrosAtivos ?? 0;
 }
 
 async function carregarDistribuicaoCategoria() {
