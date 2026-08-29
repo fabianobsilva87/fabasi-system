@@ -73,7 +73,7 @@
           <input type="hidden" id="rm-id-edicao" value="">
 
           <div class="form-grid">
-            <div class="form-group"><label for="rm-numero">Número *</label><input type="text" id="rm-numero" placeholder="Ex: RM-2026-0001"></div>
+            <div class="form-group"><label for="rm-numero">Número</label><input type="text" id="rm-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
             <div class="form-group"><label for="rm-solicitante">Solicitante *</label><input type="text" id="rm-solicitante" placeholder="Nome de quem solicita"></div>
             <div class="form-group"><label for="rm-os">O.S. Vinculada (opcional)</label><select id="rm-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
             <div class="form-group" style="grid-column:span 3;"><label for="rm-observacoes">Observações</label><textarea id="rm-observacoes" rows="2" placeholder="Detalhes do pedido..."></textarea></div>
@@ -130,7 +130,7 @@
           <input type="hidden" id="req-id-edicao" value="">
 
           <div class="form-grid">
-            <div class="form-group"><label for="req-numero">Número *</label><input type="text" id="req-numero" placeholder="Ex: RC-2026-0001"></div>
+            <div class="form-group"><label for="req-numero">Número</label><input type="text" id="req-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
             <div class="form-group"><label for="req-solicitante">Solicitante *</label><input type="text" id="req-solicitante" placeholder="Nome de quem solicita"></div>
             <div class="form-group"><label for="req-os">O.S. Vinculada (opcional)</label><select id="req-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
             <div class="form-group"><label for="req-fornecedor">Fornecedor (opcional)</label><select id="req-fornecedor" class="form-input-style"><option value="">-- A definir --</option></select></div>
@@ -566,39 +566,49 @@ async function excluirReqMaterial(id) {
 }
 
 document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', async () => {
-  const numero = document.getElementById('rm-numero').value.trim();
   const solicitante = document.getElementById('rm-solicitante').value.trim();
-  if (!numero)      { msgForm('msg-reqmaterial','Informe o número da requisição.','red'); return; }
   if (!solicitante) { msgForm('msg-reqmaterial','Informe o solicitante.','red'); return; }
 
   const itens = coletarItensReqMaterialDoForm();
   if (!itens.length) { msgForm('msg-reqmaterial','Adicione ao menos um item.','red'); return; }
 
-  const payload = {
-    numero,
-    solicitante,
-    os_id:        document.getElementById('rm-os').value || null,
-    observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
-  };
-
   const idEd = document.getElementById('rm-id-edicao').value;
   let requisicaoId = idEd;
 
   if (idEd) {
+    // Edição: número já existe e não muda — só os outros campos.
+    const payload = {
+      solicitante,
+      os_id:        document.getElementById('rm-os').value || null,
+      observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+    };
     const { error } = await db.from('requisicoes_material').update(payload).eq('id', idEd);
     if (error) { msgForm('msg-reqmaterial','Erro ao salvar: ' + error.message,'red'); return; }
     await db.from('requisicoes_material_itens').delete().eq('requisicao_id', idEd);
   } else {
+    // Nova: número só é gerado agora, no momento do save — evita "queimar"
+    // número de rascunho que o usuário abriu e não chegou a salvar.
+    const { data: numero, error: errNum } = await db.rpc('gerar_numero_documento', { p_tipo: 'RM' });
+    if (errNum) { msgForm('msg-reqmaterial','Erro ao gerar número da requisição: ' + errNum.message,'red'); return; }
+
+    const payload = {
+      numero,
+      solicitante,
+      os_id:        document.getElementById('rm-os').value || null,
+      observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+    };
     const { data, error } = await db.from('requisicoes_material').insert([payload]).select('id').single();
     if (error) { msgForm('msg-reqmaterial','Erro ao salvar: ' + error.message,'red'); return; }
     requisicaoId = data.id;
+    document.getElementById('rm-numero').value = numero;
   }
 
   const itensComRequisicao = itens.map(it => ({ ...it, requisicao_id: requisicaoId }));
   const { error: errItens } = await db.from('requisicoes_material_itens').insert(itensComRequisicao);
   if (errItens) { msgForm('msg-reqmaterial','Requisição salva, mas houve erro ao salvar os itens: ' + errItens.message,'red'); return; }
 
-  msgForm('msg-reqmaterial', idEd ? '✓ Requisição atualizada!' : '✓ Requisição registrada!', 'green');
+  const numeroFinal = document.getElementById('rm-numero').value;
+  msgForm('msg-reqmaterial', idEd ? `✓ Requisição ${numeroFinal} atualizada!` : `✓ Requisição ${numeroFinal} registrada!`, 'green');
   resetarFormReqMaterial();
   carregarReqMateriais();
 });
@@ -613,7 +623,8 @@ async function converterReqMaterialEmCompra(id) {
   alternarAbaCompras('requisicoes');
   resetarFormRequisicao();
 
-  document.getElementById('req-numero').value = r.numero.replace(/^RM/i, 'RC');
+  // Número não é mais pré-preenchido aqui — é gerado automaticamente
+  // (série RC própria) só no momento em que a solicitação for salva.
   document.getElementById('req-solicitante').value = r.solicitante;
   document.getElementById('req-observacoes').value = r.observacoes || '';
   await atualizarSelectOSParaRequisicao();
@@ -1097,41 +1108,55 @@ async function excluirRequisicao(id) {
 }
 
 document.getElementById('btn-salvar-requisicao')?.addEventListener('click', async () => {
-  const numero = document.getElementById('req-numero').value.trim();
   const solicitante = document.getElementById('req-solicitante').value.trim();
-  if (!numero)      { msgForm('msg-requisicao','Informe o número da requisição.','red'); return; }
   if (!solicitante) { msgForm('msg-requisicao','Informe o solicitante.','red'); return; }
 
   const itens = coletarItensRequisicaoDoForm();
   const valorTotal = recalcularTotalRequisicao();
 
-  const payload = {
-    numero,
-    solicitante,
-    os_id:            document.getElementById('req-os').value || null,
-    fornecedor_id:    document.getElementById('req-fornecedor').value || null,
-    status:            document.getElementById('req-status').value,
-    data_necessidade:  document.getElementById('req-data-necessidade').value || null,
-    observacoes:        document.getElementById('req-observacoes').value.trim() || null,
-    valor_total:         valorTotal,
-    updated_at:           new Date().toISOString(),
-  };
-
   const idEd = document.getElementById('req-id-edicao').value;
   const origemRm = document.getElementById('req-id-edicao').dataset.origemRm || null;
-  if (origemRm) payload.requisicao_material_id = origemRm;
   let requisicaoId = idEd;
 
   if (idEd) {
+    // Edição: número já existe e não muda.
+    const payload = {
+      solicitante,
+      os_id:            document.getElementById('req-os').value || null,
+      fornecedor_id:    document.getElementById('req-fornecedor').value || null,
+      status:            document.getElementById('req-status').value,
+      data_necessidade:  document.getElementById('req-data-necessidade').value || null,
+      observacoes:        document.getElementById('req-observacoes').value.trim() || null,
+      valor_total:         valorTotal,
+      updated_at:           new Date().toISOString(),
+    };
     const { error } = await db.from('requisicoes_compra').update(payload).eq('id', idEd);
     if (error) { msgForm('msg-requisicao','Erro ao salvar: ' + error.message,'red'); return; }
     // T-padrão do projeto: DELETE+INSERT dos itens garante substituição completa,
     // sem registro órfão de uma edição anterior (mesmo princípio da importação de folha).
     await db.from('requisicoes_compra_itens').delete().eq('requisicao_id', idEd);
   } else {
+    // Nova: número só é gerado agora, no momento do save.
+    const { data: numero, error: errNum } = await db.rpc('gerar_numero_documento', { p_tipo: 'RC' });
+    if (errNum) { msgForm('msg-requisicao','Erro ao gerar número da solicitação: ' + errNum.message,'red'); return; }
+
+    const payload = {
+      numero,
+      solicitante,
+      os_id:            document.getElementById('req-os').value || null,
+      fornecedor_id:    document.getElementById('req-fornecedor').value || null,
+      status:            document.getElementById('req-status').value,
+      data_necessidade:  document.getElementById('req-data-necessidade').value || null,
+      observacoes:        document.getElementById('req-observacoes').value.trim() || null,
+      valor_total:         valorTotal,
+      updated_at:           new Date().toISOString(),
+    };
+    if (origemRm) payload.requisicao_material_id = origemRm;
+
     const { data, error } = await db.from('requisicoes_compra').insert([payload]).select('id').single();
     if (error) { msgForm('msg-requisicao','Erro ao salvar: ' + error.message,'red'); return; }
     requisicaoId = data.id;
+    document.getElementById('req-numero').value = numero;
   }
 
   if (itens.length) {
@@ -1146,7 +1171,8 @@ document.getElementById('btn-salvar-requisicao')?.addEventListener('click', asyn
     await db.from('requisicoes_material').update({ status: 'Convertida' }).eq('id', origemRm);
   }
 
-  msgForm('msg-requisicao', idEd ? '✓ Requisição atualizada!' : '✓ Requisição registrada!', 'green');
+  const numeroFinal = document.getElementById('req-numero').value;
+  msgForm('msg-requisicao', idEd ? `✓ Requisição ${numeroFinal} atualizada!` : `✓ Requisição ${numeroFinal} registrada!`, 'green');
   resetarFormRequisicao();
   carregarRequisicoes();
   if (origemRm) carregarReqMateriais();
