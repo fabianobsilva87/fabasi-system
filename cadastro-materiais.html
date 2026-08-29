@@ -246,6 +246,7 @@ function editarTipoMaterial(id) {
   document.getElementById('tm-prefixo').value    = t.prefixo || '';
   document.getElementById('tm-ncm-padrao').value = t.ncm_padrao || '';
   document.getElementById('tm-descricao').value  = t.descricao || '';
+  _tmPrefixoEditadoManualmente = true; // já tem prefixo salvo — não sobrescrever ao editar o nome
   const btn = document.getElementById('btn-salvar-tipomaterial');
   btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
   document.getElementById('btn-cancelar-tipomaterial').style.display = 'inline-block';
@@ -256,10 +257,49 @@ function resetarFormTipoMaterial() {
   ['tm-id-edicao','tm-nome','tm-prefixo','tm-ncm-padrao','tm-descricao'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  _tmPrefixoEditadoManualmente = false;
   const btn = document.getElementById('btn-salvar-tipomaterial');
   btn.textContent = '💾 Registrar Tipo'; btn.style.background = '#b45309';
   document.getElementById('btn-cancelar-tipomaterial').style.display = 'none';
 }
+
+// ===================== SUGESTÃO AUTOMÁTICA DE PREFIXO =====================
+// Deriva um prefixo a partir do nome: nome composto usa as iniciais de cada
+// palavra (ex: "Equipamento de Proteção Individual" -> "EPI"), nome único
+// usa as 4 primeiras letras (ex: "Aço" -> "ACO"). Só sugere enquanto o
+// usuário não tiver digitado no campo Prefixo com a própria mão — a partir
+// daí, a sugestão automática para de sobrescrever o que ele já ajustou.
+let _tmPrefixoEditadoManualmente = false;
+
+const PALAVRAS_IGNORADAS_PREFIXO = new Set(['de','da','do','das','dos','e']);
+
+function sugerirPrefixoDoNome(nome) {
+  const limpo = (nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+  if (!limpo) return '';
+  const palavras = limpo.split(/\s+/).filter(p => p && !PALAVRAS_IGNORADAS_PREFIXO.has(p.toLowerCase()));
+  if (!palavras.length) return '';
+  const base = palavras.length >= 2 ? palavras.map(p => p[0]).join('').slice(0, 6) : palavras[0].slice(0, 4);
+
+  // Evita sugerir um prefixo que já existe em outro tipo — soma um dígito
+  // até achar um livre, em vez de deixar pro erro de duplicidade no save.
+  const emUso = new Set(_tiposMaterialCache.map(t => (t.prefixo || '').toUpperCase()));
+  const idAtual = document.getElementById('tm-id-edicao')?.value;
+  const tipoAtual = _tiposMaterialCache.find(t => t.id === idAtual);
+  if (tipoAtual) emUso.delete((tipoAtual.prefixo || '').toUpperCase()); // não colide consigo mesmo ao editar
+
+  if (!emUso.has(base)) return base;
+  for (let n = 2; n <= 9; n++) {
+    const tentativa = (base.slice(0, 7) + n);
+    if (!emUso.has(tentativa)) return tentativa;
+  }
+  return base;
+}
+
+document.getElementById('tm-prefixo')?.addEventListener('input', () => { _tmPrefixoEditadoManualmente = true; });
+document.getElementById('tm-nome')?.addEventListener('input', () => {
+  if (_tmPrefixoEditadoManualmente) return;
+  document.getElementById('tm-prefixo').value = sugerirPrefixoDoNome(document.getElementById('tm-nome').value);
+});
 
 async function excluirTipoMaterial(id) {
   const nome = _tiposMaterialCache.find(x => x.id === id)?.nome || 'este tipo';

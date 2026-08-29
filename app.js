@@ -35,7 +35,7 @@ const LOGO_ETIQUETA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA9oAAAEtCAY
 let globalEquipamentos     = [];
 let paginaAtualEquipamento = 0;
 let itensPorPagina         = 20;
-let chartOS = null, chartCrit = null, chartOSG = null;
+let chartOS = null, chartCrit = null, chartOSG = null, chartTopFornecedores = null;
 let modoRecuperacao = false;
 
 // ===================== UTILITÁRIOS =====================
@@ -4790,6 +4790,72 @@ async function renderizarGraficosDashboard() {
   if ($('dash-txt-fichas'))      $('dash-txt-fichas').textContent      = r.total_pmocs   ?? '0';
   if ($('dash-txt-os-abertas'))  $('dash-txt-os-abertas').textContent  = r.os_pendentes  ?? '0';
   if ($('dash-txt-os-fechadas')) $('dash-txt-os-fechadas').textContent = r.os_concluidas ?? '0';
+
+  // ── Compras — resumo do funil (view com fallback por contagem direta) ──
+  let comprasResumo = null;
+  const { data: comprasView, error: erroCompras } = await db.from('vw_dashboard_compras_resumo').select('*').single();
+  if (!erroCompras && comprasView) {
+    comprasResumo = comprasView;
+  } else {
+    try {
+      const hoje = new Date().toISOString().slice(0,10);
+      const [rRm, rRc, rCot, rOcAbertas, rOcTodasAbertas] = await Promise.allSettled([
+        db.from('requisicoes_material').select('*', { count:'exact', head:true }).eq('status','Pendente'),
+        db.from('requisicoes_compra').select('*', { count:'exact', head:true }).eq('status','Solicitado'),
+        db.from('cotacoes').select('*', { count:'exact', head:true }).eq('status','Em Cotação'),
+        db.from('ordens_compra').select('*', { count:'exact', head:true }).not('status','eq','Recebida Total').not('status','eq','Cancelada'),
+        db.from('ordens_compra').select('valor_total,status,data_entrega_prevista'),
+      ]);
+      const val = (res) => res.status === 'fulfilled' ? (res.value?.count ?? 0) : 0;
+      const ocs = rOcTodasAbertas.status === 'fulfilled' ? (rOcTodasAbertas.value?.data || []) : [];
+      const ocsAbertas = ocs.filter(o => o.status !== 'Recebida Total' && o.status !== 'Cancelada');
+      comprasResumo = {
+        rm_pendentes: val(rRm),
+        rc_aguardando_aprovacao: val(rRc),
+        cotacoes_em_andamento: val(rCot),
+        oc_em_aberto: val(rOcAbertas),
+        oc_atrasadas: ocsAbertas.filter(o => o.data_entrega_prevista && o.data_entrega_prevista < hoje).length,
+        valor_total_em_aberto: ocsAbertas.reduce((s,o) => s + Number(o.valor_total||0), 0),
+      };
+    } catch(e) { console.warn('Fallback compras falhou:', e.message); comprasResumo = {}; }
+  }
+  const cr = comprasResumo || {};
+  if ($('dash-txt-rm-pendentes'))        $('dash-txt-rm-pendentes').textContent        = cr.rm_pendentes ?? '0';
+  if ($('dash-txt-rc-aguardando'))       $('dash-txt-rc-aguardando').textContent       = cr.rc_aguardando_aprovacao ?? '0';
+  if ($('dash-txt-cotacoes-andamento'))  $('dash-txt-cotacoes-andamento').textContent  = cr.cotacoes_em_andamento ?? '0';
+  if ($('dash-txt-oc-abertas'))          $('dash-txt-oc-abertas').textContent          = cr.oc_em_aberto ?? '0';
+  if ($('dash-txt-oc-atrasadas'))        $('dash-txt-oc-atrasadas').textContent        = cr.oc_atrasadas ?? '0';
+  if ($('dash-txt-oc-valor-aberto'))     $('dash-txt-oc-valor-aberto').textContent     = 'R$ ' + Number(cr.valor_total_em_aberto || 0).toFixed(2).replace('.',',');
+
+  // ── Compras — Top Fornecedores (view com fallback por agregação client-side) ──
+  let topForn = null;
+  const { data: topFornView, error: erroTopForn } = await db.from('vw_dashboard_top_fornecedores').select('*');
+  if (!erroTopForn && topFornView) {
+    topForn = topFornView;
+  } else {
+    try {
+      const noventaDiasAtras = new Date(Date.now() - 90*24*60*60*1000).toISOString();
+      const { data: ocsComForn } = await fetchAll(() => db.from('ordens_compra').select('valor_total,created_at,fornecedores(razao_social)').gte('created_at', noventaDiasAtras));
+      const map = {};
+      (ocsComForn||[]).forEach(o => {
+        const nome = o.fornecedores?.razao_social || 'Sem fornecedor';
+        map[nome] = (map[nome] || 0) + Number(o.valor_total || 0);
+      });
+      topForn = Object.entries(map).map(([razao_social,valor_total]) => ({ razao_social, valor_total }))
+        .sort((a,b) => b.valor_total - a.valor_total).slice(0,8);
+    } catch(e) { console.warn('Fallback topForn falhou:', e.message); topForn = []; }
+  }
+  if ($('chart-top-fornecedores') && topForn) {
+    if (chartTopFornecedores) chartTopFornecedores.destroy();
+    chartTopFornecedores = new Chart($('chart-top-fornecedores'), {
+      type: 'bar',
+      data: {
+        labels: topForn.map(f => f.razao_social),
+        datasets: [{ label:'Valor em OCs (R$)', data: topForn.map(f => Number(f.valor_total)), backgroundColor:'rgba(67,56,202,.75)', borderColor:'#4338ca', borderWidth:2, borderRadius:6 }],
+      },
+      options: { ...CHART_DEFAULTS, indexAxis:'y', plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => ' R$ ' + Number(c.parsed.x).toFixed(2).replace('.',',') } } }, scales:{ x:{ ticks:{ callback: v => 'R$ '+v } } } },
+    });
+  }
 
   // Gráfico 1 — Volumetria OS (view com fallback)
   let volOS = null;

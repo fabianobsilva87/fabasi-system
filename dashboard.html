@@ -157,6 +157,54 @@
           <div id="dash-consist-lista" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#a0aec0;">Carregando...</div>
         </div>
 
+        <!-- ===== KPI: COMPRAS (funil + status das Ordens) ===== -->
+        <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 10px;">COMPRAS</p>
+        <div class="dash-cards-grid" style="grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
+
+          <div class="dash-card" style="cursor:pointer;" onclick="location.href='requisicao-materiais.html'">
+            <div class="dash-card-icon">📝</div>
+            <p class="dash-card-title">Requisições Pendentes</p>
+            <h3 id="dash-txt-rm-pendentes" class="dash-card-value">—</h3>
+          </div>
+
+          <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='solicitacoes-compra.html'">
+            <div class="dash-card-icon">🛒</div>
+            <p class="dash-card-title">Aguardando Aprovação</p>
+            <h3 id="dash-txt-rc-aguardando" class="dash-card-value">—</h3>
+          </div>
+
+          <div class="dash-card" style="cursor:pointer;border-top:3px solid #4338ca;" onclick="location.href='cotacao.html'">
+            <div class="dash-card-icon">🔍</div>
+            <p class="dash-card-title">Cotações em Andamento</p>
+            <h3 id="dash-txt-cotacoes-andamento" class="dash-card-value">—</h3>
+          </div>
+
+          <div class="dash-card" style="cursor:pointer;border-top:3px solid #0891b2;" onclick="location.href='ordem-compra.html'">
+            <div class="dash-card-icon">📦</div>
+            <p class="dash-card-title">Ordens em Aberto</p>
+            <h3 id="dash-txt-oc-abertas" class="dash-card-value">—</h3>
+          </div>
+
+          <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='followup-compra.html'">
+            <div class="dash-card-icon">⚠️</div>
+            <p class="dash-card-title">Ordens Atrasadas</p>
+            <h3 id="dash-txt-oc-atrasadas" class="dash-card-value">—</h3>
+          </div>
+
+        </div>
+
+        <div class="dash-cards-grid" style="grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px;">
+          <div class="card">
+            <h3 class="card-title" style="margin-bottom:4px;">🏭 Top Fornecedores — últimos 90 dias</h3>
+            <canvas id="chart-top-fornecedores" height="90"></canvas>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
+            <p class="dash-card-title">Valor em Ordens Abertas</p>
+            <h3 id="dash-txt-oc-valor-aberto" class="dash-card-value" style="font-size:28px;">—</h3>
+            <p style="font-size:11px;color:#a0aec0;margin-top:6px;">soma de todas as OCs não recebidas nem canceladas</p>
+          </div>
+        </div>
+
         <!-- ===== PAINEL DE ALERTAS ===== -->
         <div id="painel-alertas-vencimento" style="display:none;">
           <div style="background:linear-gradient(135deg,#fff7ed,#fff);border:1.5px solid #f97316;border-radius:12px;padding:20px 24px;margin-bottom:20px;">

@@ -159,6 +159,7 @@ body {
 .dash-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .dash-card-warning { border-left-color: var(--warning); }
 .dash-card-success  { border-left-color: var(--success); }
+.dash-card-danger   { border-left-color: var(--danger); }
 .dash-card-icon { font-size: 22px; margin-bottom: 3px; }
 .dash-card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); font-weight: 600; }
 .dash-card-value { font-size: 28px; font-weight: 800; color: var(--gray-800); line-height: 1; }
