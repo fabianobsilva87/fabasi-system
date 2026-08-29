@@ -64,15 +64,45 @@
         <div class="card">
           <h3 class="card-title">🏭 Novo Fornecedor</h3>
           <input type="hidden" id="forn-id-edicao" value="">
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label>Tipo de Cadastro *</label>
+            <div id="forn-tipos-cadastro-wrap" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:13px;color:#4a5568;"></div>
+          </div>
+
           <div class="form-grid">
             <div class="form-group"><label for="forn-razao">Razão Social *</label><input type="text" id="forn-razao" placeholder="Nome da empresa"></div>
             <div class="form-group"><label for="forn-fantasia">Nome Fantasia</label><input type="text" id="forn-fantasia" placeholder="Nome fantasia (opcional)"></div>
-            <div class="form-group"><label for="forn-cnpj">CNPJ</label><input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00" maxlength="18"></div>
+            <div class="form-group">
+              <label for="forn-cnpj">CNPJ</label>
+              <div style="display:flex;gap:6px;">
+                <input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00 (ou alfanumérico)" maxlength="20" style="flex:1;">
+                <button type="button" id="btn-buscar-cnpj" class="btn-refresh" style="white-space:nowrap;font-size:12px;" onclick="buscarDadosCNPJ()">🔍 Buscar</button>
+              </div>
+              <p id="forn-cnpj-cache-info" style="font-size:10px;color:#a0aec0;margin-top:3px;"></p>
+            </div>
             <div class="form-group"><label for="forn-categoria">Categoria</label><input type="text" id="forn-categoria" placeholder="Ex: Materiais elétricos, EPI, Refrigeração"></div>
             <div class="form-group"><label for="forn-telefone">Telefone</label><input type="text" id="forn-telefone" placeholder="(65) 99999-9999"></div>
             <div class="form-group"><label for="forn-email">E-mail</label><input type="email" id="forn-email" placeholder="contato@fornecedor.com.br"></div>
+            <div class="form-group"><label for="forn-site">Site</label><input type="text" id="forn-site" placeholder="www.fornecedor.com.br"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="forn-contato-interno">Contato Comercial Interno (responsável na Fabasi)</label><input type="text" id="forn-contato-interno" placeholder="Nome do responsável por essa relação"></div>
+
+            <div class="form-group" style="grid-column:span 3;"><label for="forn-logradouro">Logradouro</label><input type="text" id="forn-logradouro" placeholder="Preenchido automaticamente ao buscar o CNPJ"></div>
+            <div class="form-group"><label for="forn-numero">Número</label><input type="text" id="forn-numero"></div>
+            <div class="form-group"><label for="forn-complemento">Complemento</label><input type="text" id="forn-complemento"></div>
+            <div class="form-group"><label for="forn-bairro">Bairro</label><input type="text" id="forn-bairro"></div>
+            <div class="form-group"><label for="forn-cep">CEP</label><input type="text" id="forn-cep" placeholder="00000-000"></div>
+            <div class="form-group"><label for="forn-cidade">Cidade</label><input type="text" id="forn-cidade"></div>
+            <div class="form-group"><label for="forn-uf">UF</label><input type="text" id="forn-uf" maxlength="2" style="text-transform:uppercase;"></div>
+
             <div class="form-group" style="grid-column:span 3;"><label for="forn-observacoes">Observações</label><textarea id="forn-observacoes" rows="2"></textarea></div>
           </div>
+
+          <div id="forn-analise-automatica" style="display:none;margin-top:16px;padding:14px 16px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;">
+            <p style="font-weight:700;font-size:12px;color:#3730a3;margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase;">📋 Análise Automática (Receita Federal)</p>
+            <div id="forn-analise-conteudo" style="font-size:12px;color:#3730a3;"></div>
+          </div>
+
           <div class="btn-row" style="margin-top:16px;">
             <button type="button" id="btn-salvar-fornecedor" class="btn-primary">💾 Registrar Fornecedor</button>
             <button type="button" id="btn-cancelar-fornecedor" class="btn-secondary" style="display:none;" onclick="resetarFormFornecedor()">✕ Cancelar</button>
@@ -87,8 +117,8 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Categoria</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
-              <tbody id="tbody-fornecedores"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Tipo(s)</th><th>Categoria</th><th>Cidade/UF</th><th>Situação</th><th>Contato</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-fornecedores"><tr><td colspan="9" class="td-loading">Carregando...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -103,16 +133,37 @@
 // ===================== FORNECEDORES =====================
 let _fornecedoresCache = [];
 
+const TIPOS_CADASTRO_OPCOES = ['Cliente','Fornecedor','Prestador de Serviço','Subempreiteiro','Parceiro','Transportadora','Fabricante','Comércio','Outro'];
+
+function renderCheckboxesTipoCadastro(selecionados = ['Fornecedor']) {
+  const wrap = document.getElementById('forn-tipos-cadastro-wrap'); if (!wrap) return;
+  wrap.innerHTML = TIPOS_CADASTRO_OPCOES.map(t => `
+    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+      <input type="checkbox" class="chk-tipo-cadastro" value="${escapeHTML(t)}" ${selecionados.includes(t) ? 'checked' : ''}>
+      ${escapeHTML(t)}
+    </label>`).join('');
+}
+
+function coletarTiposCadastroDoForm() {
+  return Array.from(document.querySelectorAll('.chk-tipo-cadastro:checked')).map(c => c.value);
+}
+
 async function carregarFornecedores() {
   const tbody = document.getElementById('tbody-fornecedores'); if (!tbody) return;
   const { data, error } = await db.from('fornecedores').select('*').order('ativo', {ascending:false}).order('razao_social');
   if (error) { toast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
   _fornecedoresCache = data || [];
-  if (!_fornecedoresCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum fornecedor cadastrado.</td></tr>'; return; }
+  if (!_fornecedoresCache.length) { tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Nenhum fornecedor cadastrado.</td></tr>'; return; }
+
+  const corSituacao = (s) => s === 'ATIVA' ? 'success' : (s ? 'danger' : '');
+
   tbody.innerHTML = _fornecedoresCache.map(f => `<tr>
-    <td><strong>${escapeHTML(f.razao_social)}</strong>${f.nome_fantasia ? `<br><small style="color:#718096">${escapeHTML(f.nome_fantasia)}</small>` : ''}</td>
-    <td style="font-family:monospace;">${escapeHTML(f.cnpj || '—')}</td>
+    <td><strong>${escapeHTML(f.razao_social)}</strong>${f.nome_fantasia ? `<br><small style="color:#718096">${escapeHTML(f.nome_fantasia)}</small>` : ''}${f.segmento_sugerido ? `<br><small style="color:#4338ca">🏗️ ${escapeHTML(f.segmento_sugerido)}</small>` : ''}</td>
+    <td style="font-family:monospace;">${escapeHTML(formatarCNPJParaExibicao(f.cnpj || '') || '—')}</td>
+    <td style="font-size:11px;">${(f.tipos_cadastro || []).map(t => `<span class="tag-badge" style="margin:1px;">${escapeHTML(t)}</span>`).join(' ') || '—'}</td>
     <td>${escapeHTML(f.categoria || '—')}</td>
+    <td style="font-size:12px;">${f.cidade ? escapeHTML(f.cidade) + (f.uf ? '/' + escapeHTML(f.uf) : '') : '—'}</td>
+    <td>${f.situacao_cadastral ? `<span class="tag-badge ${corSituacao(f.situacao_cadastral)}">${escapeHTML(f.situacao_cadastral)}</span>` : '—'}</td>
     <td style="font-size:12px;">${escapeHTML(f.telefone || '')}${f.telefone && f.email ? '<br>' : ''}${escapeHTML(f.email || '')}</td>
     <td>${f.ativo ? '<span class="tag-badge success">✅ Ativo</span>' : '<span class="tag-badge">Inativo</span>'}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -127,11 +178,22 @@ function editarFornecedor(id) {
   document.getElementById('forn-id-edicao').value = id;
   document.getElementById('forn-razao').value      = f.razao_social || '';
   document.getElementById('forn-fantasia').value   = f.nome_fantasia || '';
-  document.getElementById('forn-cnpj').value       = f.cnpj || '';
+  document.getElementById('forn-cnpj').value       = formatarCNPJParaExibicao(f.cnpj || '');
   document.getElementById('forn-categoria').value  = f.categoria || '';
   document.getElementById('forn-telefone').value   = f.telefone || '';
   document.getElementById('forn-email').value      = f.email || '';
+  document.getElementById('forn-site').value       = f.site || '';
+  document.getElementById('forn-contato-interno').value = f.contato_comercial_interno || '';
+  document.getElementById('forn-logradouro').value = f.logradouro || '';
+  document.getElementById('forn-numero').value     = f.numero || '';
+  document.getElementById('forn-complemento').value = f.complemento || '';
+  document.getElementById('forn-bairro').value     = f.bairro || '';
+  document.getElementById('forn-cep').value        = f.cep || '';
+  document.getElementById('forn-cidade').value     = f.cidade || '';
+  document.getElementById('forn-uf').value         = f.uf || '';
   document.getElementById('forn-observacoes').value = f.observacoes || '';
+  renderCheckboxesTipoCadastro(f.tipos_cadastro || ['Fornecedor']);
+  renderizarAnaliseAutomatica(f);
   const btn = document.getElementById('btn-salvar-fornecedor');
   btn.textContent = '💾 Salvar Alterações'; btn.style.background = '#d97706';
   document.getElementById('btn-cancelar-fornecedor').style.display = 'inline-block';
@@ -139,9 +201,14 @@ function editarFornecedor(id) {
 }
 
 function resetarFormFornecedor() {
-  ['forn-id-edicao','forn-razao','forn-fantasia','forn-cnpj','forn-categoria','forn-telefone','forn-email','forn-observacoes'].forEach(id => {
+  ['forn-id-edicao','forn-razao','forn-fantasia','forn-cnpj','forn-categoria','forn-telefone','forn-email','forn-site',
+   'forn-contato-interno','forn-logradouro','forn-numero','forn-complemento','forn-bairro','forn-cep','forn-cidade','forn-uf',
+   'forn-observacoes'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  document.getElementById('forn-cnpj-cache-info').textContent = '';
+  document.getElementById('forn-analise-automatica').style.display = 'none';
+  renderCheckboxesTipoCadastro(['Fornecedor']);
   const btn = document.getElementById('btn-salvar-fornecedor');
   btn.textContent = '💾 Registrar Fornecedor'; btn.style.background = '';
   document.getElementById('btn-cancelar-fornecedor').style.display = 'none';
@@ -155,18 +222,135 @@ async function excluirFornecedor(id) {
   carregarFornecedores();
 }
 
+// ===================== ANÁLISE AUTOMÁTICA (card de apoio à decisão) =====================
+function renderizarAnaliseAutomatica(f) {
+  const wrap = document.getElementById('forn-analise-automatica');
+  const conteudo = document.getElementById('forn-analise-conteudo');
+  if (!f || (!f.situacao_cadastral && !f.cnae_principal_descricao)) { wrap.style.display = 'none'; return; }
+
+  const socios = Array.isArray(f.socios) ? f.socios : [];
+  const secundarios = Array.isArray(f.cnaes_secundarios) ? f.cnaes_secundarios : [];
+
+  conteudo.innerHTML = `
+    <div class="laudo-grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin-bottom:10px;">
+      <div><strong>Situação:</strong> ${f.situacao_cadastral === 'ATIVA' ? '🟢' : '🔴'} ${escapeHTML(f.situacao_cadastral || '—')}</div>
+      <div><strong>Tipo:</strong> ${escapeHTML(f.tipo_estabelecimento || '—')}</div>
+      <div><strong>Porte:</strong> ${escapeHTML(f.porte || '—')}</div>
+      <div><strong>Abertura:</strong> ${fmtDate(f.data_abertura)}</div>
+      <div><strong>Natureza Jurídica:</strong> ${escapeHTML(f.natureza_juridica || '—')}</div>
+      <div><strong>Capital Social:</strong> ${f.capital_social != null ? 'R$ ' + Number(f.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</div>
+    </div>
+    ${f.segmento_sugerido ? `<p style="margin-bottom:6px;"><strong>Segmento identificado:</strong> ${escapeHTML(f.segmento_sugerido)}</p>` : ''}
+    ${f.cnae_principal_descricao ? `<p style="margin-bottom:6px;"><strong>CNAE principal:</strong> ${escapeHTML(f.cnae_principal_codigo || '')} — ${escapeHTML(f.cnae_principal_descricao)}</p>` : ''}
+    ${secundarios.length ? `<p style="margin-bottom:6px;"><strong>CNAEs secundários:</strong> ${secundarios.map(c => escapeHTML(c.descricao || c.text || '')).filter(Boolean).join('; ')}</p>` : ''}
+    ${socios.length ? `<p style="margin-bottom:0;"><strong>Sócios/Administradores:</strong> ${socios.map(s => escapeHTML(s.nome_socio || s.nome || '')).filter(Boolean).join(', ')}</p>` : ''}
+  `;
+  wrap.style.display = 'block';
+}
+
+// ===================== BUSCA AUTOMÁTICA POR CNPJ (via CNPJService — app.js) =====================
+// Usa a camada de abstração CNPJService (cache-first, provider trocável —
+// hoje BrasilAPIProvider). Nunca sobrescreve campo já preenchido manualmente.
+async function buscarDadosCNPJ(forcarNovaConsulta = false) {
+  const cnpjDigitado = document.getElementById('forn-cnpj').value.trim();
+  if (!cnpjDigitado) { msgForm('msg-fornecedor','Informe um CNPJ antes de buscar.','red'); return; }
+
+  const btn = document.getElementById('btn-buscar-cnpj');
+  const textoOriginal = btn.textContent;
+  btn.textContent = '⏳ Buscando...'; btn.disabled = true;
+
+  try {
+    const { dados: d, fonte, consultadoEm } = await CNPJService.consultar(cnpjDigitado, { forcarNovaConsulta });
+
+    const setSeVazio = (id, valor) => {
+      const el = document.getElementById(id);
+      if (el && !el.value.trim() && valor) el.value = valor;
+    };
+
+    setSeVazio('forn-razao', d.razao_social);
+    setSeVazio('forn-fantasia', d.nome_fantasia);
+    if (d.ddd_telefone_1) setSeVazio('forn-telefone', `(${d.ddd_telefone_1.slice(0,2)}) ${d.ddd_telefone_1.slice(2)}`);
+    setSeVazio('forn-email', d.email);
+    setSeVazio('forn-cep', d.cep);
+    setSeVazio('forn-cidade', d.municipio);
+    setSeVazio('forn-uf', d.uf);
+    setSeVazio('forn-logradouro', d.logradouro);
+    setSeVazio('forn-numero', d.numero);
+    setSeVazio('forn-complemento', d.complemento);
+    setSeVazio('forn-bairro', d.bairro);
+    document.getElementById('forn-cnpj').value = formatarCNPJParaExibicao(limparCNPJ(cnpjDigitado));
+
+    // Campos "de análise" — sempre atualizados pela busca (não são dado que
+    // o usuário digita manualmente, então não faz sentido preservar valor antigo).
+    const fRow = {
+      situacao_cadastral: d.descricao_situacao_cadastral,
+      data_situacao_cadastral: d.data_situacao_cadastral,
+      data_abertura: d.data_inicio_atividade,
+      natureza_juridica: d.natureza_juridica,
+      porte: d.descricao_porte,
+      capital_social: d.capital_social,
+      tipo_estabelecimento: d.descricao_identificador_matriz_filial,
+      situacao_especial: d.situacao_especial,
+      data_situacao_especial: d.data_situacao_especial,
+      cnae_principal_codigo: d.cnae_fiscal,
+      cnae_principal_descricao: d.cnae_fiscal_descricao,
+      cnaes_secundarios: d.cnaes_secundarios || [],
+      socios: d.qsa || [],
+      segmento_sugerido: sugerirSegmentoPorCNAE(d.cnae_fiscal_descricao),
+    };
+    window._fornAnaliseAtual = fRow; // lido no submit, pra gravar junto do resto
+    renderizarAnaliseAutomatica(fRow);
+
+    if (fRow.segmento_sugerido) {
+      const catEl = document.getElementById('forn-categoria');
+      if (!catEl.value.trim()) catEl.value = fRow.segmento_sugerido;
+    }
+
+    document.getElementById('forn-cnpj-cache-info').innerHTML =
+      fonte === 'cache'
+        ? `Dado em cache — última atualização: ${new Date(consultadoEm).toLocaleDateString('pt-BR')}. <a href="#" onclick="event.preventDefault(); buscarDadosCNPJ(true);" style="color:#1a56db;">🔄 forçar nova consulta</a>`
+        : `Consultado agora na Receita Federal.`;
+
+    msgForm('msg-fornecedor', `✓ Dados encontrados: ${d.razao_social}${d.descricao_situacao_cadastral ? ' — situação: ' + d.descricao_situacao_cadastral : ''}${fonte === 'cache' ? ' (via cache)' : ''}`, 'green');
+  } catch (e) {
+    msgForm('msg-fornecedor', e.message || 'Erro ao consultar CNPJ.', 'red');
+  } finally {
+    btn.textContent = textoOriginal; btn.disabled = false;
+  }
+}
+
 document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', async () => {
   const razao = document.getElementById('forn-razao').value.trim();
   if (!razao) { msgForm('msg-fornecedor','Informe a Razão Social.','red'); return; }
 
+  const tipos = coletarTiposCadastroDoForm();
+  if (!tipos.length) { msgForm('msg-fornecedor','Selecione ao menos um Tipo de Cadastro.','red'); return; }
+
+  const logradouro = document.getElementById('forn-logradouro').value.trim();
+  const numero = document.getElementById('forn-numero').value.trim();
+  const complemento = document.getElementById('forn-complemento').value.trim();
+  const bairro = document.getElementById('forn-bairro').value.trim();
+  const enderecoComposto = [logradouro, numero, complemento, bairro].filter(Boolean).join(', ') || null;
+
+  const analise = window._fornAnaliseAtual || {};
+
   const payload = {
     razao_social:  razao,
     nome_fantasia: document.getElementById('forn-fantasia').value.trim() || null,
-    cnpj:          document.getElementById('forn-cnpj').value.trim() || null,
+    cnpj:          limparCNPJ(document.getElementById('forn-cnpj').value) || null,
     categoria:     document.getElementById('forn-categoria').value.trim() || null,
     telefone:      document.getElementById('forn-telefone').value.trim() || null,
     email:         document.getElementById('forn-email').value.trim() || null,
+    site:          document.getElementById('forn-site').value.trim() || null,
+    contato_comercial_interno: document.getElementById('forn-contato-interno').value.trim() || null,
+    logradouro: logradouro || null, numero: numero || null, complemento: complemento || null, bairro: bairro || null,
+    endereco:      enderecoComposto,
+    cep:           document.getElementById('forn-cep').value.trim() || null,
+    cidade:        document.getElementById('forn-cidade').value.trim() || null,
+    uf:            document.getElementById('forn-uf').value.trim().toUpperCase() || null,
     observacoes:   document.getElementById('forn-observacoes').value.trim() || null,
+    tipos_cadastro: tipos,
+    ...analise,
   };
 
   const idEd = document.getElementById('forn-id-edicao').value;
@@ -176,12 +360,14 @@ document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', asyn
 
   if (error) { msgForm('msg-fornecedor','Erro ao salvar: ' + error.message,'red'); return; }
   msgForm('msg-fornecedor', idEd ? '✓ Fornecedor atualizado!' : '✓ Fornecedor registrado!', 'green');
+  window._fornAnaliseAtual = null;
   resetarFormFornecedor();
   carregarFornecedores();
 });
 
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+  renderCheckboxesTipoCadastro(['Fornecedor']);
   await carregarFornecedores();
 });
 </script>
