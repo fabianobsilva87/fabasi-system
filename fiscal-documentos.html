@@ -118,9 +118,9 @@
               <table>
                 <thead><tr>
                   <th>Tipo</th><th>Emitente (CNPJ)</th><th>Número/Série</th><th>Emissão</th>
-                  <th>Valor</th><th>Fornecedor Vinculado</th><th>Status</th>
+                  <th>Valor</th><th>Fornecedor Vinculado</th><th>Status</th><th>Ações</th>
                 </tr></thead>
-                <tbody id="tbody-fiscal-documentos"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+                <tbody id="tbody-fiscal-documentos"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -157,7 +157,7 @@
 
     async function carregarDocumentosFiscais() {
       const tbody = document.getElementById('tbody-fiscal-documentos');
-      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
 
       const de = document.getElementById('fdoc-filtro-de').value;
       const ate = document.getElementById('fdoc-filtro-ate').value;
@@ -173,9 +173,9 @@
       if (busca) query = query.or(`cnpj_emitente.ilike.%${busca}%,chave_acesso.ilike.%${busca}%`);
 
       const { data, error } = await query;
-      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (error) { tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
       if (!data || !data.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhum documento encontrado — a importação (manual de teste ou automática via SEFAZ/ADN) entra nas próximas etapas do Módulo Fiscal.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Nenhum documento encontrado — a importação (manual de teste ou automática via SEFAZ/ADN) entra nas próximas etapas do Módulo Fiscal.</td></tr>';
         return;
       }
 
@@ -192,7 +192,22 @@
         <td>R$ ${Number(d.valor_total || 0).toFixed(2).replace('.', ',')}</td>
         <td>${escapeHTML(d.fornecedores?.razao_social || 'Pendente de vínculo')}</td>
         <td><span class="tag-badge ${statusBadge[d.status] || ''}">${escapeHTML(d.status || '—')}</span></td>
+        <td>${
+          d.gerou_conta_pagar
+            ? '<span style="font-size:11px;color:#059669;">✓ Conta a pagar gerada</span>'
+            : (['processada','validada'].includes(d.status)
+                ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="gerarContaPagarFiscal('${escapeHTML(d.id)}')">💰 Gerar Conta a Pagar</button>`
+                : '<span style="font-size:11px;color:#a0aec0;">—</span>')
+        }</td>
       </tr>`).join('');
+    }
+
+    async function gerarContaPagarFiscal(documentoId) {
+      if (!confirm('Gerar uma Conta a Pagar a partir deste documento fiscal?')) return;
+      const { error } = await db.rpc('fn_gerar_conta_pagar_fiscal', { p_documento_id: documentoId });
+      if (error) { toast('Erro ao gerar conta a pagar: ' + error.message, 'erro'); return; }
+      toast('Conta a pagar gerada! Confira em Contas a Pagar.', 'sucesso');
+      await carregarDocumentosFiscais();
     }
 
     window.addEventListener('DOMContentLoaded', async () => {

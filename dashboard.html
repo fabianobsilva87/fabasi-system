@@ -220,11 +220,39 @@
 
         </div>
 
+        <!-- ===== KPI: FINANCEIRO — Contas a Pagar ===== -->
+        <!-- Etapa 14.2 — financeiro-contas-pagar.html deixou de ser
+             placeholder (ledger unificado: manual + espelho de Ordem de
+             Compra + geração a partir do Fiscal). Contas a Receber, Fluxo
+             de Caixa e Bancário continuam pendentes. -->
+        <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 10px;">FINANCEIRO — CONTAS A PAGAR</p>
+        <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+
+          <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='financeiro-contas-pagar.html'">
+            <div class="dash-card-icon">⏳</div>
+            <p class="dash-card-title">A Vencer (7 dias)</p>
+            <h3 id="dash-txt-cp-a-vencer" class="dash-card-value" style="font-size:18px;">—</h3>
+          </div>
+
+          <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='financeiro-contas-pagar.html'">
+            <div class="dash-card-icon">⚠️</div>
+            <p class="dash-card-title">Vencidas</p>
+            <h3 id="dash-txt-cp-vencidas" class="dash-card-value" style="font-size:18px;">—</h3>
+          </div>
+
+          <div class="dash-card" style="cursor:pointer;border-top:3px solid #0891b2;" onclick="location.href='financeiro-contas-pagar.html'">
+            <div class="dash-card-icon">💰</div>
+            <p class="dash-card-title">Total em Aberto</p>
+            <h3 id="dash-txt-cp-total-aberto" class="dash-card-value" style="font-size:18px;">—</h3>
+          </div>
+
+        </div>
+
         <!-- ===== NOVOS NÚCLEOS DO ERP (Estoque/Financeiro/Governança) ===== -->
         <!-- Sem consulta ao banco ainda: os núcleos abaixo são placeholders de
              arquitetura (sem tabelas criadas). Assim que cada um ganhar schema
              e dados reais, estes cards passam a exibir KPIs de verdade, no
-             mesmo padrão dos cards de Compras/Fiscal/Obras acima. -->
+             mesmo padrão dos cards de Compras/Fiscal/Obras/Financeiro acima. -->
         <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 10px;">NOVOS NÚCLEOS DO ERP — EM CONSTRUÇÃO</p>
         <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
 
@@ -234,9 +262,9 @@
             <h3 class="dash-card-value" style="font-size:13px;">Em construção</h3>
           </div>
 
-          <div class="dash-card" style="cursor:pointer;opacity:.75;" onclick="location.href='financeiro-contas-pagar.html'">
-            <div class="dash-card-icon">💵</div>
-            <p class="dash-card-title">Financeiro (inclui Bancário)</p>
+          <div class="dash-card" style="cursor:pointer;opacity:.75;" onclick="location.href='financeiro-contas-receber.html'">
+            <div class="dash-card-icon">💰</div>
+            <p class="dash-card-title">Contas a Receber / Bancário</p>
             <h3 class="dash-card-value" style="font-size:13px;">Em construção</h3>
           </div>
 
@@ -387,6 +415,7 @@
         carregarKPIsExtras();
         carregarKpisFiscalDashboard();
         carregarKpiObrasDashboard();
+        carregarKpisContasPagarDashboard();
         carregarInventarioGas();
         carregarDistribuicaoCategoria();
         carregarConformidadeFiltros();

@@ -64,6 +64,7 @@
                 <option value="Pela Empresa Contratada">Pela Empresa Contratada</option>
               </select>
             </div>
+            <div class="form-group"><label for="oc-centro-custo">Centro de Custo</label><select id="oc-centro-custo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
             <div class="form-group" id="oc-cliente-wrap" style="display:none;"><label for="oc-cliente-id">Cliente</label><select id="oc-cliente-id" class="form-input-style"><option value="">-- Selecione --</option></select></div>
             <div class="form-group"><label for="oc-frete">Frete (R$)</label><input type="number" id="oc-frete" step="0.01" value="0"></div>
             <div class="form-group" style="grid-column:span 3;"><label for="oc-observacoes">Observações</label><textarea id="oc-observacoes" rows="2"></textarea></div>
@@ -162,6 +163,16 @@ async function atualizarSelectFornecedoresOC() {
   if (error) { console.warn('Não foi possível carregar fornecedores:', error.message); return; }
   sel.innerHTML = '<option value="">-- Selecione --</option>' +
     (data || []).map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+  sel.value = atual;
+}
+
+async function atualizarSelectCentroCustoOC() {
+  const sel = document.getElementById('oc-centro-custo'); if (!sel) return;
+  const atual = sel.value;
+  const { data, error } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+  if (error) { console.warn('Não foi possível carregar centros de custo:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Selecione --</option>' +
+    (data || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
   sel.value = atual;
 }
 
@@ -316,6 +327,8 @@ async function editarOC(id) {
   await atualizarSelectClienteOC();
   document.getElementById('oc-cliente-id').value = o.cliente_id || '';
   aoTrocarModoFaturamentoOC();
+  await atualizarSelectCentroCustoOC();
+  document.getElementById('oc-centro-custo').value = o.centro_custo_id || '';
 
   const info = document.getElementById('oc-origem-info');
   const partes = [];
@@ -352,6 +365,7 @@ function resetarFormOC() {
   document.getElementById('oc-fornecedor').value = '';
   document.getElementById('oc-status').value = 'Emitida';
   document.getElementById('oc-frete').value = 0;
+  document.getElementById('oc-centro-custo').value = '';
   limparLinhasItensOC();
   document.getElementById('oc-parcelas-wrap').style.display = 'none';
   document.getElementById('tbody-parcelas-oc').innerHTML = '';
@@ -605,6 +619,7 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
       updated_at:                   new Date().toISOString(),
       modo_faturamento:              document.getElementById('oc-modo-faturamento').value || 'Direto',
       cliente_id:                    document.getElementById('oc-cliente-id').value || null,
+      centro_custo_id:                document.getElementById('oc-centro-custo').value || null,
     };
     const { error } = await db.from('ordens_compra').update(payload).eq('id', idEd);
     if (error) { msgForm('msg-oc','Erro ao salvar: ' + error.message,'red'); return; }
@@ -625,6 +640,7 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
       criado_por_nome:              window._usuarioAtual?.nome || null,
       modo_faturamento:              document.getElementById('oc-modo-faturamento').value || 'Direto',
       cliente_id:                    document.getElementById('oc-cliente-id').value || null,
+      centro_custo_id:                document.getElementById('oc-centro-custo').value || null,
     };
     if (origemRc) payload.requisicao_compra_id = origemRc;
     if (origemCotacao) payload.cotacao_id = origemCotacao;
@@ -748,6 +764,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await atualizarSelectFornecedoresOC();
   await atualizarSelectClienteOC();
+  await atualizarSelectCentroCustoOC();
   await carregarOrdensCompra();
   await aplicarOrigemRcDaURL();
   await aplicarOrigemCotacaoDaURL();

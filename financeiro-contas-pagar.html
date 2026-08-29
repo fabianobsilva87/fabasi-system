@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Contas a pagar da empresa — fornecedores, parcelas, vencimentos e centro de custo.">
+    <meta name="description" content="Contas a pagar da empresa — fornecedores, parcelas, vencimentos, centro de custo e plano de contas — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,353 @@
       <div class="topbar no-print"><h2>💵 Contas a Pagar</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>💵 Contas a Pagar</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Financeiro — obrigações a pagar geradas por compras, contratos e despesas.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> lançamento manual e via NF-e/Compras, parcelas, juros/multa/desconto, vínculo com obra e centro de custo, aprovação de pagamento.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Ledger único: títulos lançados manualmente aqui, espelhados automaticamente das parcelas de pagamento de
+            Ordens de Compra, ou gerados a partir de um documento do Fiscal.
+          </p>
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">⏳</div>
+              <p class="dash-card-title">A Vencer (7 dias)</p>
+              <h3 id="cp-txt-a-vencer" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Vencidas</p>
+              <h3 id="cp-txt-vencidas" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-success">
+              <div class="dash-card-icon">✅</div>
+              <p class="dash-card-title">Pago no Mês</p>
+              <h3 id="cp-txt-pago-mes" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+            <div class="dash-card" style="border-top:3px solid #0891b2;">
+              <div class="dash-card-icon">💰</div>
+              <p class="dash-card-title">Total em Aberto</p>
+              <h3 id="cp-txt-total-aberto" class="dash-card-value" style="font-size:18px;">—</h3>
             </div>
           </div>
+
+          <div class="card" id="foco-formulario-cp">
+            <h3 class="card-title">💵 Nova Conta a Pagar (lançamento manual)</h3>
+            <input type="hidden" id="cp-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="cp-descricao">Descrição *</label><input type="text" id="cp-descricao" placeholder="Ex: Aluguel do escritório — Setembro/2026"></div>
+              <div class="form-group"><label for="cp-fornecedor">Fornecedor (opcional)</label><select id="cp-fornecedor" class="form-input-style"><option value="">-- Nenhum --</option></select></div>
+              <div class="form-group"><label for="cp-centro-custo">Centro de Custo *</label><select id="cp-centro-custo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="cp-plano-conta">Conta (Plano de Contas)</label><select id="cp-plano-conta" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="cp-valor-total">Valor Total (R$) *</label><input type="number" id="cp-valor-total" step="0.01" placeholder="0,00"></div>
+              <div class="form-group"><label for="cp-num-parcelas">Nº de Parcelas</label><input type="number" id="cp-num-parcelas" min="1" value="1"></div>
+              <div class="form-group"><label for="cp-primeiro-vencimento">1º Vencimento *</label><input type="date" id="cp-primeiro-vencimento"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="cp-observacoes">Observações</label><textarea id="cp-observacoes" rows="2"></textarea></div>
+            </div>
+            <p style="font-size:11px;color:#a0aec0;margin-top:-6px;margin-bottom:14px;">As parcelas são geradas automaticamente (valor dividido igualmente, vencimentos a cada 30 dias a partir do 1º vencimento). Ajustes finos de parcela ficam disponíveis depois de salvar, no painel "Parcelas".</p>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-cp" class="btn-primary">💾 Registrar Conta a Pagar</button>
+              <button type="button" id="btn-cancelar-cp" class="btn-secondary" style="display:none;" onclick="resetarFormContaPagar()">✕ Cancelar</button>
+            </div>
+            <p id="msg-cp" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;">
+                <label for="cp-filtro-status">Status</label>
+                <select id="cp-filtro-status" class="form-input-style" style="width:auto;" onchange="carregarContasPagar()">
+                  <option value="">Todos</option>
+                  <option value="pendente_aprovacao">Pendente de Aprovação</option>
+                  <option value="aprovado">Aprovado</option>
+                  <option value="pago_parcial">Pago Parcial</option>
+                  <option value="pago">Pago</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="cp-filtro-origem">Origem</label>
+                <select id="cp-filtro-origem" class="form-input-style" style="width:auto;" onchange="carregarContasPagar()">
+                  <option value="">Todas</option>
+                  <option value="manual">Manual</option>
+                  <option value="ordem_compra">Ordem de Compra</option>
+                  <option value="fiscal">Fiscal</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="cp-filtro-centro-custo">Centro de Custo</label>
+                <select id="cp-filtro-centro-custo" class="form-input-style" style="width:auto;" onchange="carregarContasPagar()"><option value="">Todos</option></select>
+              </div>
+              <button type="button" class="btn-refresh" onclick="carregarContasPagar()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Descrição</th><th>Fornecedor</th><th>Centro de Custo</th><th>Origem</th><th>Valor Total</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-contas-pagar"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card" id="painel-parcelas-cp" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+              <h3 class="card-title" id="painel-parcelas-titulo" style="margin:0;">Parcelas</h3>
+              <button type="button" class="btn-secondary" onclick="fecharPainelParcelas()">✕ Fechar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pagamento</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-parcelas-cp"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _contasPagarCache = [];
+    let _parcelasPainelAtualContaId = null;
+
+    const STATUS_CP_LABEL = {
+      pendente_aprovacao: 'Pendente de Aprovação', aprovado: 'Aprovado',
+      pago_parcial: 'Pago Parcial', pago: 'Pago', cancelado: 'Cancelado',
+    };
+    const STATUS_CP_COR = {
+      pendente_aprovacao: 'warning', aprovado: 'andamento',
+      pago_parcial: 'warning', pago: 'success', cancelado: 'danger',
+    };
+    const ORIGEM_CP_LABEL = { manual: '✍️ Manual', ordem_compra: '📦 Ordem de Compra', fiscal: '🧾 Fiscal' };
+    const STATUS_PARCELA_LABEL = { aberta: 'Aberta', paga: 'Paga', vencida: 'Vencida', cancelada: 'Cancelada' };
+    const STATUS_PARCELA_COR = { aberta: '', paga: 'success', vencida: 'danger', cancelada: '' };
+
+    // ===================== SELECTS =====================
+    async function carregarSelectsContaPagar() {
+      const { data: forns } = await db.from('fornecedores').select('id,razao_social').eq('ativo', true).order('razao_social');
+      const selForn = document.getElementById('cp-fornecedor');
+      selForn.innerHTML = '<option value="">-- Nenhum --</option>' + (forns || []).map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+
+      const { data: ccs } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+      const opcoesCC = (ccs || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+      document.getElementById('cp-centro-custo').innerHTML = '<option value="">-- Selecione --</option>' + opcoesCC;
+      document.getElementById('cp-filtro-centro-custo').innerHTML = '<option value="">Todos</option>' + opcoesCC;
+
+      const { data: contas } = await db.from('plano_contas').select('id,codigo,nome,nivel').eq('ativo', true).order('codigo');
+      document.getElementById('cp-plano-conta').innerHTML = '<option value="">-- Selecione --</option>' +
+        (contas || []).filter(c => c.nivel > 1).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+    }
+
+    // ===================== KPIs =====================
+    async function carregarKpisContasPagar() {
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const em7 = new Date(hoje); em7.setDate(em7.getDate() + 7);
+      const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const hojeStr = hoje.toISOString().slice(0,10);
+      const em7Str = em7.toISOString().slice(0,10);
+      const inicioMesStr = inicioMes.toISOString().slice(0,10);
+
+      const [aVencer, vencidas, pagasMes, abertas] = await Promise.all([
+        db.from('contas_pagar_parcelas').select('valor').eq('status', 'aberta').gte('data_vencimento', hojeStr).lte('data_vencimento', em7Str),
+        db.from('contas_pagar_parcelas').select('valor').in('status', ['aberta','vencida']).lt('data_vencimento', hojeStr),
+        db.from('contas_pagar_parcelas').select('valor_pago').eq('status', 'paga').gte('data_pagamento', inicioMesStr),
+        db.from('contas_pagar_parcelas').select('valor').in('status', ['aberta','vencida']),
+      ]);
+
+      const soma = (res, campo) => (res.data || []).reduce((acc, r) => acc + Number(r[campo] || 0), 0);
+      document.getElementById('cp-txt-a-vencer').textContent = 'R$ ' + soma(aVencer, 'valor').toFixed(2).replace('.', ',');
+      document.getElementById('cp-txt-vencidas').textContent = 'R$ ' + soma(vencidas, 'valor').toFixed(2).replace('.', ',');
+      document.getElementById('cp-txt-pago-mes').textContent = 'R$ ' + soma(pagasMes, 'valor_pago').toFixed(2).replace('.', ',');
+      document.getElementById('cp-txt-total-aberto').textContent = 'R$ ' + soma(abertas, 'valor').toFixed(2).replace('.', ',');
+    }
+
+    // ===================== FORM (lançamento manual) =====================
+    async function salvarContaPagar() {
+      const descricao = document.getElementById('cp-descricao').value.trim();
+      const centroCustoId = document.getElementById('cp-centro-custo').value;
+      const valorTotal = Number(document.getElementById('cp-valor-total').value);
+      const primeiroVencimento = document.getElementById('cp-primeiro-vencimento').value;
+      const numParcelas = Math.max(1, Number(document.getElementById('cp-num-parcelas').value) || 1);
+
+      if (!descricao) { msgForm('msg-cp', 'Informe a descrição.', 'red'); return; }
+      if (!centroCustoId) { msgForm('msg-cp', 'Selecione o centro de custo.', 'red'); return; }
+      if (!valorTotal || valorTotal <= 0) { msgForm('msg-cp', 'Informe um valor total válido.', 'red'); return; }
+      if (!primeiroVencimento) { msgForm('msg-cp', 'Informe o 1º vencimento.', 'red'); return; }
+
+      const payload = {
+        descricao,
+        fornecedor_id: document.getElementById('cp-fornecedor').value || null,
+        centro_custo_id: centroCustoId,
+        plano_conta_id: document.getElementById('cp-plano-conta').value || null,
+        origem: 'manual',
+        valor_total: valorTotal,
+        data_emissao: new Date().toISOString().slice(0,10),
+        status: 'pendente_aprovacao',
+        observacoes: document.getElementById('cp-observacoes').value.trim() || null,
+      };
+
+      const { data: novaConta, error } = await db.from('contas_pagar').insert([payload]).select('id').single();
+      if (error) { msgForm('msg-cp', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      const valorParcela = Math.round((valorTotal / numParcelas) * 100) / 100;
+      const parcelas = [];
+      for (let i = 0; i < numParcelas; i++) {
+        const venc = new Date(primeiroVencimento + 'T00:00:00'); venc.setDate(venc.getDate() + 30 * i);
+        parcelas.push({ conta_pagar_id: novaConta.id, numero_parcela: i + 1, valor: valorParcela, data_vencimento: venc.toISOString().slice(0,10), status: 'aberta' });
+      }
+      const { error: errParcelas } = await db.from('contas_pagar_parcelas').insert(parcelas);
+      if (errParcelas) { msgForm('msg-cp', 'Conta criada, mas houve erro ao gerar parcelas: ' + errParcelas.message, 'red'); }
+      else { msgForm('msg-cp', '✓ Conta a pagar registrada com ' + numParcelas + ' parcela(s)!', 'green'); }
+
+      resetarFormContaPagar();
+      await carregarContasPagar();
+      await carregarKpisContasPagar();
+    }
+
+    function resetarFormContaPagar() {
+      document.getElementById('cp-id-edicao').value = '';
+      ['cp-descricao','cp-valor-total','cp-primeiro-vencimento','cp-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cp-fornecedor').value = '';
+      document.getElementById('cp-centro-custo').value = '';
+      document.getElementById('cp-plano-conta').value = '';
+      document.getElementById('cp-num-parcelas').value = 1;
+    }
+
+    // ===================== APROVAÇÃO =====================
+    async function aprovarContaPagar(id) {
+      if (!podeAprovar()) { toast('Só master/admin podem aprovar.', 'erro'); return; }
+      const { error } = await db.from('contas_pagar').update({
+        status: 'aprovado',
+        aprovado_por_nome: window._usuarioAtual?.nome || null,
+        aprovado_em: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) { toast('Erro ao aprovar: ' + error.message, 'erro'); return; }
+      toast('Conta a pagar aprovada!', 'sucesso');
+      await carregarContasPagar();
+    }
+
+    // ===================== LISTAGEM =====================
+    async function carregarContasPagar() {
+      const tbody = document.getElementById('tbody-contas-pagar'); if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+      const status = document.getElementById('cp-filtro-status').value;
+      const origem = document.getElementById('cp-filtro-origem').value;
+      const centroCusto = document.getElementById('cp-filtro-centro-custo').value;
+
+      let query = db.from('contas_pagar').select('*, fornecedores(razao_social), centros_custo(codigo,nome,tipo)').order('created_at', { ascending: false }).limit(200);
+      if (status) query = query.eq('status', status);
+      if (origem) query = query.eq('origem', origem);
+      if (centroCusto) query = query.eq('centro_custo_id', centroCusto);
+
+      const { data, error } = await query;
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _contasPagarCache = data || [];
+      if (!_contasPagarCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma conta a pagar encontrada.</td></tr>'; return; }
+
+      tbody.innerHTML = _contasPagarCache.map(c => `<tr>
+        <td><strong>${escapeHTML(c.descricao)}</strong>${c.aprovado_em ? seloAprovacao(c.aprovado_por_nome, c.aprovado_em) : ''}</td>
+        <td>${escapeHTML(c.fornecedores?.razao_social || '—')}</td>
+        <td>${c.centros_custo ? (c.centros_custo.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(c.centros_custo.nome) : '—'}</td>
+        <td><span class="tag-badge">${ORIGEM_CP_LABEL[c.origem] || escapeHTML(c.origem)}</span></td>
+        <td>R$ ${Number(c.valor_total || 0).toFixed(2).replace('.', ',')}</td>
+        <td><span class="tag-badge ${STATUS_CP_COR[c.status] || ''}">${STATUS_CP_LABEL[c.status] || escapeHTML(c.status)}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirPainelParcelas('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">📋 Parcelas</button>
+          ${c.status === 'pendente_aprovacao' && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarContaPagar('${escapeHTML(c.id)}')">✓ Aprovar</button>` : ''}
+          ${c.status === 'pendente_aprovacao' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">não aprovada</span>` : ''}
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== PAINEL DE PARCELAS =====================
+    function fecharPainelParcelas() {
+      document.getElementById('painel-parcelas-cp').style.display = 'none';
+      _parcelasPainelAtualContaId = null;
+    }
+
+    async function abrirPainelParcelas(contaPagarId, descricao) {
+      _parcelasPainelAtualContaId = contaPagarId;
+      document.getElementById('painel-parcelas-titulo').textContent = 'Parcelas — ' + descricao;
+      document.getElementById('painel-parcelas-cp').style.display = 'block';
+      await carregarParcelasPainel();
+      document.getElementById('painel-parcelas-cp').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function carregarParcelasPainel() {
+      const tbody = document.getElementById('tbody-parcelas-cp'); if (!tbody || !_parcelasPainelAtualContaId) return;
+      tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Carregando...</td></tr>';
+      const { data, error } = await db.from('contas_pagar_parcelas').select('*').eq('conta_pagar_id', _parcelasPainelAtualContaId).order('numero_parcela');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma parcela cadastrada.</td></tr>'; return; }
+
+      tbody.innerHTML = data.map(p => `<tr>
+        <td>${p.numero_parcela}</td>
+        <td>R$ ${Number(p.valor || 0).toFixed(2).replace('.', ',')}</td>
+        <td>${fmtDate(p.data_vencimento)}</td>
+        <td><span class="tag-badge ${STATUS_PARCELA_COR[p.status] || ''}">${STATUS_PARCELA_LABEL[p.status] || escapeHTML(p.status)}</span></td>
+        <td style="font-size:11px;color:#718096;">${p.status === 'paga' ? `${fmtDate(p.data_pagamento)} · R$ ${Number(p.valor_pago || 0).toFixed(2).replace('.', ',')}${p.forma_pagamento ? ' · ' + escapeHTML(p.forma_pagamento) : ''}` : '—'}</td>
+        <td>${p.status !== 'paga' && p.status !== 'cancelada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarPagamentoParcela('${escapeHTML(p.id)}', ${p.valor})">💰 Registrar Pagamento</button>` : '—'}</td>
+      </tr>`).join('');
+    }
+
+    async function registrarPagamentoParcela(parcelaId, valorOriginal) {
+      const valorPagoTexto = prompt('Valor efetivamente pago (R$):', valorOriginal);
+      if (valorPagoTexto === null) return;
+      const valorPago = Number(valorPagoTexto.replace(',', '.'));
+      if (!valorPago || valorPago <= 0) { toast('Valor inválido.', 'erro'); return; }
+
+      const jurosTexto = prompt('Juros (R$) — opcional:', '0');
+      const multaTexto = prompt('Multa (R$) — opcional:', '0');
+      const descontoTexto = prompt('Desconto (R$) — opcional:', '0');
+      const formaPagamento = prompt('Forma de pagamento (pix, boleto, ted, cartão, dinheiro):', 'pix');
+
+      const payload = {
+        status: 'paga',
+        data_pagamento: new Date().toISOString().slice(0,10),
+        valor_pago: valorPago,
+        juros: Number((jurosTexto || '0').replace(',', '.')) || 0,
+        multa: Number((multaTexto || '0').replace(',', '.')) || 0,
+        desconto: Number((descontoTexto || '0').replace(',', '.')) || 0,
+        forma_pagamento: (formaPagamento || '').trim() || null,
+      };
+
+      const { data: parcela, error } = await db.from('contas_pagar_parcelas').update(payload).eq('id', parcelaId).select('*').single();
+      if (error) { toast('Erro ao registrar pagamento: ' + error.message, 'erro'); return; }
+
+      // Sincroniza de volta com a Ordem de Compra, se essa parcela veio de lá
+      // (via aplicação — evita ping-pong de trigger, ver migration 14.2).
+      if (parcela.origem_parcela_oc_id) {
+        await db.from('parcelas_pagamento_oc').update({ status: 'Paga' }).eq('id', parcela.origem_parcela_oc_id);
+      }
+
+      await atualizarStatusContaPagarAgregado(parcela.conta_pagar_id);
+      toast('Pagamento registrado!', 'sucesso');
+      await carregarParcelasPainel();
+      await carregarContasPagar();
+      await carregarKpisContasPagar();
+    }
+
+    // Recalcula o status do título com base no conjunto de parcelas: todas
+    // pagas → pago; alguma paga → pago_parcial; senão mantém como está
+    // (pendente_aprovacao/aprovado seguem o fluxo de aprovação, não pagamento).
+    async function atualizarStatusContaPagarAgregado(contaPagarId) {
+      const { data: parcelas } = await db.from('contas_pagar_parcelas').select('status').eq('conta_pagar_id', contaPagarId);
+      if (!parcelas || !parcelas.length) return;
+      const todasPagas = parcelas.every(p => p.status === 'paga' || p.status === 'cancelada');
+      const algumaPaga = parcelas.some(p => p.status === 'paga');
+      const novoStatus = todasPagas ? 'pago' : (algumaPaga ? 'pago_parcial' : null);
+      if (novoStatus) await db.from('contas_pagar').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', contaPagarId);
+    }
+
+    document.getElementById('btn-salvar-cp').addEventListener('click', salvarContaPagar);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsContaPagar();
+      await carregarKpisContasPagar();
+      await carregarContasPagar();
+    });
+  </script>
 </body>
 </html>

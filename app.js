@@ -5636,6 +5636,27 @@ async function carregarKpiObrasDashboard() {
   if ($('dash-txt-centros-custo-ativos')) $('dash-txt-centros-custo-ativos').textContent = centrosAtivos ?? 0;
 }
 
+// ===================== DASHBOARD — CONTAS A PAGAR (Etapa 14.2) =====================
+async function carregarKpisContasPagarDashboard() {
+  if (!$('dash-txt-cp-a-vencer')) return;
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const em7 = new Date(hoje); em7.setDate(em7.getDate() + 7);
+  const hojeStr = hoje.toISOString().slice(0,10);
+  const em7Str = em7.toISOString().slice(0,10);
+
+  const [aVencer, vencidas, abertas] = await Promise.all([
+    db.from('contas_pagar_parcelas').select('valor').eq('status', 'aberta').gte('data_vencimento', hojeStr).lte('data_vencimento', em7Str),
+    db.from('contas_pagar_parcelas').select('valor').in('status', ['aberta','vencida']).lt('data_vencimento', hojeStr),
+    db.from('contas_pagar_parcelas').select('valor').in('status', ['aberta','vencida']),
+  ]);
+
+  const soma = (res) => (res.data || []).reduce((acc, r) => acc + Number(r.valor || 0), 0);
+  if ($('dash-txt-cp-a-vencer'))     $('dash-txt-cp-a-vencer').textContent     = 'R$ ' + soma(aVencer).toFixed(2).replace('.', ',');
+  if ($('dash-txt-cp-vencidas'))     $('dash-txt-cp-vencidas').textContent     = 'R$ ' + soma(vencidas).toFixed(2).replace('.', ',');
+  if ($('dash-txt-cp-total-aberto')) $('dash-txt-cp-total-aberto').textContent = 'R$ ' + soma(abertas).toFixed(2).replace('.', ',');
+}
+
 async function carregarDistribuicaoCategoria() {
   const el       = $('dash-dist-cat');
   const elCrit   = $('dash-cat-criticos');
