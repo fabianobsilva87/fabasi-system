@@ -43,6 +43,7 @@
         <div class="nav-label">Compras</div>
         <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
         <div class="nav-item active" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
         <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
         <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
         <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
@@ -73,7 +74,7 @@
             <div class="form-group"><label for="req-status">Status</label>
               <select id="req-status" class="form-input-style">
                 <option value="Solicitado">Solicitado</option>
-                <option value="Aprovado">Aprovado</option>
+                <option value="Aprovado" disabled>Aprovado (use o botão ✓ Aprovar na listagem)</option>
                 <option value="Rejeitado">Rejeitado</option>
                 <option value="Cancelado">Cancelado</option>
               </select>
@@ -237,7 +238,7 @@ async function carregarRequisicoes() {
   const filtroStatus = document.getElementById('filtro-status-requisicao')?.value || '';
 
   let query = db.from('requisicoes_compra')
-    .select('*, fornecedores(razao_social), ordens_servico(id,descricao_defeito)')
+    .select('*, fornecedores(razao_social), ordens_servico(id,descricao_defeito), requisicoes_material(numero)')
     .order('created_at', { ascending: false });
   if (filtroStatus) query = query.eq('status', filtroStatus);
 
@@ -251,25 +252,49 @@ async function carregarRequisicoes() {
   const txtStatus = { Solicitado:'#1e40af', Aprovado:'#065f46', Rejeitado:'#991b1b', Convertida:'#3730a3', Cancelado:'#991b1b' };
 
   tbody.innerHTML = _requisicoesCache.map(r => `<tr>
-    <td><strong>${escapeHTML(r.numero)}</strong></td>
+    <td><strong>${escapeHTML(r.numero)}</strong>${r.requisicoes_material ? `<br><a href="requisicao-materiais.html?ver=${escapeHTML(r.requisicao_material_id)}" style="font-size:10px;color:#4a5568;" target="_blank">↳ origem: ${escapeHTML(r.requisicoes_material.numero)}</a>` : ''}</td>
     <td>${escapeHTML(r.solicitante)}</td>
     <td>${r.ordens_servico ? escapeHTML(rotuloOS(r.ordens_servico)) : '—'}</td>
     <td>${escapeHTML(r.fornecedores?.razao_social || '—')}</td>
-    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span></td>
+    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span>${seloAprovacao(r.aprovado_por_nome, r.aprovado_em)}</td>
     <td>R$ ${Number(r.valor_total || 0).toFixed(2).replace('.',',')}</td>
     <td>${r.data_solicitacao ? new Date(r.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
-      ${r.status === 'Aprovado' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="gerarOrdemDeCompra('${escapeHTML(r.id)}')">📦 Gerar Ordem de Compra</button>` : ''}
+      ${r.status === 'Solicitado' && podeAprovar() ? `
+        <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarRequisicao('${escapeHTML(r.id)}')">✓ Aprovar</button>
+        <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="definirStatusRequisicao('${escapeHTML(r.id)}','Rejeitado')">✕ Rejeitar</button>` : ''}
+      ${r.status === 'Solicitado' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">aguardando aprovação</span>` : ''}
+      ${r.status === 'Aprovado' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="gerarOrdemDeCompra('${escapeHTML(r.id)}')">🔍 Iniciar Cotação</button>` : ''}
       <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarRequisicao('${escapeHTML(r.id)}')">✏️ Editar</button>
       <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirRequisicao('${escapeHTML(r.id)}')">✕</button>
     </td>
   </tr>`).join('');
 }
 
-// Ponte Estágio 2 → Estágio 3: manda pra Ordem de Compra, que busca os dados
-// sozinha a partir do parâmetro na URL (mesmo padrão da ponte RM → RC).
+async function definirStatusRequisicao(id, novoStatus) {
+  const { error } = await db.from('requisicoes_compra').update({ status: novoStatus }).eq('id', id);
+  if (error) { toast('Erro ao atualizar status: ' + error.message, 'erro'); return; }
+  carregarRequisicoes();
+}
+
+// Ação dedicada de aprovar — única rota que grava aprovado_em (ver nota em
+// requisicao-materiais.html sobre como o trigger usa isso).
+async function aprovarRequisicao(id) {
+  if (!podeAprovar()) { toast('Só master/admin podem aprovar.', 'erro'); return; }
+  const { error } = await db.from('requisicoes_compra').update({
+    status: 'Aprovado',
+    aprovado_por_nome: window._usuarioAtual?.nome || null,
+    aprovado_em: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) { toast('Erro ao aprovar: ' + error.message, 'erro'); return; }
+  carregarRequisicoes();
+}
+
+// Ponte Estágio 2 → Estágio 3: agora manda pra Cotação (Mapa de Cotação),
+// não direto pra Ordem de Compra — a OC só nasce depois que uma proposta
+// vencedora for escolhida na cotação.
 function gerarOrdemDeCompra(id) {
-  location.href = 'ordem-compra.html?origem_rc=' + encodeURIComponent(id);
+  location.href = 'cotacao.html?origem_rc=' + encodeURIComponent(id);
 }
 
 async function editarRequisicao(id) {
@@ -281,6 +306,15 @@ async function editarRequisicao(id) {
   document.getElementById('req-status').value         = r.status || 'Solicitado';
   document.getElementById('req-data-necessidade').value = r.data_necessidade || '';
   document.getElementById('req-observacoes').value    = r.observacoes || '';
+
+  const info = document.getElementById('rc-origem-info');
+  if (r.requisicao_material_id) {
+    info.style.display = 'block';
+    info.innerHTML = `↳ Gerada a partir da Requisição de Material <a href="requisicao-materiais.html?ver=${escapeHTML(r.requisicao_material_id)}" target="_blank" style="color:#065f46;font-weight:600;">${escapeHTML(r.requisicoes_material?.numero || '')}</a>${r.criado_por_nome ? ' · criada por ' + escapeHTML(r.criado_por_nome) : ''}`;
+  } else {
+    info.style.display = r.criado_por_nome ? 'block' : 'none';
+    info.innerHTML = r.criado_por_nome ? `Criada por ${escapeHTML(r.criado_por_nome)}` : '';
+  }
 
   await Promise.all([atualizarSelectOSParaRequisicao(), atualizarSelectFornecedores()]);
   document.getElementById('req-os').value = r.os_id || '';
@@ -364,6 +398,7 @@ document.getElementById('btn-salvar-requisicao')?.addEventListener('click', asyn
       observacoes:        document.getElementById('req-observacoes').value.trim() || null,
       valor_total:         valorTotal,
       updated_at:           new Date().toISOString(),
+      criado_por_nome:       window._usuarioAtual?.nome || null,
     };
     if (origemRm) payload.requisicao_material_id = origemRm;
 
@@ -434,16 +469,28 @@ async function aplicarOrigemRmDaURL() {
   document.getElementById('req-id-edicao').dataset.origemRm = origemRm; // lido no submit
   const info = document.getElementById('rc-origem-info');
   info.style.display = 'block';
-  info.textContent = `↳ Gerada a partir da Requisição de Material ${r.numero}. Complete o fornecedor e os valores antes de registrar.`;
+  info.innerHTML = `↳ Gerada a partir da Requisição de Material <a href="requisicao-materiais.html?ver=${escapeHTML(origemRm)}" target="_blank" style="color:#065f46;font-weight:600;">${escapeHTML(r.numero)}</a>${r.criado_por_nome ? ' (criada por ' + escapeHTML(r.criado_por_nome) + ')' : ''}. Complete o fornecedor e os valores antes de registrar.`;
 
   document.getElementById('foco-formulario-requisicao').scrollIntoView({ behavior:'smooth' });
+}
+
+// Suporte a ?ver=<id> — abre a solicitação direto no formulário quando se
+// chega aqui por um link de origem clicado noutra página (Cotação/OC).
+async function aplicarVerDaURL() {
+  const params = new URLSearchParams(location.search);
+  const verId = params.get('ver');
+  if (!verId) return;
+  // Garante que já temos a listagem carregada antes de tentar abrir o registro.
+  if (!_requisicoesCache.length) await carregarRequisicoes();
+  editarRequisicao(verId);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await Promise.all([atualizarSelectOSParaRequisicao(), atualizarSelectFornecedores()]);
-  await aplicarOrigemRmDaURL();
   await carregarRequisicoes();
+  await aplicarOrigemRmDaURL();
+  await aplicarVerDaURL();
 });
 </script>
 </body>

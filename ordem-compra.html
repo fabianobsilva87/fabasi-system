@@ -43,6 +43,7 @@
         <div class="nav-label">Compras</div>
         <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
         <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
         <div class="nav-item active" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
         <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
         <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
@@ -65,6 +66,7 @@
           <p id="oc-origem-info" style="display:none;font-size:12px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:8px 12px;border-radius:6px;margin-bottom:12px;"></p>
           <input type="hidden" id="oc-id-edicao" value="">
           <input type="hidden" id="oc-origem-rc" value="">
+          <input type="hidden" id="oc-origem-cotacao" value="">
 
           <div class="form-grid">
             <div class="form-group"><label for="oc-numero">Número</label><input type="text" id="oc-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
@@ -242,7 +244,7 @@ async function carregarOrdensCompra() {
   const tbody = document.getElementById('tbody-oc'); if (!tbody) return;
   const filtroStatus = document.getElementById('filtro-status-oc')?.value || '';
 
-  let query = db.from('ordens_compra').select('*, fornecedores(razao_social)').order('created_at', { ascending: false });
+  let query = db.from('ordens_compra').select('*, fornecedores(razao_social), requisicoes_compra(numero), cotacoes(numero)').order('created_at', { ascending: false });
   if (filtroStatus) query = query.eq('status', filtroStatus);
 
   const { data, error } = await query;
@@ -255,16 +257,31 @@ async function carregarOrdensCompra() {
   const txtStatus = { 'Emitida':'#1e40af', 'Confirmada':'#92400e', 'Enviada':'#3730a3', 'Recebida Parcial':'#9a3412', 'Recebida Total':'#065f46', 'Cancelada':'#991b1b' };
 
   tbody.innerHTML = _ordensCompraCache.map(o => `<tr>
-    <td><strong>${escapeHTML(o.numero)}</strong></td>
+    <td><strong>${escapeHTML(o.numero)}</strong>${o.cotacoes ? `<br><a href="cotacao.html?ver=${escapeHTML(o.cotacao_id)}" target="_blank" style="font-size:10px;color:#4a5568;">↳ origem: ${escapeHTML(o.cotacoes.numero)}</a>` : (o.requisicoes_compra ? `<br><a href="solicitacoes-compra.html?ver=${escapeHTML(o.requisicao_compra_id)}" target="_blank" style="font-size:10px;color:#4a5568;">↳ origem: ${escapeHTML(o.requisicoes_compra.numero)}</a>` : '')}</td>
     <td>${escapeHTML(o.fornecedores?.razao_social || '—')}</td>
-    <td><span class="tag-badge" style="background:${corStatus[o.status]||'#f1f5f9'};color:${txtStatus[o.status]||'#4a5568'};">${escapeHTML(o.status)}</span></td>
+    <td><span class="tag-badge" style="background:${corStatus[o.status]||'#f1f5f9'};color:${txtStatus[o.status]||'#4a5568'};">${escapeHTML(o.status)}</span>${seloAprovacao(o.aprovado_por_nome, o.aprovado_em)}</td>
     <td>R$ ${Number(o.valor_total || 0).toFixed(2).replace('.',',')}</td>
     <td>${o.data_entrega_prevista ? new Date(o.data_entrega_prevista + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${!o.aprovado_em && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarOC('${escapeHTML(o.id)}')">✓ Aprovar</button>` : ''}
+      ${!o.aprovado_em && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">não aprovada</span>` : ''}
       <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarOC('${escapeHTML(o.id)}')">✏️ Editar</button>
       <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirOC('${escapeHTML(o.id)}')">✕</button>
     </td>
   </tr>`).join('');
+}
+
+// Ação dedicada de aprovar — separada do status logístico (Emitida/Enviada/...),
+// que continua livre pra qualquer editor mudar. "Aprovar" aqui é sobre o
+// documento em si (autorização da compra), só master/admin.
+async function aprovarOC(id) {
+  if (!podeAprovar()) { toast('Só master/admin podem aprovar.', 'erro'); return; }
+  const { error } = await db.from('ordens_compra').update({
+    aprovado_por_nome: window._usuarioAtual?.nome || null,
+    aprovado_em: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) { toast('Erro ao aprovar: ' + error.message, 'erro'); return; }
+  carregarOrdensCompra();
 }
 
 async function editarOC(id) {
@@ -277,6 +294,14 @@ async function editarOC(id) {
   document.getElementById('oc-condicao-pagamento').value = o.condicao_pagamento || '';
   document.getElementById('oc-frete').value = o.frete ?? 0;
   document.getElementById('oc-observacoes').value = o.observacoes || '';
+
+  const info = document.getElementById('oc-origem-info');
+  const partes = [];
+  if (o.cotacoes) partes.push(`Originada da Cotação <a href="cotacao.html?ver=${escapeHTML(o.cotacao_id)}" target="_blank" style="color:#3730a3;font-weight:600;">${escapeHTML(o.cotacoes.numero)}</a>`);
+  else if (o.requisicoes_compra) partes.push(`Originada da Solicitação de Compra <a href="solicitacoes-compra.html?ver=${escapeHTML(o.requisicao_compra_id)}" target="_blank" style="color:#3730a3;font-weight:600;">${escapeHTML(o.requisicoes_compra.numero)}</a>`);
+  if (o.criado_por_nome) partes.push(`criada por ${escapeHTML(o.criado_por_nome)}`);
+  if (partes.length) { info.style.display = 'block'; info.innerHTML = '↳ ' + partes.join(' · ') + seloAprovacao(o.aprovado_por_nome, o.aprovado_em); }
+  else { info.style.display = 'none'; }
 
   await atualizarSelectFornecedoresOC();
   document.getElementById('oc-fornecedor').value = o.fornecedor_id || '';
@@ -293,7 +318,7 @@ async function editarOC(id) {
 }
 
 function resetarFormOC() {
-  ['oc-id-edicao','oc-origem-rc','oc-numero','oc-data-entrega','oc-condicao-pagamento','oc-observacoes'].forEach(id => {
+  ['oc-id-edicao','oc-origem-rc','oc-origem-cotacao','oc-numero','oc-data-entrega','oc-condicao-pagamento','oc-observacoes'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('oc-fornecedor').value = '';
@@ -323,6 +348,7 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
   const valorTotal = recalcularTotalOC();
   const idEd = document.getElementById('oc-id-edicao').value;
   const origemRc = document.getElementById('oc-origem-rc').value || null;
+  const origemCotacao = document.getElementById('oc-origem-cotacao').value || null;
   let ordemId = idEd;
 
   if (idEd) {
@@ -352,8 +378,10 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
       frete:                     Number(document.getElementById('oc-frete').value) || 0,
       observacoes:                document.getElementById('oc-observacoes').value.trim() || null,
       valor_total:                 valorTotal,
+      criado_por_nome:              window._usuarioAtual?.nome || null,
     };
     if (origemRc) payload.requisicao_compra_id = origemRc;
+    if (origemCotacao) payload.cotacao_id = origemCotacao;
 
     const { data, error } = await db.from('ordens_compra').insert([payload]).select('id').single();
     if (error) { msgForm('msg-oc','Erro ao salvar: ' + error.message,'red'); return; }
@@ -367,7 +395,8 @@ document.getElementById('btn-salvar-oc')?.addEventListener('click', async () => 
     if (errItens) { msgForm('msg-oc','Ordem salva, mas houve erro ao salvar os itens: ' + errItens.message,'red'); return; }
   }
 
-  // Fecha o ciclo: a Solicitação de Compra de origem passa a "Convertida".
+  // Fecha o ciclo: a Solicitação de Compra (ou, se veio de Cotação, ela
+  // já ficou "Concluída" ao marcar a vencedora — nada a fazer aqui nesse caso).
   if (origemRc && !idEd) {
     await db.from('requisicoes_compra').update({ status: 'Convertida' }).eq('id', origemRc);
   }
@@ -406,16 +435,68 @@ async function aplicarOrigemRcDaURL() {
 
   const info = document.getElementById('oc-origem-info');
   info.style.display = 'block';
-  info.textContent = `↳ Gerada a partir da Solicitação de Compra ${r.numero}. Confira fornecedor, itens e valores antes de registrar.`;
+  info.innerHTML = `↳ Gerada a partir da Solicitação de Compra <a href="solicitacoes-compra.html?ver=${escapeHTML(origemRc)}" target="_blank" style="color:#3730a3;font-weight:600;">${escapeHTML(r.numero)}</a>. Confira fornecedor, itens e valores antes de registrar.`;
 
   document.getElementById('foco-formulario-oc').scrollIntoView({ behavior:'smooth' });
+}
+
+// ===================== PONTE: chegada vinda de Cotação (proposta vencedora) =====================
+// Lê ?origem_cotacao=<id>&proposta=<id> — busca a proposta vencedora, o
+// fornecedor e os preços já negociados dela, e pré-preenche o formulário.
+async function aplicarOrigemCotacaoDaURL() {
+  const params = new URLSearchParams(location.search);
+  const origemCotacao = params.get('origem_cotacao');
+  const propostaId = params.get('proposta');
+  if (!origemCotacao || !propostaId) return;
+
+  const { data: cot, error: errCot } = await db.from('cotacoes').select('*, requisicoes_compra(numero)').eq('id', origemCotacao).single();
+  if (errCot || !cot) { toast('Não foi possível carregar a cotação de origem.', 'erro'); return; }
+  const { data: prop, error: errProp } = await db.from('cotacoes_propostas').select('*, fornecedores(razao_social)').eq('id', propostaId).single();
+  if (errProp || !prop) { toast('Não foi possível carregar a proposta vencedora.', 'erro'); return; }
+  const { data: itensCot } = await db.from('cotacoes_itens').select('*').eq('cotacao_id', origemCotacao).order('id');
+  const { data: precos } = await db.from('cotacoes_propostas_itens').select('*').eq('proposta_id', propostaId);
+  const mapaPrecos = Object.fromEntries((precos || []).map(p => [p.cotacao_item_id, p.valor_unitario]));
+
+  resetarFormOC();
+  document.getElementById('oc-origem-cotacao').value = origemCotacao;
+  await atualizarSelectFornecedoresOC();
+  document.getElementById('oc-fornecedor').value = prop.fornecedor_id || '';
+  document.getElementById('oc-condicao-pagamento').value = prop.condicao_pagamento || '';
+  if (prop.prazo_entrega_dias) {
+    const data = new Date(); data.setDate(data.getDate() + prop.prazo_entrega_dias);
+    document.getElementById('oc-data-entrega').value = data.toISOString().slice(0,10);
+  }
+
+  limparLinhasItensOC();
+  (itensCot || []).forEach(it => adicionarLinhaItemOC({
+    material_id: it.material_id, descricao: it.descricao,
+    quantidade: it.quantidade, unidade: it.unidade, valor_unitario: mapaPrecos[it.id] ?? 0,
+  }));
+  recalcularTotalOC();
+
+  const info = document.getElementById('oc-origem-info');
+  info.style.display = 'block';
+  info.innerHTML = `↳ Gerada a partir da Cotação <a href="cotacao.html?ver=${escapeHTML(origemCotacao)}" target="_blank" style="color:#3730a3;font-weight:600;">${escapeHTML(cot.numero)}</a> — proposta vencedora: ${escapeHTML(prop.fornecedores?.razao_social || '')}. Confira antes de registrar.`;
+
+  document.getElementById('foco-formulario-oc').scrollIntoView({ behavior:'smooth' });
+}
+
+// Suporte a ?ver=<id> — mesmo padrão das outras páginas do fluxo.
+async function aplicarVerDaURL() {
+  const params = new URLSearchParams(location.search);
+  const verId = params.get('ver');
+  if (!verId) return;
+  if (!_ordensCompraCache.length) await carregarOrdensCompra();
+  editarOC(verId);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await atualizarSelectFornecedoresOC();
-  await aplicarOrigemRcDaURL();
   await carregarOrdensCompra();
+  await aplicarOrigemRcDaURL();
+  await aplicarOrigemCotacaoDaURL();
+  await aplicarVerDaURL();
 });
 </script>
 </body>

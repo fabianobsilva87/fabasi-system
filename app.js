@@ -218,9 +218,25 @@ function rotuloOS(o) {
   return `OS-AC-${curto}` + (o.descricao_defeito ? ' — ' + String(o.descricao_defeito).slice(0,40) : '');
 }
 
-// ── Compartilhado entre Requisição de Materiais, Solicitação de Compra e
-// Ordem de Compra: preenche todo <select class="select-material-item"> já
-// renderizado na página com o catálogo ativo de materiais. Cada página
+// ── Compartilhado entre RM/RC/OC/Cotação: só master e admin aprovam.
+// window._usuarioAtual é preenchido por verificarSessaoGlobal(); pode não
+// estar pronto ainda se chamado antes de window.sessaoPronta resolver.
+function podeAprovar() {
+  const role = window._usuarioAtual?.role;
+  return role === 'master' || role === 'admin';
+}
+
+// Selo compacto "Aprovado por X em DD/MM/AAAA HH:MM", usado nos formulários
+// de edição de RM/RC/OC/Cotação quando o documento já está aprovado.
+function seloAprovacao(nome, em) {
+  if (!nome || !em) return '';
+  const data = new Date(em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  return `<span class="tag-badge success" style="margin-left:8px;">✓ Aprovado por ${escapeHTML(nome)} em ${data}</span>`;
+}
+
+// ── Compartilhado entre Requisição de Materiais, Solicitação de Compra,
+// Ordem de Compra e Cotação: preenche todo <select class="select-material-item">
+// já renderizado na página com o catálogo ativo de materiais. Cada página
 // chama isso de novo depois de adicionar uma linha de item dinâmica.
 async function carregarMateriaisParaSelectItem() {
   const { data, error } = await db.from('materiais').select('id,nome,unidade,valor_referencia').eq('ativo', true).order('nome');
@@ -542,6 +558,7 @@ async function verificarSessaoGlobal() {
     if (perfil) {
       if ($('user-display-email'))
         $('user-display-email').textContent = perfil.nome || user.email;
+      window._usuarioAtual = { id: user.id, email: user.email, nome: perfil.nome || user.email, role: perfil.role || null };
     } else {
       // T1.2 — o cliente NUNCA cria o próprio perfil nem escreve a própria role.
       // A criação passou a ser responsabilidade do servidor: trigger
@@ -549,10 +566,12 @@ async function verificarSessaoGlobal() {
       // 'leitor'/'pendente'. Aqui apenas registramos e seguimos com o e-mail.
       console.warn('profiles: perfil não localizado para', user.email,
                    '— criação é responsabilidade do trigger no servidor.');
+      window._usuarioAtual = { id: user.id, email: user.email, nome: user.email, role: null };
     }
   } catch(e) {
     // RLS ou outro erro em profiles — não impede o uso do sistema
     console.warn('profiles sync:', e.message);
+    window._usuarioAtual = { id: user.id, email: user.email, nome: user.email, role: null };
   }
 }
 // T2.2 — a promise é exportada para que as páginas sequenciem de verdade o

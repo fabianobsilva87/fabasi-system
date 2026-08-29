@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Mapa de cotação comparativo entre fornecedores (Estágio 3 do fluxo de Compras) — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Cotação</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:30px;width:auto;display:block;margin-bottom:6px;"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav>
+        <div class="nav-label">Visão Geral</div>
+        <div class="nav-item" onclick="location.href='dashboard.html'"><span>📊</span> Dashboard Geral</div>
+        <div class="nav-label">Refrigeração</div>
+        <div class="nav-item" onclick="location.href='equipamentos.html'"><span>➕</span> Novo Ativo</div>
+        <div class="nav-item" onclick="location.href='gerir-equipamentos.html'"><span>⚙️</span> Gerenciamento de Ativos</div>
+        <div class="nav-item" onclick="location.href='pmoc.html'"><span>📋</span> Formulário PMOC</div>
+        <div class="nav-item" onclick="location.href='programacao-pmoc.html'"><span>📅</span> Programação PMOC</div>
+        <div class="nav-item" onclick="location.href='plano-pmoc.html'"><span>📘</span> Plano PMOC (Documento)</div>
+        <div class="nav-item" data-nav="impressoes" onclick="location.href='impressoes.html'"><span>🖨️</span> Central de Impressões</div>
+        <div class="nav-label">Manutenção</div>
+        <div class="nav-item" onclick="location.href='os.html'"><span>🛠️</span> Ordens de Serviço</div>
+        <div class="nav-label">Compras</div>
+        <div class="nav-item" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
+        <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item active" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
+        <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
+        <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
+        <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
+        <div class="nav-item" onclick="location.href='cadastro-materiais.html'"><span>🗂️</span> Cadastro de Materiais</div>
+        <div class="nav-label">Administração</div>
+        <div class="nav-item" onclick="location.href='colaborador.html'"><span>👷</span> Colaboradores</div>
+        <div class="nav-item" onclick="location.href='empresas.html'"><span>🏢</span> Empresas</div>
+        <div class="nav-item" onclick="location.href='locais.html'"><span>📍</span> Locais</div>
+        <div class="nav-item" onclick="location.href='usuarios.html'"><span>👥</span> Gestão de Usuários</div>
+      </nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>🔍 Cotação (Mapa de Cotação)</h2></div>
+      <div class="section-content">
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Cotações</h3>
+            <button type="button" class="btn-refresh" onclick="carregarCotacoes()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Número</th><th>Origem (RC)</th><th>Status</th><th>Propostas</th><th>Vencedora</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-cotacoes"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="painel-cotacao-detalhe" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+            <h3 class="card-title" id="cotacao-titulo" style="margin:0;">Cotação</h3>
+            <button type="button" class="btn-secondary" onclick="fecharDetalheCotacao()">✕ Fechar</button>
+          </div>
+          <p id="cotacao-origem-info" style="font-size:12px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:8px 12px;border-radius:6px;margin:10px 0;"></p>
+
+          <div style="margin:14px 0;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <label style="font-weight:600;font-size:13px;">➕ Convidar Fornecedor para Cotar</label>
+            </div>
+            <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr;">
+              <div class="form-group"><label for="cot-fornecedor">Fornecedor *</label><select id="cot-fornecedor" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="cot-prazo">Prazo de Entrega (dias)</label><input type="number" id="cot-prazo" min="0"></div>
+              <div class="form-group"><label for="cot-condicao">Condição de Pagamento</label><input type="text" id="cot-condicao" placeholder="Ex: 30/60/90"></div>
+            </div>
+            <div class="btn-row"><button type="button" id="btn-add-proposta" class="btn-primary" style="background:#0891b2;">➕ Adicionar Fornecedor ao Mapa</button></div>
+            <p id="msg-cotacao" class="msg-form"></p>
+          </div>
+
+          <div class="table-wrap">
+            <table id="tabela-mapa-cotacao">
+              <thead id="thead-mapa-cotacao"></thead>
+              <tbody id="tbody-mapa-cotacao"></tbody>
+              <tfoot id="tfoot-mapa-cotacao"></tfoot>
+            </table>
+          </div>
+          <p style="font-size:11px;color:#a0aec0;margin-top:8px;">Preencha o preço unitário de cada item por fornecedor e clique em "💾 Salvar Preços" na coluna correspondente. Depois, marque a proposta vencedora.</p>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+  <script src="app.js"></script>
+<script>
+// ===================== LISTAGEM DE COTAÇÕES =====================
+let _cotacoesCache = [];
+let _cotacaoAtual = null;       // registro completo da cotação aberta no painel
+let _itensCotacaoAtual = [];    // itens (linhas) da cotação aberta
+let _propostasCotacaoAtual = []; // propostas (colunas) da cotação aberta, cada uma com .itens{}
+
+async function carregarCotacoes() {
+  const tbody = document.getElementById('tbody-cotacoes'); if (!tbody) return;
+  const { data, error } = await db.from('cotacoes')
+    .select('*, requisicoes_compra(numero), cotacoes_propostas(id, vencedora, fornecedores(razao_social))')
+    .order('created_at', { ascending: false });
+  if (error) { toast('Erro ao carregar cotações: ' + error.message, 'erro'); return; }
+  _cotacoesCache = data || [];
+
+  if (!_cotacoesCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma cotação encontrada.</td></tr>'; return; }
+
+  const corStatus = { 'Em Cotação':'#fef3c7', 'Concluída':'#d1fae5', 'Cancelada':'#fee2e2' };
+  const txtStatus = { 'Em Cotação':'#92400e', 'Concluída':'#065f46', 'Cancelada':'#991b1b' };
+
+  tbody.innerHTML = _cotacoesCache.map(c => {
+    const vencedora = (c.cotacoes_propostas || []).find(p => p.vencedora);
+    return `<tr>
+      <td><strong>${escapeHTML(c.numero)}</strong></td>
+      <td>${c.requisicoes_compra ? `<a href="solicitacoes-compra.html?ver=${escapeHTML(c.requisicao_compra_id)}" target="_blank">${escapeHTML(c.requisicoes_compra.numero)}</a>` : '—'}</td>
+      <td><span class="tag-badge" style="background:${corStatus[c.status]||'#f1f5f9'};color:${txtStatus[c.status]||'#4a5568'};">${escapeHTML(c.status)}</span>${seloAprovacao(c.aprovado_por_nome, c.aprovado_em)}</td>
+      <td>${(c.cotacoes_propostas || []).length}</td>
+      <td>${vencedora ? '🏆 ' + escapeHTML(vencedora.fornecedores?.razao_social || '') : '—'}</td>
+      <td>
+        <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirDetalheCotacao('${escapeHTML(c.id)}')">📋 Abrir</button>
+        ${c.status === 'Em Cotação' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirCotacao('${escapeHTML(c.id)}')">✕</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function excluirCotacao(id) {
+  if (!confirm('Excluir esta cotação? Todas as propostas e preços registrados também serão perdidos.')) return;
+  const { error } = await db.from('cotacoes').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  carregarCotacoes();
+}
+
+// ===================== PONTE: chegada vinda de Solicitação de Compra =====================
+// Lê ?origem_rc=<id> — se já existe uma cotação em aberto pra essa RC,
+// reabre ela; senão cria uma nova (cabeçalho + itens copiados da RC, sem
+// preço) e já abre o painel de detalhe.
+async function aplicarOrigemRcDaURL() {
+  const params = new URLSearchParams(location.search);
+  const origemRc = params.get('origem_rc');
+  if (!origemRc) return;
+
+  const { data: existente } = await db.from('cotacoes').select('id').eq('requisicao_compra_id', origemRc).eq('status', 'Em Cotação').maybeSingle();
+  if (existente) { await abrirDetalheCotacao(existente.id); return; }
+
+  const { data: rc, error: errRc } = await db.from('requisicoes_compra').select('*').eq('id', origemRc).single();
+  if (errRc || !rc) { toast('Não foi possível carregar a solicitação de compra de origem.', 'erro'); return; }
+  const { data: itensRc } = await db.from('requisicoes_compra_itens').select('*').eq('requisicao_id', origemRc).order('id');
+
+  const { data: numero, error: errNum } = await db.rpc('gerar_numero_documento', { p_tipo: 'CT' });
+  if (errNum) { toast('Erro ao gerar número da cotação: ' + errNum.message, 'erro'); return; }
+
+  const { data: nova, error: errNova } = await db.from('cotacoes').insert([{
+    numero, requisicao_compra_id: origemRc, criado_por_nome: window._usuarioAtual?.nome || null,
+  }]).select('id').single();
+  if (errNova) { toast('Erro ao criar cotação: ' + errNova.message, 'erro'); return; }
+
+  if (itensRc && itensRc.length) {
+    const itensCotacao = itensRc.map(it => ({
+      cotacao_id: nova.id, material_id: it.material_id, descricao: it.descricao,
+      quantidade: it.quantidade, unidade: it.unidade,
+    }));
+    await db.from('cotacoes_itens').insert(itensCotacao);
+  }
+
+  await carregarCotacoes();
+  await abrirDetalheCotacao(nova.id);
+}
+
+// Suporte a ?ver=<id> — mesmo padrão das outras páginas do fluxo.
+async function aplicarVerDaURL() {
+  const params = new URLSearchParams(location.search);
+  const verId = params.get('ver');
+  if (!verId) return;
+  await abrirDetalheCotacao(verId);
+}
+
+// ===================== DETALHE DA COTAÇÃO (MAPA) =====================
+async function abrirDetalheCotacao(cotacaoId) {
+  const { data: c, error } = await db.from('cotacoes').select('*, requisicoes_compra(numero)').eq('id', cotacaoId).single();
+  if (error || !c) { toast('Não foi possível abrir a cotação.', 'erro'); return; }
+  _cotacaoAtual = c;
+
+  const { data: itens } = await db.from('cotacoes_itens').select('*').eq('cotacao_id', cotacaoId).order('id');
+  _itensCotacaoAtual = itens || [];
+
+  const { data: propostas } = await db.from('cotacoes_propostas').select('*, fornecedores(razao_social)').eq('cotacao_id', cotacaoId).order('created_at');
+  const { data: precos } = await db.from('cotacoes_propostas_itens').select('*').in('proposta_id', (propostas||[]).map(p=>p.id).length ? (propostas||[]).map(p=>p.id) : ['00000000-0000-0000-0000-000000000000']);
+
+  _propostasCotacaoAtual = (propostas || []).map(p => ({
+    ...p,
+    precos: Object.fromEntries((precos || []).filter(pr => pr.proposta_id === p.id).map(pr => [pr.cotacao_item_id, pr.valor_unitario])),
+  }));
+
+  document.getElementById('painel-cotacao-detalhe').style.display = 'block';
+  document.getElementById('cotacao-titulo').textContent = `🔍 ${c.numero}${c.status !== 'Em Cotação' ? ' — ' + c.status : ''}`;
+
+  const info = document.getElementById('cotacao-origem-info');
+  info.innerHTML = `↳ Originada da Solicitação de Compra <a href="solicitacoes-compra.html?ver=${escapeHTML(c.requisicao_compra_id)}" target="_blank" style="color:#3730a3;font-weight:600;">${escapeHTML(c.requisicoes_compra?.numero || '')}</a>${c.criado_por_nome ? ' · iniciada por ' + escapeHTML(c.criado_por_nome) : ''}${seloAprovacao(c.aprovado_por_nome, c.aprovado_em)}`;
+
+  await atualizarSelectFornecedoresCotacao();
+  renderizarMapaCotacao();
+  document.getElementById('painel-cotacao-detalhe').scrollIntoView({ behavior: 'smooth' });
+}
+
+function fecharDetalheCotacao() {
+  _cotacaoAtual = null;
+  document.getElementById('painel-cotacao-detalhe').style.display = 'none';
+}
+
+async function atualizarSelectFornecedoresCotacao() {
+  const sel = document.getElementById('cot-fornecedor'); if (!sel) return;
+  const jaConvidados = new Set(_propostasCotacaoAtual.map(p => p.fornecedor_id));
+  const { data, error } = await db.from('fornecedores').select('id,razao_social').eq('ativo', true).order('razao_social');
+  if (error) { console.warn('Não foi possível carregar fornecedores:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Selecione --</option>' +
+    (data || []).filter(f => !jaConvidados.has(f.id)).map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+}
+
+// Renderiza a grade: linha de cabeçalho com 1 coluna por proposta, uma
+// linha por item, e no fim uma linha de total + linha de ação por proposta.
+function renderizarMapaCotacao() {
+  const thead = document.getElementById('thead-mapa-cotacao');
+  const tbody = document.getElementById('tbody-mapa-cotacao');
+  const tfoot = document.getElementById('tfoot-mapa-cotacao');
+  const encerrada = _cotacaoAtual.status !== 'Em Cotação';
+
+  thead.innerHTML = `<tr>
+    <th>Item</th><th>Qtd.</th>
+    ${_propostasCotacaoAtual.map(p => `<th>${escapeHTML(p.fornecedores?.razao_social || '—')}${p.vencedora ? ' 🏆' : ''}<br><small style="font-weight:400;">${p.prazo_entrega_dias ? p.prazo_entrega_dias+'d · ' : ''}${escapeHTML(p.condicao_pagamento || '')}</small></th>`).join('')}
+  </tr>`;
+
+  tbody.innerHTML = _itensCotacaoAtual.map(item => `<tr>
+    <td>${escapeHTML(item.descricao)}</td>
+    <td>${item.quantidade} ${escapeHTML(item.unidade || '')}</td>
+    ${_propostasCotacaoAtual.map(p => `
+      <td>
+        <input type="number" class="form-input-style preco-item" style="font-size:12px;width:90px;" step="0.01" min="0"
+          data-proposta="${escapeHTML(p.id)}" data-item="${escapeHTML(item.id)}"
+          value="${p.precos[item.id] ?? ''}" ${encerrada ? 'disabled' : ''}
+          oninput="recalcularTotalProposta('${escapeHTML(p.id)}')">
+      </td>`).join('')}
+  </tr>`).join('');
+
+  tfoot.innerHTML = `<tr style="font-weight:700;">
+    <td colspan="2">Total</td>
+    ${_propostasCotacaoAtual.map(p => `<td id="total-proposta-${escapeHTML(p.id)}">R$ 0,00</td>`).join('')}
+  </tr>
+  <tr>
+    <td colspan="2"></td>
+    ${_propostasCotacaoAtual.map(p => `
+      <td style="display:flex;flex-direction:column;gap:4px;">
+        ${!encerrada ? `<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 6px;" onclick="salvarPrecosProposta('${escapeHTML(p.id)}')">💾 Salvar Preços</button>` : ''}
+        ${!encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#b45309;" onclick="marcarPropostaVencedora('${escapeHTML(p.id)}')">🏆 Marcar Vencedora</button>` : ''}
+        ${p.vencedora && encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#1a56db;" onclick="gerarOCDaCotacao('${escapeHTML(p.id)}')">📦 Gerar Ordem de Compra</button>` : ''}
+      </td>`).join('')}
+  </tr>`;
+
+  _propostasCotacaoAtual.forEach(p => recalcularTotalProposta(p.id));
+}
+
+function recalcularTotalProposta(propostaId) {
+  let total = 0;
+  document.querySelectorAll(`.preco-item[data-proposta="${propostaId}"]`).forEach(inp => {
+    total += Number(inp.value) || 0;
+  });
+  const el = document.getElementById('total-proposta-' + propostaId);
+  if (el) el.textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+  return total;
+}
+
+document.getElementById('btn-add-proposta')?.addEventListener('click', async () => {
+  const fornecedorId = document.getElementById('cot-fornecedor').value;
+  if (!fornecedorId) { msgForm('msg-cotacao','Selecione o fornecedor.','red'); return; }
+
+  const payload = {
+    cotacao_id: _cotacaoAtual.id,
+    fornecedor_id: fornecedorId,
+    prazo_entrega_dias: document.getElementById('cot-prazo').value ? Number(document.getElementById('cot-prazo').value) : null,
+    condicao_pagamento: document.getElementById('cot-condicao').value.trim() || null,
+  };
+
+  const { error } = await db.from('cotacoes_propostas').insert([payload]);
+  if (error) { msgForm('msg-cotacao','Erro ao adicionar fornecedor: ' + error.message,'red'); return; }
+
+  document.getElementById('cot-fornecedor').value = '';
+  document.getElementById('cot-prazo').value = '';
+  document.getElementById('cot-condicao').value = '';
+  msgForm('msg-cotacao','✓ Fornecedor adicionado ao mapa!','green');
+  await abrirDetalheCotacao(_cotacaoAtual.id);
+});
+
+async function salvarPrecosProposta(propostaId) {
+  const linhas = [];
+  document.querySelectorAll(`.preco-item[data-proposta="${propostaId}"]`).forEach(inp => {
+    linhas.push({ proposta_id: propostaId, cotacao_item_id: inp.dataset.item, valor_unitario: Number(inp.value) || 0 });
+  });
+
+  // T-padrão do projeto: DELETE+INSERT garante substituição completa dos
+  // preços dessa proposta, sem registro órfão de uma edição anterior.
+  await db.from('cotacoes_propostas_itens').delete().eq('proposta_id', propostaId);
+  const { error } = await db.from('cotacoes_propostas_itens').insert(linhas);
+  if (error) { toast('Erro ao salvar preços: ' + error.message, 'erro'); return; }
+
+  const total = recalcularTotalProposta(propostaId);
+  await db.from('cotacoes_propostas').update({ valor_total: total }).eq('id', propostaId);
+  toast('Preços salvos.', 'info');
+}
+
+async function marcarPropostaVencedora(propostaId) {
+  if (!confirm('Marcar esta proposta como vencedora? Isso encerra a cotação (as outras deixam de ser editáveis).')) return;
+
+  // Garante que o total mais recente está salvo antes de encerrar.
+  await salvarPrecosProposta(propostaId);
+
+  await db.from('cotacoes_propostas').update({ vencedora: false }).eq('cotacao_id', _cotacaoAtual.id);
+  await db.from('cotacoes_propostas').update({ vencedora: true }).eq('id', propostaId);
+  await db.from('cotacoes').update({ status: 'Concluída' }).eq('id', _cotacaoAtual.id);
+
+  toast('Proposta marcada como vencedora — cotação concluída.', 'info');
+  await carregarCotacoes();
+  await abrirDetalheCotacao(_cotacaoAtual.id);
+}
+
+// Ponte Estágio 3 → Estágio 4: manda pra Ordem de Compra com a proposta
+// vencedora, que busca fornecedor/condições/preços sozinha.
+function gerarOCDaCotacao(propostaId) {
+  location.href = 'ordem-compra.html?origem_cotacao=' + encodeURIComponent(_cotacaoAtual.id) + '&proposta=' + encodeURIComponent(propostaId);
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.sessaoPronta;
+  await carregarCotacoes();
+  await aplicarOrigemRcDaURL();
+  await aplicarVerDaURL();
+});
+</script>
+</body>
+</html>

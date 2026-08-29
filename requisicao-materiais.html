@@ -43,6 +43,7 @@
         <div class="nav-label">Compras</div>
         <div class="nav-item active" onclick="location.href='requisicao-materiais.html'"><span>📝</span> Requisição de Materiais</div>
         <div class="nav-item" onclick="location.href='solicitacoes-compra.html'"><span>🛒</span> Solicitações de Compra</div>
+        <div class="nav-item" onclick="location.href='cotacao.html'"><span>🔍</span> Cotação</div>
         <div class="nav-item" onclick="location.href='ordem-compra.html'"><span>📦</span> Ordem de Compra</div>
         <div class="nav-item" onclick="location.href='followup-compra.html'"><span>📡</span> Follow-up</div>
         <div class="nav-item" onclick="location.href='fornecedores.html'"><span>🏭</span> Fornecedores</div>
@@ -63,6 +64,7 @@
         <div class="card" id="foco-formulario-reqmaterial">
           <h3 class="card-title">📝 Nova Requisição de Materiais</h3>
           <p style="font-size:12px;color:#718096;margin-bottom:14px;">Pedido interno — "o que" e "quanto", sem fornecedor nem preço ainda. Depois de aprovada, vira uma Solicitação de Compra.</p>
+          <p id="rm-autor-info" style="display:none;font-size:12px;background:#f8fafc;border:1px solid #e2e8f0;color:#4a5568;padding:8px 12px;border-radius:6px;margin-bottom:12px;"></p>
           <input type="hidden" id="rm-id-edicao" value="">
 
           <div class="form-grid">
@@ -205,12 +207,13 @@ async function carregarReqMateriais() {
     <td><strong>${escapeHTML(r.numero)}</strong></td>
     <td>${escapeHTML(r.solicitante)}</td>
     <td>${r.ordens_servico ? escapeHTML(rotuloOS(r.ordens_servico)) : '—'}</td>
-    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span></td>
+    <td><span class="tag-badge" style="background:${corStatus[r.status]||'#f1f5f9'};color:${txtStatus[r.status]||'#4a5568'};">${escapeHTML(r.status)}</span>${seloAprovacao(r.aprovado_por_nome, r.aprovado_em)}</td>
     <td>${r.data_solicitacao ? new Date(r.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">
-      ${r.status === 'Pendente' ? `
-        <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="definirStatusReqMaterial('${escapeHTML(r.id)}','Aprovada')">✓ Aprovar</button>
+      ${r.status === 'Pendente' && podeAprovar() ? `
+        <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarReqMaterial('${escapeHTML(r.id)}')">✓ Aprovar</button>
         <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="definirStatusReqMaterial('${escapeHTML(r.id)}','Rejeitada')">✕ Rejeitar</button>` : ''}
+      ${r.status === 'Pendente' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">aguardando aprovação</span>` : ''}
       ${r.status === 'Aprovada' ? `
         <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="converterReqMaterialEmCompra('${escapeHTML(r.id)}')">🛒 Converter em Compra</button>` : ''}
       <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarReqMaterial('${escapeHTML(r.id)}')">✏️ Editar</button>
@@ -225,12 +228,30 @@ async function definirStatusReqMaterial(id, novoStatus) {
   carregarReqMateriais();
 }
 
+// Ação dedicada de aprovar — é a ÚNICA rota que grava aprovado_em; é isso
+// que o trigger no banco usa pra distinguir "aprovar" de "editar depois
+// de já aprovado" (edição comum derruba a aprovação automaticamente).
+async function aprovarReqMaterial(id) {
+  if (!podeAprovar()) { toast('Só master/admin podem aprovar.', 'erro'); return; }
+  const { error } = await db.from('requisicoes_material').update({
+    status: 'Aprovada',
+    aprovado_por_nome: window._usuarioAtual?.nome || null,
+    aprovado_em: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) { toast('Erro ao aprovar: ' + error.message, 'erro'); return; }
+  carregarReqMateriais();
+}
+
 async function editarReqMaterial(id) {
   const r = _reqMateriaisCache.find(x => x.id === id); if (!r) return;
   document.getElementById('rm-id-edicao').value  = id;
   document.getElementById('rm-numero').value      = r.numero || '';
   document.getElementById('rm-solicitante').value = r.solicitante || '';
   document.getElementById('rm-observacoes').value = r.observacoes || '';
+
+  const info = document.getElementById('rm-autor-info');
+  if (r.criado_por_nome) { info.style.display = 'block'; info.textContent = `Criada por ${r.criado_por_nome}${r.status === 'Aprovada' ? ' · ' : ''}`; if (r.status === 'Aprovada') info.innerHTML += seloAprovacao(r.aprovado_por_nome, r.aprovado_em); }
+  else { info.style.display = 'none'; }
 
   await atualizarSelectOSParaReqMaterial();
   document.getElementById('rm-os').value = r.os_id || '';
@@ -250,6 +271,7 @@ function resetarFormReqMaterial() {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('rm-os').value = '';
+  document.getElementById('rm-autor-info').style.display = 'none';
   limparLinhasItensReqMaterial();
   const btn = document.getElementById('btn-salvar-reqmaterial');
   btn.textContent = '💾 Registrar Requisição'; btn.style.background = '#059669';
@@ -295,6 +317,7 @@ document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', asy
       solicitante,
       os_id:        document.getElementById('rm-os').value || null,
       observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
+      criado_por_nome: window._usuarioAtual?.nome || null,
     };
     const { data, error } = await db.from('requisicoes_material').insert([payload]).select('id').single();
     if (error) { msgForm('msg-reqmaterial','Erro ao salvar: ' + error.message,'red'); return; }
@@ -322,10 +345,21 @@ function converterReqMaterialEmCompra(id) {
 }
 
 
+// Suporte a ?ver=<id> — abre a requisição direto no formulário quando se
+// chega aqui por um link de origem clicado na Solicitação de Compra.
+async function aplicarVerDaURL() {
+  const params = new URLSearchParams(location.search);
+  const verId = params.get('ver');
+  if (!verId) return;
+  if (!_reqMateriaisCache.length) await carregarReqMateriais();
+  editarReqMaterial(verId);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await atualizarSelectOSParaReqMaterial();
   await carregarReqMateriais();
+  await aplicarVerDaURL();
 });
 </script>
 </body>
