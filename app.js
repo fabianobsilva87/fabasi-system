@@ -751,15 +751,15 @@ const MENU_SECTIONS = [
     { icon: '🦺', label: 'Resp. de Segurança', href: 'empresas.html' },
     { icon: '📍', label: 'Locais', href: 'locais.html' },
   ]},
-  // NÚCLEO FINANCEIRO — placeholders desta entrega; conteúdo interno entra
-  // em fases seguintes do roadmap.
+  // NÚCLEO FINANCEIRO — inclui Bancário (mesclado a pedido: na prática as
+  // duas coisas operam juntas — pagar/receber e conciliar extrato são
+  // etapas do mesmo fluxo). Os arquivos continuam com os nomes
+  // "bancario-*.html" para não reescrever histórico/links; só a seção de
+  // menu que virou uma só.
   { id: 'financeiro', label: 'Financeiro', items: [
     { icon: '💵', label: 'Contas a Pagar', href: 'financeiro-contas-pagar.html' },
     { icon: '💰', label: 'Contas a Receber', href: 'financeiro-contas-receber.html' },
     { icon: '📈', label: 'Fluxo de Caixa', href: 'financeiro-fluxo-caixa.html' },
-  ]},
-  // NÚCLEO BANCÁRIO — placeholders desta entrega.
-  { id: 'bancario', label: 'Bancário', items: [
     { icon: '🏦', label: 'Contas Bancárias', href: 'bancario-contas.html' },
     { icon: '🔄', label: 'Conciliação Bancária', href: 'bancario-conciliacao.html' },
   ]},
