@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Conferência Fiscal — pendências de classificação e vínculo de documentos fiscais — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Conferência Fiscal</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>🔎 Conferência Fiscal</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">🏷️</div>
+              <p class="dash-card-title">Itens a Classificar</p>
+              <h3 id="fconf-txt-itens" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">🏭</div>
+              <p class="dash-card-title">Fornecedores a Confirmar</p>
+              <h3 id="fconf-txt-fornecedores" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Documentos com Erro</p>
+              <h3 id="fconf-txt-erros" class="dash-card-value">—</h3>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">🏷️ Itens Pendentes de Classificação de Material</h3>
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Itens de NF-e/NFS-e cujo material ainda não foi vinculado ao catálogo (Cadastro de Materiais).</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Descrição no Documento</th><th>NCM</th><th>Qtd.</th><th>Valor Unit.</th><th>Confiança</th></tr></thead>
+                <tbody id="tbody-fconf-itens"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">🏭 Fornecedores Pré-cadastrados Aguardando Confirmação</h3>
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Criados automaticamente a partir do CNPJ emitente de um documento fiscal — confirme ou ajuste em Fornecedores.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Cidade/UF</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-fconf-fornecedores"><tr><td colspan="4" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">⚠️ Documentos com Erro de Processamento</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Tipo</th><th>Emitente (CNPJ)</th><th>Erro</th><th>Recebido em</th></tr></thead>
+                <tbody id="tbody-fconf-erros"><tr><td colspan="4" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    async function carregarConferenciaFiscal() {
+      const [itens, fornecedoresPendentes, erros] = await Promise.all([
+        db.from('fiscal_documento_itens').select('*').eq('status_classificacao', 'pendente').order('created_at', { ascending: false }).limit(100),
+        db.from('fornecedores').select('*').eq('status_pre_cadastro', 'aguardando_confirmacao').order('created_at', { ascending: false }),
+        db.from('fiscal_documentos').select('*').eq('status', 'erro').order('data_importacao', { ascending: false }).limit(100),
+      ]);
+
+      document.getElementById('fconf-txt-itens').textContent = itens.data?.length ?? 0;
+      document.getElementById('fconf-txt-fornecedores').textContent = fornecedoresPendentes.data?.length ?? 0;
+      document.getElementById('fconf-txt-erros').textContent = erros.data?.length ?? 0;
+
+      const tbodyItens = document.getElementById('tbody-fconf-itens');
+      tbodyItens.innerHTML = (!itens.data || !itens.data.length)
+        ? '<tr><td colspan="5" class="td-loading">Nenhum item pendente de classificação no momento.</td></tr>'
+        : itens.data.map(i => `<tr>
+            <td>${escapeHTML(i.descricao_original)}</td>
+            <td style="font-family:monospace;">${escapeHTML(i.ncm || '—')}</td>
+            <td>${Number(i.quantidade || 0)}</td>
+            <td>R$ ${Number(i.valor_unitario || 0).toFixed(2).replace('.', ',')}</td>
+            <td>${escapeHTML(i.confianca_vinculo || '—')}</td>
+          </tr>`).join('');
+
+      const tbodyForn = document.getElementById('tbody-fconf-fornecedores');
+      tbodyForn.innerHTML = (!fornecedoresPendentes.data || !fornecedoresPendentes.data.length)
+        ? '<tr><td colspan="4" class="td-loading">Nenhum fornecedor aguardando confirmação.</td></tr>'
+        : fornecedoresPendentes.data.map(f => `<tr>
+            <td>${escapeHTML(f.razao_social)}</td>
+            <td>${escapeHTML(f.cnpj || '—')}</td>
+            <td>${escapeHTML(f.cidade || '—')}${f.uf ? '/' + escapeHTML(f.uf) : ''}</td>
+            <td><button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="location.href='fornecedores.html'">Abrir em Fornecedores</button></td>
+          </tr>`).join('');
+
+      const tbodyErros = document.getElementById('tbody-fconf-erros');
+      tbodyErros.innerHTML = (!erros.data || !erros.data.length)
+        ? '<tr><td colspan="4" class="td-loading">Nenhum documento com erro no momento.</td></tr>'
+        : erros.data.map(d => `<tr>
+            <td>${d.tipo_documento === 'NFE' ? '🧾 NF-e' : d.tipo_documento === 'NFSE' ? '🧾 NFS-e' : escapeHTML(d.tipo_documento)}</td>
+            <td>${escapeHTML(d.cnpj_emitente || '—')}</td>
+            <td style="color:#dc2626;">${escapeHTML(d.erro_processamento || '—')}</td>
+            <td>${d.data_importacao ? new Date(d.data_importacao).toLocaleString('pt-BR') : '—'}</td>
+          </tr>`).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarConferenciaFiscal();
+    });
+  </script>
+</body>
+</html>

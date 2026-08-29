@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Configuração do Módulo Fiscal — certificado digital e sincronização com SEFAZ/ADN — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Configuração Fiscal</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>⚙️ Configuração Fiscal</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="card">
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 4px;">
+              Este módulo está sendo construído em etapas (ver plano de implementação). Nesta etapa, as tabelas do
+              Módulo Fiscal já existem e esta tela já lê dados reais delas — o cadastro do certificado digital e a
+              sincronização automática com SEFAZ/ADN entram nas próximas etapas, sempre por Edge Function no
+              servidor, nunca no navegador.
+            </p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">🔐 Certificado Digital A1</h3>
+              <button type="button" class="btn-refresh" onclick="carregarCertificadoFiscal()">↺ Atualizar</button>
+            </div>
+            <div id="fiscal-certificado-info" style="font-size:13px;color:#a0aec0;">Carregando...</div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" class="btn-primary" onclick="acaoFiscalIndisponivel('Cadastro de certificado')">📤 Cadastrar Certificado</button>
+              <button type="button" class="btn-secondary" onclick="acaoFiscalIndisponivel('Teste de certificado')">🔎 Testar Certificado</button>
+            </div>
+            <p id="msg-fiscal-certificado" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">🔄 Sincronização (NF-e / NFS-e)</h3>
+              <button type="button" class="btn-refresh" onclick="carregarSincronizacaoFiscal()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Tipo</th><th>Ambiente</th><th>Último NSU</th><th>Última Sincronização</th><th>Status</th></tr></thead>
+                <tbody id="tbody-fiscal-sync"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" class="btn-primary" onclick="acaoFiscalIndisponivel('Sincronização manual')">🔄 Sincronizar Agora</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    function acaoFiscalIndisponivel(recurso) {
+      alert(recurso + ' ainda não está disponível — entra em uma próxima etapa do Módulo Fiscal, via Edge Function no servidor (o navegador nunca tem acesso ao certificado ou à senha).');
+    }
+
+    async function carregarCertificadoFiscal() {
+      const el = document.getElementById('fiscal-certificado-info');
+      el.textContent = 'Carregando...';
+      const { data, error } = await db.from('fiscal_certificados').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) { el.textContent = 'Erro ao carregar: ' + error.message; return; }
+      if (!data) { el.innerHTML = 'Nenhum certificado cadastrado ainda.'; return; }
+
+      const statusBadge = {
+        valido:       '<span class="tag-badge success">✓ Válido</span>',
+        expirado:     '<span class="tag-badge danger">✕ Expirado</span>',
+        invalido:     '<span class="tag-badge danger">✕ Inválido</span>',
+        nao_testado:  '<span class="tag-badge warning">⏳ Não testado</span>',
+      };
+      el.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><strong>CNPJ do certificado:</strong> ${escapeHTML(data.cnpj_certificado || '—')}</div>
+          <div><strong>Status:</strong> ${statusBadge[data.status] || escapeHTML(data.status || '—')}</div>
+          <div><strong>Ambiente padrão:</strong> ${escapeHTML(data.ambiente_padrao || '—')}</div>
+          <div><strong>Validade:</strong> ${fmtDate(data.data_expiracao)}</div>
+          <div><strong>Último teste:</strong> ${data.data_ultimo_teste ? new Date(data.data_ultimo_teste).toLocaleString('pt-BR') : '—'}</div>
+        </div>`;
+    }
+
+    async function carregarSincronizacaoFiscal() {
+      const tbody = document.getElementById('tbody-fiscal-sync');
+      tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Carregando...</td></tr>';
+      const { data, error } = await db.from('fiscal_sync_state').select('*').order('tipo_documento');
+      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma sincronização configurada ainda — entra na Etapa 13.4.</td></tr>'; return; }
+
+      const statusBadge = {
+        ok:               '<span class="tag-badge success">✓ OK</span>',
+        erro:             '<span class="tag-badge danger">✕ Erro</span>',
+        consumo_indevido: '<span class="tag-badge warning">⏳ Aguardando (consumo indevido)</span>',
+        aguardando:       '<span class="tag-badge">Aguardando</span>',
+      };
+      tbody.innerHTML = data.map(s => `<tr>
+        <td>${escapeHTML(s.tipo_documento)}</td>
+        <td>${escapeHTML(s.ambiente)}</td>
+        <td style="font-family:monospace;">${escapeHTML(s.ultimo_nsu || '—')}</td>
+        <td>${s.ultima_sincronizacao ? new Date(s.ultima_sincronizacao).toLocaleString('pt-BR') : '—'}</td>
+        <td>${statusBadge[s.status] || escapeHTML(s.status || '—')}</td>
+      </tr>`).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarCertificadoFiscal();
+      await carregarSincronizacaoFiscal();
+    });
+  </script>
+</body>
+</html>

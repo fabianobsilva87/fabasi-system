@@ -733,6 +733,16 @@ const MENU_SECTIONS = [
     { icon: '📦', label: 'Ordem de Compra', href: 'ordem-compra.html' },
     { icon: '📡', label: 'Follow-up', href: 'followup-compra.html' },
   ]},
+  // NÚCLEO "FISCAL" — entrada de NF-e/NFS-e recebidas (Módulo Fiscal,
+  // Etapas 13.1-13.10). Nesta etapa (13.1/13.5) as tabelas e as telas já
+  // existem e leem dados reais (ainda vazios); a sincronização automática
+  // com SEFAZ/ADN entra nas Etapas 13.4/13.7, via Edge Functions — nunca
+  // no frontend, que nunca toca certificado/senha (ver migrations/2026-08-29_fiscal_modulo_etapa13-1.sql).
+  { id: 'fiscal', label: 'Fiscal', items: [
+    { icon: '⚙️', label: 'Configuração Fiscal', href: 'fiscal-config.html' },
+    { icon: '📄', label: 'Documentos Fiscais', href: 'fiscal-documentos.html' },
+    { icon: '🔎', label: 'Conferência Fiscal', href: 'fiscal-conferencia.html' },
+  ]},
   // NÚCLEO "ESTOQUE" — outro gap do raio-x: o prompt master original citava
   // estoque como conceito, mas nunca virou módulo navegável (ficava
   // implícito dentro de Compras). Formalizado como núcleo próprio porque
@@ -5591,6 +5601,27 @@ async function carregarInventarioGas() {
 }
 
 // ===================== DASHBOARD — DISTRIBUIÇÃO POR CATEGORIA =====================
+// ===================== DASHBOARD — MÓDULO FISCAL (Etapa 13.5) =====================
+// Cards reais desde já (não "Em construção" como os outros núcleos novos do
+// ERP) porque as tabelas fiscal_* já existem a partir desta etapa — só
+// ficam em zero até a importação de XML (manual em 13.3, automática em
+// 13.4/13.7) começar a alimentar fiscal_documentos.
+async function carregarKpisFiscalDashboard() {
+  if (!$('dash-txt-fiscal-nfe')) return;
+
+  const [{ count: totalNfe }, { count: totalNfse }, { count: totalPendentes }, { count: totalErro }] = await Promise.all([
+    db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('tipo_documento', 'NFE'),
+    db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('tipo_documento', 'NFSE'),
+    db.from('fiscal_documento_itens').select('id', { count: 'exact', head: true }).eq('status_classificacao', 'pendente'),
+    db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('status', 'erro'),
+  ]);
+
+  if ($('dash-txt-fiscal-nfe'))       $('dash-txt-fiscal-nfe').textContent       = totalNfe ?? 0;
+  if ($('dash-txt-fiscal-nfse'))      $('dash-txt-fiscal-nfse').textContent      = totalNfse ?? 0;
+  if ($('dash-txt-fiscal-pendentes')) $('dash-txt-fiscal-pendentes').textContent = totalPendentes ?? 0;
+  if ($('dash-txt-fiscal-erro'))      $('dash-txt-fiscal-erro').textContent      = totalErro ?? 0;
+}
+
 async function carregarDistribuicaoCategoria() {
   const el       = $('dash-dist-cat');
   const elCrit   = $('dash-cat-criticos');

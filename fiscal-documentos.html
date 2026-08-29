@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Documentos fiscais recebidos (NF-e / NFS-e) — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Documentos Fiscais</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>📄 Documentos Fiscais</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card">
+              <div class="dash-card-icon">🧾</div>
+              <p class="dash-card-title">NF-e Recebidas</p>
+              <h3 id="fdoc-txt-nfe" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">🧾</div>
+              <p class="dash-card-title">NFS-e Recebidas</p>
+              <h3 id="fdoc-txt-nfse" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card" style="border-top:3px solid #0891b2;">
+              <div class="dash-card-icon">💰</div>
+              <p class="dash-card-title">Valor Total</p>
+              <h3 id="fdoc-txt-valor" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">🏷️</div>
+              <p class="dash-card-title">Itens a Classificar</p>
+              <h3 id="fdoc-txt-pendentes" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Com Erro</p>
+              <h3 id="fdoc-txt-erro" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">🚫</div>
+              <p class="dash-card-title">Cancelados</p>
+              <h3 id="fdoc-txt-cancelados" class="dash-card-value">—</h3>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;">
+                <label for="fdoc-filtro-de">De</label>
+                <input type="date" id="fdoc-filtro-de" class="form-input-style">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="fdoc-filtro-ate">Até</label>
+                <input type="date" id="fdoc-filtro-ate" class="form-input-style">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="fdoc-filtro-tipo">Tipo</label>
+                <select id="fdoc-filtro-tipo" class="form-input-style" style="width:auto;">
+                  <option value="">Todos</option>
+                  <option value="NFE">NF-e</option>
+                  <option value="NFSE">NFS-e</option>
+                  <option value="EVENTO_NFE">Evento NF-e</option>
+                  <option value="OUTRO_DFE">Outro DF-e</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="fdoc-filtro-status">Status</label>
+                <select id="fdoc-filtro-status" class="form-input-style" style="width:auto;">
+                  <option value="">Todos</option>
+                  <option value="recebida">Recebida</option>
+                  <option value="importada">Importada</option>
+                  <option value="processada">Processada</option>
+                  <option value="validada">Validada</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="erro">Erro</option>
+                  <option value="cancelada">Cancelada</option>
+                  <option value="denegada">Denegada</option>
+                  <option value="inutilizada">Inutilizada</option>
+                  <option value="ignorada">Ignorada</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;flex:1;min-width:180px;">
+                <label for="fdoc-filtro-busca">Fornecedor / CNPJ / Chave</label>
+                <input type="text" id="fdoc-filtro-busca" class="form-input-style" placeholder="Busca livre">
+              </div>
+              <button type="button" class="btn-primary" onclick="carregarDocumentosFiscais()">🔍 Filtrar</button>
+              <button type="button" class="btn-secondary" onclick="limparFiltrosDocumentosFiscais()">✕ Limpar</button>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th>Tipo</th><th>Emitente (CNPJ)</th><th>Número/Série</th><th>Emissão</th>
+                  <th>Valor</th><th>Fornecedor Vinculado</th><th>Status</th>
+                </tr></thead>
+                <tbody id="tbody-fiscal-documentos"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    async function carregarKpisDocumentosFiscais() {
+      const [{ count: totalNfe }, { count: totalNfse }, { count: totalPendentes }, { count: totalErro }, { count: totalCancelados }, { data: docs }] = await Promise.all([
+        db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('tipo_documento', 'NFE'),
+        db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('tipo_documento', 'NFSE'),
+        db.from('fiscal_documento_itens').select('id', { count: 'exact', head: true }).eq('status_classificacao', 'pendente'),
+        db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('status', 'erro'),
+        db.from('fiscal_documentos').select('id', { count: 'exact', head: true }).eq('status', 'cancelada'),
+        db.from('fiscal_documentos').select('valor_total'),
+      ]);
+      document.getElementById('fdoc-txt-nfe').textContent = totalNfe ?? 0;
+      document.getElementById('fdoc-txt-nfse').textContent = totalNfse ?? 0;
+      document.getElementById('fdoc-txt-pendentes').textContent = totalPendentes ?? 0;
+      document.getElementById('fdoc-txt-erro').textContent = totalErro ?? 0;
+      document.getElementById('fdoc-txt-cancelados').textContent = totalCancelados ?? 0;
+      const soma = (docs || []).reduce((acc, d) => acc + Number(d.valor_total || 0), 0);
+      document.getElementById('fdoc-txt-valor').textContent = 'R$ ' + soma.toFixed(2).replace('.', ',');
+    }
+
+    function limparFiltrosDocumentosFiscais() {
+      ['fdoc-filtro-de','fdoc-filtro-ate','fdoc-filtro-tipo','fdoc-filtro-status','fdoc-filtro-busca'].forEach(id => document.getElementById(id).value = '');
+      carregarDocumentosFiscais();
+    }
+
+    async function carregarDocumentosFiscais() {
+      const tbody = document.getElementById('tbody-fiscal-documentos');
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+      const de = document.getElementById('fdoc-filtro-de').value;
+      const ate = document.getElementById('fdoc-filtro-ate').value;
+      const tipo = document.getElementById('fdoc-filtro-tipo').value;
+      const status = document.getElementById('fdoc-filtro-status').value;
+      const busca = document.getElementById('fdoc-filtro-busca').value.trim();
+
+      let query = db.from('fiscal_documentos').select('*, fornecedores(razao_social)').order('data_emissao', { ascending: false }).limit(200);
+      if (de) query = query.gte('data_emissao', de + 'T00:00:00');
+      if (ate) query = query.lte('data_emissao', ate + 'T23:59:59');
+      if (tipo) query = query.eq('tipo_documento', tipo);
+      if (status) query = query.eq('status', status);
+      if (busca) query = query.or(`cnpj_emitente.ilike.%${busca}%,chave_acesso.ilike.%${busca}%`);
+
+      const { data, error } = await query;
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhum documento encontrado — a importação (manual de teste ou automática via SEFAZ/ADN) entra nas próximas etapas do Módulo Fiscal.</td></tr>';
+        return;
+      }
+
+      const statusBadge = {
+        recebida: '', importada: '', processada: 'success', validada: 'success',
+        pendente: 'warning', erro: 'danger', cancelada: 'danger', denegada: 'danger',
+        inutilizada: 'danger', ignorada: '',
+      };
+      tbody.innerHTML = data.map(d => `<tr>
+        <td>${d.tipo_documento === 'NFE' ? '🧾 NF-e' : d.tipo_documento === 'NFSE' ? '🧾 NFS-e' : escapeHTML(d.tipo_documento)}</td>
+        <td>${escapeHTML(d.cnpj_emitente || '—')}</td>
+        <td>${escapeHTML(d.numero || '—')}${d.serie ? '/' + escapeHTML(d.serie) : ''}</td>
+        <td>${d.data_emissao ? new Date(d.data_emissao).toLocaleDateString('pt-BR') : '—'}</td>
+        <td>R$ ${Number(d.valor_total || 0).toFixed(2).replace('.', ',')}</td>
+        <td>${escapeHTML(d.fornecedores?.razao_social || 'Pendente de vínculo')}</td>
+        <td><span class="tag-badge ${statusBadge[d.status] || ''}">${escapeHTML(d.status || '—')}</span></td>
+      </tr>`).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarKpisDocumentosFiscais();
+      await carregarDocumentosFiscais();
+    });
+  </script>
+</body>
+</html>
