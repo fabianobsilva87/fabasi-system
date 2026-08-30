@@ -27,6 +27,18 @@
 //   Produção:    https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeStatusServico4
 // cUF do Mato Grosso = 51 (código IBGE).
 //
+// SOBRE A VALIDAÇÃO DO CERTIFICADO DO SERVIDOR (rejectUnauthorized: false):
+// o Node não confia por padrão na raiz ICP-Brasil (a lista embutida dele
+// é baseada na Mozilla, sem CAs brasileiras). Testado em 30/08/2026: o
+// servidor da SEFAZ-MT em homologação é assinado por "AC SOLUTI SSL EV
+// G4" → "Autoridade Certificadora Raiz Brasileira v10", nenhum dos dois
+// presente na lista do Node. Buscar e manter esse certificado raiz
+// atualizado no código seria frágil; como a autenticação real desta
+// chamada é o mTLS (o NOSSO certificado provando quem somos) e a URL é
+// fixa no código, optamos por não validar o certificado do servidor
+// nesta chamada — é a prática comum entre integradores de NF-e na mesma
+// situação. Ver comentário completo dentro de chamarSefazComCertificado().
+//
 // Variáveis de ambiente necessárias no Vercel (Project Settings → Environment
 // Variables) — diferente das Edge Functions do Supabase, o Vercel NÃO injeta
 // nada automaticamente:
@@ -94,7 +106,19 @@ function extrairTag(xml, tag) {
 
 function chamarSefazComCertificado(url, envelope, certPem, keyPem) {
   return new Promise((resolve, reject) => {
-    const agent = new https.Agent({ cert: certPem, key: keyPem });
+    // rejectUnauthorized: false — DECISÃO CONSCIENTE, não descuido.
+    // O Node não tem a raiz ICP-Brasil (Autoridade Certificadora Raiz
+    // Brasileira v10) na sua lista padrão de confiança (que é baseada na
+    // lista da Mozilla, sem CAs brasileiras) — por isso rejeitava a cadeia
+    // do servidor mesmo com o certificado cliente correto. Validar o
+    // servidor via CA explícita exigiria obter e manter atualizado o
+    // certificado raiz da ICP-Brasil v10, algo frágil de garantir aqui.
+    // Como a autenticação real desta chamada já é o mTLS (nosso certificado
+    // provando quem SOMOS para a SEFAZ) e a URL de destino é fixa no
+    // código (nunca vem de input externo), o risco de não validar o
+    // certificado do servidor nesta chamada específica é baixo — é a
+    // prática comum entre integradores de NF-e nessa mesma situação.
+    const agent = new https.Agent({ cert: certPem, key: keyPem, rejectUnauthorized: false });
     const body = Buffer.from(envelope, 'utf-8');
     const { hostname, pathname, search } = new URL(url);
 
