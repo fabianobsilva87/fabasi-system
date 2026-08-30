@@ -203,9 +203,28 @@
       const valorTotal = Number(document.getElementById('cp-valor-total').value);
       const primeiroVencimento = document.getElementById('cp-primeiro-vencimento').value;
       const numParcelas = Math.max(1, Number(document.getElementById('cp-num-parcelas').value) || 1);
+      const idEd = document.getElementById('cp-id-edicao').value;
 
       if (!descricao) { msgForm('msg-cp', 'Informe a descrição.', 'red'); return; }
       if (!centroCustoId) { msgForm('msg-cp', 'Selecione o centro de custo.', 'red'); return; }
+
+      // Edição: só os dados cadastrais do título — valor/parcelas não mudam
+      // aqui (ajuste fino de parcela fica no painel "Parcelas").
+      if (idEd) {
+        const { error } = await db.from('contas_pagar').update({
+          descricao, fornecedor_id: document.getElementById('cp-fornecedor').value || null,
+          centro_custo_id: centroCustoId, plano_conta_id: document.getElementById('cp-plano-conta').value || null,
+          observacoes: document.getElementById('cp-observacoes').value.trim() || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', idEd);
+        if (error) { msgForm('msg-cp', 'Erro ao salvar: ' + error.message, 'red'); return; }
+        msgForm('msg-cp', '✓ Conta a pagar atualizada!', 'green');
+        resetarFormContaPagar();
+        await carregarContasPagar();
+        await carregarKpisContasPagar();
+        return;
+      }
+
       if (!valorTotal || valorTotal <= 0) { msgForm('msg-cp', 'Informe um valor total válido.', 'red'); return; }
       if (!primeiroVencimento) { msgForm('msg-cp', 'Informe o 1º vencimento.', 'red'); return; }
 
@@ -246,6 +265,34 @@
       document.getElementById('cp-centro-custo').value = '';
       document.getElementById('cp-plano-conta').value = '';
       document.getElementById('cp-num-parcelas').value = 1;
+      ['cp-valor-total','cp-num-parcelas','cp-primeiro-vencimento'].forEach(id => document.getElementById(id).disabled = false);
+      document.getElementById('btn-salvar-cp').textContent = '💾 Registrar Conta a Pagar';
+      document.getElementById('btn-cancelar-cp').style.display = 'none';
+    }
+
+    function editarContaPagar(id) {
+      const c = _contasPagarCache.find(x => x.id === id); if (!c) return;
+      if (c.origem !== 'manual') { toast('Só lançamentos manuais podem ser editados aqui — este veio de ' + (ORIGEM_CP_LABEL[c.origem] || c.origem) + '.', 'info'); return; }
+      document.getElementById('cp-id-edicao').value = id;
+      document.getElementById('cp-descricao').value = c.descricao || '';
+      document.getElementById('cp-fornecedor').value = c.fornecedor_id || '';
+      document.getElementById('cp-centro-custo').value = c.centro_custo_id || '';
+      document.getElementById('cp-plano-conta').value = c.plano_conta_id || '';
+      document.getElementById('cp-observacoes').value = c.observacoes || '';
+      document.getElementById('cp-valor-total').value = c.valor_total || '';
+      ['cp-valor-total','cp-num-parcelas','cp-primeiro-vencimento'].forEach(id2 => document.getElementById(id2).disabled = true);
+      document.getElementById('btn-salvar-cp').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-cp').style.display = 'inline-block';
+      document.getElementById('foco-formulario-cp').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function excluirContaPagar(id, descricao) {
+      if (!confirm(`Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.`)) return;
+      const { error } = await db.from('contas_pagar').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      toast('Conta a pagar excluída.', 'sucesso');
+      await carregarContasPagar();
+      await carregarKpisContasPagar();
     }
 
     // ===================== APROVAÇÃO =====================
@@ -289,6 +336,8 @@
         <td><span class="tag-badge ${STATUS_CP_COR[c.status] || ''}">${STATUS_CP_LABEL[c.status] || escapeHTML(c.status)}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirPainelParcelas('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">📋 Parcelas</button>
+          ${c.origem === 'manual' ? `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContaPagar('${escapeHTML(c.id)}')">✏️</button>` : ''}
+          ${c.origem === 'manual' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaPagar('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>` : ''}
           ${c.status === 'pendente_aprovacao' && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarContaPagar('${escapeHTML(c.id)}')">✓ Aprovar</button>` : ''}
           ${c.status === 'pendente_aprovacao' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">não aprovada</span>` : ''}
         </td>
@@ -322,8 +371,42 @@
         <td>${fmtDate(p.data_vencimento)}</td>
         <td><span class="tag-badge ${STATUS_PARCELA_COR[p.status] || ''}">${STATUS_PARCELA_LABEL[p.status] || escapeHTML(p.status)}</span></td>
         <td style="font-size:11px;color:#718096;">${p.status === 'paga' ? `${fmtDate(p.data_pagamento)} · R$ ${Number(p.valor_pago || 0).toFixed(2).replace('.', ',')}${p.forma_pagamento ? ' · ' + escapeHTML(p.forma_pagamento) : ''}` : '—'}</td>
-        <td>${p.status !== 'paga' && p.status !== 'cancelada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarPagamentoParcela('${escapeHTML(p.id)}', ${p.valor})">💰 Registrar Pagamento</button>` : '—'}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${p.status !== 'paga' && p.status !== 'cancelada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarPagamentoParcela('${escapeHTML(p.id)}', ${p.valor})">💰 Pagar</button>` : ''}
+          ${p.status !== 'paga' ? `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarParcelaContaPagar('${escapeHTML(p.id)}', ${p.valor}, '${p.data_vencimento}')">✏️</button>` : ''}
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirParcelaContaPagar('${escapeHTML(p.id)}', ${p.numero_parcela})">✕</button>
+        </td>
       </tr>`).join('');
+    }
+
+    async function editarParcelaContaPagar(parcelaId, valorAtual, vencimentoAtual) {
+      const novoValorTexto = prompt('Novo valor da parcela (R$):', valorAtual);
+      if (novoValorTexto === null) return;
+      const novoValor = Number(novoValorTexto.replace(',', '.'));
+      if (!novoValor || novoValor <= 0) { toast('Valor inválido.', 'erro'); return; }
+
+      const novoVencimento = prompt('Novo vencimento (AAAA-MM-DD):', vencimentoAtual);
+      if (novoVencimento === null) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(novoVencimento)) { toast('Data inválida — use o formato AAAA-MM-DD.', 'erro'); return; }
+
+      const { error } = await db.from('contas_pagar_parcelas').update({
+        valor: novoValor, data_vencimento: novoVencimento, updated_at: new Date().toISOString(),
+      }).eq('id', parcelaId);
+      if (error) { toast('Erro ao editar parcela: ' + error.message, 'erro'); return; }
+      toast('Parcela atualizada!', 'sucesso');
+      await carregarParcelasPainel();
+      await carregarContasPagar();
+      await carregarKpisContasPagar();
+    }
+
+    async function excluirParcelaContaPagar(parcelaId, numeroParcela) {
+      if (!confirm(`Excluir a parcela ${numeroParcela}?`)) return;
+      const { error } = await db.from('contas_pagar_parcelas').delete().eq('id', parcelaId);
+      if (error) { toast('Erro ao excluir parcela: ' + error.message, 'erro'); return; }
+      toast('Parcela excluída.', 'sucesso');
+      await carregarParcelasPainel();
+      await carregarContasPagar();
+      await carregarKpisContasPagar();
     }
 
     async function registrarPagamentoParcela(parcelaId, valorOriginal) {

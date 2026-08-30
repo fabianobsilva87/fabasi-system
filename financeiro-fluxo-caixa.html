@@ -128,8 +128,23 @@
       document.getElementById('fc-alerta-deficit').style.display = 'none';
 
       const saldoAtual = await carregarSaldoAtual();
-      const saldoInicial = saldoAtual ? Number(saldoAtual.saldo) : 0;
+      const saldoManual = saldoAtual ? Number(saldoAtual.saldo) : 0;
       const dataReferencia = saldoAtual ? saldoAtual.data_referencia : new Date().toISOString().slice(0,10);
+
+      // Incorpora automaticamente o que já foi recebido/pago DEPOIS do
+      // checkpoint manual — assim o usuário não precisa recalcular o saldo
+      // na mão toda vez que registra um recebimento/pagamento.
+      const [recebidosDesde, pagosDesde] = await Promise.all([
+        db.from('contas_receber_parcelas').select('valor_recebido').eq('status', 'recebida').gt('data_recebimento', dataReferencia),
+        db.from('contas_pagar_parcelas').select('valor_pago').eq('status', 'paga').gt('data_pagamento', dataReferencia),
+      ]);
+      const somaRecebidos = (recebidosDesde.data || []).reduce((acc, p) => acc + Number(p.valor_recebido || 0), 0);
+      const somaPagos = (pagosDesde.data || []).reduce((acc, p) => acc + Number(p.valor_pago || 0), 0);
+      const saldoInicial = saldoManual + somaRecebidos - somaPagos;
+
+      if (somaRecebidos || somaPagos) {
+        document.getElementById('fc-saldo-atual-info').innerHTML += ` <span style="color:#718096;">(+ R$ ${somaRecebidos.toFixed(2).replace('.', ',')} recebido e − R$ ${somaPagos.toFixed(2).replace('.', ',')} pago desde então → saldo ajustado: <strong>R$ ${saldoInicial.toFixed(2).replace('.', ',')}</strong>)</span>`;
+      }
 
       const horizonteDias = Number(document.getElementById('fc-horizonte').value);
       const hoje = new Date(); hoje.setHours(0,0,0,0);

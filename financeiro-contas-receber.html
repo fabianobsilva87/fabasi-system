@@ -194,10 +194,29 @@
       const valorTotal = Number(document.getElementById('cr-valor-total').value);
       const primeiroVencimento = document.getElementById('cr-primeiro-vencimento').value;
       const numParcelas = Math.max(1, Number(document.getElementById('cr-num-parcelas').value) || 1);
+      const idEd = document.getElementById('cr-id-edicao').value;
 
       if (!descricao) { msgForm('msg-cr', 'Informe a descrição.', 'red'); return; }
       if (!clienteId) { msgForm('msg-cr', 'Selecione o cliente.', 'red'); return; }
       if (!centroCustoId) { msgForm('msg-cr', 'Selecione o centro de custo.', 'red'); return; }
+
+      // Edição: só os dados cadastrais do título — valor/parcelas não mudam
+      // aqui (ajuste fino de parcela fica no painel "Parcelas").
+      if (idEd) {
+        const { error } = await db.from('contas_receber').update({
+          descricao, cliente_id: clienteId, centro_custo_id: centroCustoId,
+          plano_conta_id: document.getElementById('cr-plano-conta').value || null,
+          observacoes: document.getElementById('cr-observacoes').value.trim() || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', idEd);
+        if (error) { msgForm('msg-cr', 'Erro ao salvar: ' + error.message, 'red'); return; }
+        msgForm('msg-cr', '✓ Conta a receber atualizada!', 'green');
+        resetarFormContaReceber();
+        await carregarContasReceber();
+        await carregarKpisContasReceber();
+        return;
+      }
+
       if (!valorTotal || valorTotal <= 0) { msgForm('msg-cr', 'Informe um valor total válido.', 'red'); return; }
       if (!primeiroVencimento) { msgForm('msg-cr', 'Informe o 1º vencimento.', 'red'); return; }
 
@@ -233,6 +252,34 @@
       document.getElementById('cr-centro-custo').value = '';
       document.getElementById('cr-plano-conta').value = '';
       document.getElementById('cr-num-parcelas').value = 1;
+      ['cr-valor-total','cr-num-parcelas','cr-primeiro-vencimento'].forEach(id => document.getElementById(id).disabled = false);
+      document.getElementById('btn-salvar-cr').textContent = '💾 Registrar Conta a Receber';
+      document.getElementById('btn-cancelar-cr').style.display = 'none';
+    }
+
+    function editarContaReceber(id) {
+      const c = _contasReceberCache.find(x => x.id === id); if (!c) return;
+      if (c.origem !== 'manual') { toast('Só lançamentos manuais podem ser editados aqui — este veio de ' + (ORIGEM_CR_LABEL[c.origem] || c.origem) + '.', 'info'); return; }
+      document.getElementById('cr-id-edicao').value = id;
+      document.getElementById('cr-descricao').value = c.descricao || '';
+      document.getElementById('cr-cliente').value = c.cliente_id || '';
+      document.getElementById('cr-centro-custo').value = c.centro_custo_id || '';
+      document.getElementById('cr-plano-conta').value = c.plano_conta_id || '';
+      document.getElementById('cr-observacoes').value = c.observacoes || '';
+      document.getElementById('cr-valor-total').value = c.valor_total || '';
+      ['cr-valor-total','cr-num-parcelas','cr-primeiro-vencimento'].forEach(id2 => document.getElementById(id2).disabled = true);
+      document.getElementById('btn-salvar-cr').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-cr').style.display = 'inline-block';
+      document.getElementById('foco-formulario-cr').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function excluirContaReceber(id, descricao) {
+      if (!confirm(`Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.`)) return;
+      const { error } = await db.from('contas_receber').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      toast('Conta a receber excluída.', 'sucesso');
+      await carregarContasReceber();
+      await carregarKpisContasReceber();
     }
 
     // ===================== LISTAGEM =====================
@@ -263,6 +310,8 @@
         <td><span class="tag-badge ${STATUS_CR_COR[c.status] || ''}">${STATUS_CR_LABEL[c.status] || escapeHTML(c.status)}</span></td>
         <td>
           <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirPainelParcelasCR('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">📋 Parcelas</button>
+          ${c.origem === 'manual' ? `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContaReceber('${escapeHTML(c.id)}')">✏️</button>` : ''}
+          ${c.origem === 'manual' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaReceber('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>` : ''}
         </td>
       </tr>`).join('');
     }
@@ -294,8 +343,42 @@
         <td>${fmtDate(p.data_vencimento)}</td>
         <td><span class="tag-badge ${STATUS_PARCELA_CR_COR[p.status] || ''}">${STATUS_PARCELA_CR_LABEL[p.status] || escapeHTML(p.status)}</span></td>
         <td style="font-size:11px;color:#718096;">${p.status === 'recebida' ? `${fmtDate(p.data_recebimento)} · R$ ${Number(p.valor_recebido || 0).toFixed(2).replace('.', ',')}${p.forma_recebimento ? ' · ' + escapeHTML(p.forma_recebimento) : ''}` : '—'}</td>
-        <td>${p.status !== 'recebida' && p.status !== 'cancelada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarRecebimentoParcela('${escapeHTML(p.id)}', ${p.valor})">💰 Registrar Recebimento</button>` : '—'}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${p.status !== 'recebida' && p.status !== 'cancelada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarRecebimentoParcela('${escapeHTML(p.id)}', ${p.valor})">💰 Receber</button>` : ''}
+          ${p.status !== 'recebida' ? `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarParcelaContaReceber('${escapeHTML(p.id)}', ${p.valor}, '${p.data_vencimento}')">✏️</button>` : ''}
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirParcelaContaReceber('${escapeHTML(p.id)}', ${p.numero_parcela})">✕</button>
+        </td>
       </tr>`).join('');
+    }
+
+    async function editarParcelaContaReceber(parcelaId, valorAtual, vencimentoAtual) {
+      const novoValorTexto = prompt('Novo valor da parcela (R$):', valorAtual);
+      if (novoValorTexto === null) return;
+      const novoValor = Number(novoValorTexto.replace(',', '.'));
+      if (!novoValor || novoValor <= 0) { toast('Valor inválido.', 'erro'); return; }
+
+      const novoVencimento = prompt('Novo vencimento (AAAA-MM-DD):', vencimentoAtual);
+      if (novoVencimento === null) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(novoVencimento)) { toast('Data inválida — use o formato AAAA-MM-DD.', 'erro'); return; }
+
+      const { error } = await db.from('contas_receber_parcelas').update({
+        valor: novoValor, data_vencimento: novoVencimento, updated_at: new Date().toISOString(),
+      }).eq('id', parcelaId);
+      if (error) { toast('Erro ao editar parcela: ' + error.message, 'erro'); return; }
+      toast('Parcela atualizada!', 'sucesso');
+      await carregarParcelasPainelCR();
+      await carregarContasReceber();
+      await carregarKpisContasReceber();
+    }
+
+    async function excluirParcelaContaReceber(parcelaId, numeroParcela) {
+      if (!confirm(`Excluir a parcela ${numeroParcela}?`)) return;
+      const { error } = await db.from('contas_receber_parcelas').delete().eq('id', parcelaId);
+      if (error) { toast('Erro ao excluir parcela: ' + error.message, 'erro'); return; }
+      toast('Parcela excluída.', 'sucesso');
+      await carregarParcelasPainelCR();
+      await carregarContasReceber();
+      await carregarKpisContasReceber();
     }
 
     async function registrarRecebimentoParcela(parcelaId, valorOriginal) {
