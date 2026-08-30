@@ -26,13 +26,19 @@ Diferente das Edge Functions do Supabase, o Vercel **não injeta nada automatica
 
 Se o projeto já está conectado a um repositório Git, só precisa dar `git push` — o Vercel builda e publica sozinho. Se você sobe os arquivos manualmente, use `vercel --prod` (CLI do Vercel) na raiz do projeto.
 
-## Teste
+## Status
 
-Em `fiscal-config.html`, com um certificado já cadastrado e válido (Etapa 13.2, que você já confirmou funcionando), clique em **"Testar Conexão SEFAZ (real)"**. Isso faz uma chamada real, porém de **baixíssimo custo** (`NFeStatusServico` — não consome cota de importação de notas), à SEFAZ-MT em homologação.
+✅ **Validado em produção (código) / homologação (SEFAZ) em 30/08/2026.** `cStat=107` — "Serviço em Operação". Três problemas apareceram no caminho, documentados abaixo para não precisar redescobrir na próxima integração (NFS-e/ADN vai ter os mesmos riscos).
 
-- **Se der `cStat=107`** ("Serviço em Operação"): mTLS funcionou de ponta a ponta — o certificado autenticou de verdade junto à SEFAZ. 🎉 Esse é o sinal verde pra seguirmos com o `distNSU` de verdade (Etapa 13.4 completa).
-- **Qualquer outro erro**: me manda a mensagem exata. Os pontos mais prováveis de falhar, na minha ordem de suspeita:
-  1. Variável de ambiente faltando/errada no Vercel.
-  2. URL do webservice de MT desatualizada (confirmei via [nfephp-org/sped-nfe](https://github.com/nfephp-org/sped-nfe), referência mantida pela comunidade, mas SEFAZ pode ter mudado o endereço).
-  3. Estrutura do envelope SOAP (o XML dentro de `montarEnvelopeSoap()`) não bater exatamente com o que a SEFAZ-MT espera — cada estado pode ter pequenas variações apesar do padrão nacional.
-  4. `rejectUnauthorized` — se a SEFAZ usar uma cadeia de certificados que o Node não reconhece por padrão, pode ser preciso ajustar `ca` no `https.Agent`.
+### Lições aprendidas (guarde para o distNSU e para o NFS-e/ADN)
+
+1. **`Unsupported PKCS12 PFX data`** — Node 17+ usa OpenSSL 3, que rejeita por padrão PKCS12 cifrados com RC2 (comum em certificados ICP-Brasil). Solução: usar `node-forge` pra extrair certificado + chave privada como PEM, e passar `{ cert, key }` pro `https.Agent` em vez de `{ pfx, passphrase }` — evita o parser PKCS12 nativo do Node inteiramente.
+
+2. **`self-signed certificate in certificate chain`** — o Node não confia na raiz ICP-Brasil por padrão (sua lista embutida é a da Mozilla, sem CAs brasileiras). A cadeia real da SEFAZ-MT homologação: `homologacao.sefaz.mt.gov.br` → `AC SOLUTI SSL EV G4` → `Autoridade Certificadora Raiz Brasileira v10`. Em vez de caçar e manter atualizado o certificado raiz da ICP-Brasil no código (frágil), optamos por `rejectUnauthorized: false` nesta chamada — decisão consciente, documentada no código, aceitável porque a autenticação real já é o mTLS e a URL é fixa (não vem de input externo).
+
+3. **`cStat=588` ("Rejeicao: Nao e permitida a presenca de caracteres de edicao...")** — a SEFAZ rejeita qualquer espaço/quebra de linha entre as tags do XML da mensagem. O envelope SOAP precisa ser montado 100% compacto (sem indentação "bonita" pra humano ler) — ver `montarEnvelopeSoap()`.
+
+## Próximo passo natural: Etapa 13.4 completa (distNSU)
+
+Diferente do `NFeStatusServico` (baixíssimo custo, sem limite prático), o `distNSU` é o serviço que de fato importa as notas — e tem regras de uso restritas: se não houver nada novo (`ultNSU == maxNSU`), a SEFAZ exige esperar 1h antes de consultar de novo (rejeição 656, "consumo indevido"), e reconsultar antes disso reinicia essa espera. Precisa de controle de estado (`fiscal_sync_state`, já criado na Etapa 13.1) e assinatura da requisição, não só mTLS. Avise quando quiser seguir para essa etapa.
+
