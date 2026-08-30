@@ -72,6 +72,7 @@
               <button type="button" class="btn-primary" onclick="cadastrarCertificadoFiscal()">📤 Cadastrar Certificado</button>
               <button type="button" class="btn-secondary" onclick="testarCertificadoFiscal()">🔎 Testar Certificado</button>
               <button type="button" class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="testarConexaoSefaz()">📡 Testar Conexão SEFAZ (real)</button>
+              <button type="button" class="btn-secondary" style="background:#0891b2;color:#fff;border-color:#0891b2;" onclick="testarConexaoAdn()">📡 Testar Conexão ADN (NFS-e, exploratório)</button>
             </div>
             <p style="font-size:11px;color:#a0aec0;margin-top:6px;">"Testar Conexão SEFAZ" faz uma chamada real e de baixíssimo custo (NFeStatusServico — não consome cota de importação de notas) para confirmar que o certificado autentica de verdade junto à SEFAZ-MT, em homologação.</p>
             <p id="msg-fiscal-certificado" class="msg-form" style="white-space:pre-wrap;"></p>
@@ -198,6 +199,29 @@
         msgForm('msg-fiscal-certificado', `✓ SEFAZ respondeu! cStat=${data.cStat} — "${data.xMotivo}" (${data.duracao_ms}ms)${data.servico_em_operacao ? ' — serviço em operação normal.' : ' — atenção: serviço pode estar fora do ar ou em contingência.'}`, data.servico_em_operacao ? 'green' : 'red');
       } catch (e) {
         msgForm('msg-fiscal-certificado', 'Erro inesperado ao chamar /api/fiscal-sefaz-status: ' + e.message, 'red');
+      }
+    }
+
+    async function testarConexaoAdn() {
+      msgForm('msg-fiscal-certificado', 'Testando conexão com o ADN (NFS-e)...', 'green');
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const resp = await fetch('/api/fiscal-nfse-adn-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+          body: JSON.stringify({ ambiente: document.getElementById('fiscal-cert-ambiente').value }),
+        });
+        const textoResposta = await resp.text();
+        let data;
+        try { data = JSON.parse(textoResposta); }
+        catch (_e) {
+          msgForm('msg-fiscal-certificado', `A resposta não veio em JSON (HTTP ${resp.status}) — provável sinal de que a function /api/fiscal-nfse-adn-status ainda não foi publicada no Vercel. Início: "${textoResposta.slice(0, 150)}"`, 'red');
+          return;
+        }
+        if (!resp.ok) { msgForm('msg-fiscal-certificado', (data.error || 'Falha na chamada ao ADN.') + (data.url_tentada ? ' (URL: ' + data.url_tentada + ')' : ''), 'red'); return; }
+        msgForm('msg-fiscal-certificado', `Resposta do ADN recebida! HTTP ${data.http_status} de ${data.url_tentada} (${data.duracao_ms}ms)\n\nEssa é uma chamada EXPLORATÓRIA — o corpo abaixo ainda não é interpretado, é só pra eu conseguir escrever o parser certo.\n\nContent-Type: ${data.content_type}\n\nCorpo bruto:\n${data.corpo_bruto}`, data.http_status < 400 ? 'green' : 'red');
+      } catch (e) {
+        msgForm('msg-fiscal-certificado', 'Erro inesperado ao chamar /api/fiscal-nfse-adn-status: ' + e.message, 'red');
       }
     }
 

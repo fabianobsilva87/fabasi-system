@@ -63,3 +63,30 @@ Diferente do `NFeStatusServico` (baixíssimo custo, sem limite prático), o `dis
 4. Se em algum momento houver documentos de teste disponíveis (a SEFAZ eventualmente disponibiliza XMLs de exemplo em homologação para o certificado testado), confira: `fiscal_documentos` recebeu a linha, `fiscal_documento_itens` (se for `procNFe`) recebeu os itens, `fornecedores` ganhou um pré-cadastro se o CNPJ emitente não existia.
 5. **Se der erro de parsing** (documento processado mas campos vazios/errados): provável que o layout real do XML da SEFAZ tenha alguma diferença do que assumi em `api/_lib/parser-distnsu.js` — me manda o XML (depois de descompactado) que eu ajusto o parser.
 
+## Indo para produção (Etapa 13.6) — é mais operacional que código novo
+
+O código já é parametrizado por ambiente desde o início (`ambiente: 'homologacao' | 'producao'` em todas as chamadas) — não precisa de nada novo pra "ir pra produção" no sentido técnico. O que muda é o risco: produção fala com dados fiscais reais.
+
+Checklist antes de virar a chave:
+1. Em `fiscal-config.html`, cadastre o certificado com `ambiente_padrao: 'producao'` (pode ser o mesmo certificado, só muda o rótulo de qual ambiente ele normalmente atende).
+2. Troque o seletor "Ambiente" pra "Produção" e clique "Testar Conexão SEFAZ (real)" — deve continuar dando `cStat=107`. Isso já confirma mTLS funcionando em produção (o endpoint muda de `homologacao.sefaz.mt.gov.br` para `nfe.sefaz.mt.gov.br`, mas o resto do código é o mesmo).
+3. **Não** clique em "Sincronizar Agora" (distNSU) em produção até ter certeza — isso importa notas de verdade. Teste primeiro várias vezes em homologação.
+4. Monitoramento de erro/consumo indevido: `fiscal_logs` já registra toda chamada (sucesso ou erro) com `cStat`/`xMotivo` — dá pra montar um alerta em cima disso quando quiser (Etapa 13.10).
+
+## `/api/fiscal-nfse-adn-status` — Etapa 13.7 (fase exploratória, NFS-e via ADN)
+
+⚠️ **Nível de incerteza maior que a NF-e.** A documentação oficial (Swagger) da API do ADN exige certificado mTLS até pra ser visualizada — não consegui buscá-la de jeito nenhum antes de escrever este código, mesmo com acesso à internet. As URLs base vêm confirmadas do [portal oficial](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/apis-prod-restrita-e-producao) (atualizado em 20/08/2026):
+
+- Homologação (Produção Restrita): `https://adn.producaorestrita.nfse.gov.br/contribuintes`
+- Produção: `https://adn.nfse.gov.br/contribuintes`
+
+O caminho exato (`/DFe/{ultimoNSU}`) veio só de relatos de comunidade, não de documentação oficial confirmada. Por isso esta function **não tenta parsear nada ainda** — só faz a chamada e devolve a resposta crua (JSON ou texto), pra a gente ver o formato real antes de escrever qualquer parser. Mesma estratégia que funcionou bem pra descobrir os detalhes da NF-e (etapa por etapa, corrigindo com o erro real em mãos).
+
+### Diferenças importantes da NF-e
+
+- **REST/JSON, não SOAP/XML** — só GET autenticado por mTLS, sem envelope nem SOAPAction.
+- **Documentos vêm em GZip+Base64 dentro do JSON** (segundo a documentação de terceiros) — igual ao `docZip` da NF-e, mas empacotado diferente.
+
+### Teste
+
+Em `fiscal-config.html`, botão **"Testar Conexão ADN (NFS-e, exploratório)"**. Qualquer resultado é útil aqui — mesmo um erro 404 me diz que o caminho está errado (e eu ajusto), e uma resposta 200 com JSON me dá o formato real pra escrever o parser de verdade. Me manda a mensagem completa que aparecer, incluindo o "Corpo bruto".
