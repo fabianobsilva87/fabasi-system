@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Cadastro de bancos, agências e contas bancárias da empresa.">
+    <meta name="description" content="Contas bancárias e importação de extrato — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,271 @@
       <div class="topbar no-print"><h2>🏦 Contas Bancárias</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>🏦 Contas Bancárias</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Financeiro (Bancário) — cadastro central de contas usadas em pagamentos e recebimentos.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> cadastro de banco/agência/conta, saldo, importação de extrato.
+          <div class="card">
+            <h3 class="card-title">🏦 Nova Conta Bancária</h3>
+            <input type="hidden" id="cb-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group"><label for="cb-banco">Banco *</label><input type="text" id="cb-banco" placeholder="Ex: Banco do Brasil, Sicredi, Itaú"></div>
+              <div class="form-group"><label for="cb-agencia">Agência</label><input type="text" id="cb-agencia" placeholder="0000"></div>
+              <div class="form-group"><label for="cb-numero-conta">Conta</label><input type="text" id="cb-numero-conta" placeholder="00000-0"></div>
+              <div class="form-group"><label for="cb-tipo">Tipo</label>
+                <select id="cb-tipo" class="form-input-style">
+                  <option value="corrente">Conta Corrente</option>
+                  <option value="poupanca">Poupança</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="cb-saldo-atual">Saldo Atual (R$)</label><input type="number" id="cb-saldo-atual" step="0.01" placeholder="0,00"></div>
+              <div class="form-group"><label for="cb-data-saldo">Data do Saldo</label><input type="date" id="cb-data-saldo"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="cb-observacoes">Observações</label><input type="text" id="cb-observacoes"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-cb" class="btn-primary">💾 Registrar Conta</button>
+              <button type="button" id="btn-cancelar-cb" class="btn-secondary" style="display:none;" onclick="resetarFormContaBancaria()">✕ Cancelar</button>
+            </div>
+            <p id="msg-cb" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Contas Cadastradas</h3>
+              <button type="button" class="btn-refresh" onclick="carregarContasBancarias()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Banco</th><th>Agência/Conta</th><th>Tipo</th><th>Saldo</th><th>Data do Saldo</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-contas-bancarias"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
             </div>
           </div>
+
+          <div class="card">
+            <h3 class="card-title">📤 Importar Extrato (OFX ou CSV)</h3>
+            <p style="font-size:12px;color:#718096;margin-bottom:14px;">
+              OFX é o formato exportado pela maioria dos bancos (mais confiável). CSV também é aceito — o sistema tenta
+              identificar sozinho as colunas de data, descrição e valor; confira o resultado antes de confirmar.
+              Movimentos já importados (mesmo arquivo, reimportado por engano) são ignorados automaticamente.
+            </p>
+            <div class="form-grid">
+              <div class="form-group"><label for="cb-extrato-conta">Conta de Destino *</label><select id="cb-extrato-conta" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group" style="grid-column:span 2;"><label for="cb-extrato-arquivo">Arquivo (.ofx ou .csv)</label><input type="file" id="cb-extrato-arquivo" accept=".ofx,.csv,text/csv"></div>
+            </div>
+            <div class="btn-row" style="margin-top:12px;">
+              <button type="button" id="btn-importar-extrato" class="btn-primary">⚙️ Processar Extrato</button>
+            </div>
+            <div id="cb-extrato-resultado" style="margin-top:14px;font-size:13px;"></div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _contasBancariasCache = [];
+
+    // ===================== CRUD DE CONTAS =====================
+    async function salvarContaBancaria() {
+      const banco = document.getElementById('cb-banco').value.trim();
+      if (!banco) { msgForm('msg-cb', 'Informe o banco.', 'red'); return; }
+
+      const payload = {
+        banco,
+        agencia: document.getElementById('cb-agencia').value.trim() || null,
+        numero_conta: document.getElementById('cb-numero-conta').value.trim() || null,
+        tipo: document.getElementById('cb-tipo').value,
+        saldo_atual: Number(document.getElementById('cb-saldo-atual').value) || 0,
+        data_saldo: document.getElementById('cb-data-saldo').value || new Date().toISOString().slice(0,10),
+        observacoes: document.getElementById('cb-observacoes').value.trim() || null,
+      };
+
+      const idEd = document.getElementById('cb-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('contas_bancarias').update(payload).eq('id', idEd)
+        : await db.from('contas_bancarias').insert([payload]);
+
+      if (error) { msgForm('msg-cb', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-cb', '✓ Conta bancária salva!', 'green');
+      resetarFormContaBancaria();
+      await carregarContasBancarias();
+      await carregarSelectContaExtrato();
+    }
+
+    function resetarFormContaBancaria() {
+      document.getElementById('cb-id-edicao').value = '';
+      ['cb-banco','cb-agencia','cb-numero-conta','cb-saldo-atual','cb-data-saldo','cb-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cb-tipo').value = 'corrente';
+      document.getElementById('btn-salvar-cb').textContent = '💾 Registrar Conta';
+      document.getElementById('btn-cancelar-cb').style.display = 'none';
+    }
+
+    function editarContaBancaria(id) {
+      const c = _contasBancariasCache.find(x => x.id === id); if (!c) return;
+      document.getElementById('cb-id-edicao').value = id;
+      document.getElementById('cb-banco').value = c.banco || '';
+      document.getElementById('cb-agencia').value = c.agencia || '';
+      document.getElementById('cb-numero-conta').value = c.numero_conta || '';
+      document.getElementById('cb-tipo').value = c.tipo || 'corrente';
+      document.getElementById('cb-saldo-atual').value = c.saldo_atual || '';
+      document.getElementById('cb-data-saldo').value = c.data_saldo || '';
+      document.getElementById('cb-observacoes').value = c.observacoes || '';
+      document.getElementById('btn-salvar-cb').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-cb').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirContaBancaria(id, banco) {
+      if (!confirm(`Excluir a conta "${banco}"? Todos os movimentos de extrato importados para ela também serão removidos.`)) return;
+      const { error } = await db.from('contas_bancarias').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarContasBancarias();
+      await carregarSelectContaExtrato();
+    }
+
+    async function carregarContasBancarias() {
+      const tbody = document.getElementById('tbody-contas-bancarias'); if (!tbody) return;
+      const { data, error } = await db.from('contas_bancarias').select('*').order('ativo', { ascending: false }).order('banco');
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _contasBancariasCache = data || [];
+      if (!_contasBancariasCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma conta bancária cadastrada ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _contasBancariasCache.map(c => `<tr>
+        <td><strong>${escapeHTML(c.banco)}</strong></td>
+        <td>${escapeHTML(c.agencia || '—')} / ${escapeHTML(c.numero_conta || '—')}</td>
+        <td>${c.tipo === 'poupanca' ? 'Poupança' : 'Corrente'}</td>
+        <td>R$ ${Number(c.saldo_atual || 0).toFixed(2).replace('.', ',')}</td>
+        <td>${fmtDate(c.data_saldo)}</td>
+        <td><span class="tag-badge ${c.ativo ? 'success' : 'danger'}">${c.ativo ? 'Ativa' : 'Inativa'}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContaBancaria('${escapeHTML(c.id)}')">✏️</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaBancaria('${escapeHTML(c.id)}','${escapeHTML(c.banco)}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    async function carregarSelectContaExtrato() {
+      const { data } = await db.from('contas_bancarias').select('id,banco,numero_conta').eq('ativo', true).order('banco');
+      document.getElementById('cb-extrato-conta').innerHTML = '<option value="">-- Selecione --</option>' +
+        (data || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.banco)}${c.numero_conta ? ' — ' + escapeHTML(c.numero_conta) : ''}</option>`).join('');
+    }
+
+    // ===================== IMPORTAÇÃO DE EXTRATO =====================
+    async function calcularHashMovimento(texto) {
+      const bytes = new TextEncoder().encode(texto);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Parser OFX — formato SGML-like, blocos <STMTTRN>...</STMTTRN> repetidos.
+    function parseOfx(texto) {
+      const blocos = texto.match(/<STMTTRN>[\s\S]*?<\/STMTTRN>/g) || [];
+      return blocos.map(bloco => {
+        const pegar = (tag) => { const m = bloco.match(new RegExp(`<${tag}>([^<\\r\\n]*)`)); return m ? m[1].trim() : null; };
+        const dataRaw = pegar('DTPOSTED'); // formato AAAAMMDDhhmmss ou só AAAAMMDD
+        const data = dataRaw ? `${dataRaw.slice(0,4)}-${dataRaw.slice(4,6)}-${dataRaw.slice(6,8)}` : null;
+        return {
+          data_movimento: data,
+          valor: Number(pegar('TRNAMT')) || 0,
+          descricao: pegar('MEMO') || pegar('NAME') || '',
+          documento: pegar('FITID') || pegar('CHECKNUM') || null,
+        };
+      }).filter(m => m.data_movimento);
+    }
+
+    // Parser CSV — tenta identificar colunas de data/descrição/valor pelo
+    // cabeçalho; aceita separador ; ou , e datas em DD/MM/AAAA ou AAAA-MM-DD.
+    function parseCsv(texto) {
+      const linhas = texto.split(/\r?\n/).filter(l => l.trim());
+      if (!linhas.length) return [];
+      const separador = linhas[0].includes(';') ? ';' : ',';
+      const cabecalho = linhas[0].split(separador).map(c => c.trim().toLowerCase().replace(/["']/g, ''));
+
+      const idxData = cabecalho.findIndex(c => /data/.test(c));
+      const idxDescricao = cabecalho.findIndex(c => /descri|historico|hist[oó]rico|memo/.test(c));
+      const idxValor = cabecalho.findIndex(c => /valor|montante/.test(c));
+
+      if (idxData === -1 || idxValor === -1) return null; // não conseguiu identificar colunas essenciais
+
+      function normalizarData(txt) {
+        txt = txt.trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(txt)) return txt.slice(0, 10);
+        const m = txt.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return null;
+      }
+      function normalizarValor(txt) {
+        txt = txt.trim().replace(/[R$\s]/g, '');
+        if (txt.includes(',') && txt.includes('.')) txt = txt.replace(/\./g, '').replace(',', '.');
+        else if (txt.includes(',')) txt = txt.replace(',', '.');
+        return Number(txt) || 0;
+      }
+
+      return linhas.slice(1).map(linha => {
+        const campos = linha.split(separador).map(c => c.trim().replace(/^"|"$/g, ''));
+        return {
+          data_movimento: normalizarData(campos[idxData] || ''),
+          valor: normalizarValor(campos[idxValor] || '0'),
+          descricao: idxDescricao > -1 ? (campos[idxDescricao] || '') : '',
+          documento: null,
+        };
+      }).filter(m => m.data_movimento);
+    }
+
+    async function processarExtrato() {
+      const contaId = document.getElementById('cb-extrato-conta').value;
+      const arquivo = document.getElementById('cb-extrato-arquivo').files[0];
+      const resultadoEl = document.getElementById('cb-extrato-resultado');
+
+      if (!contaId) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Selecione a conta de destino.</span>'; return; }
+      if (!arquivo) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Selecione um arquivo.</span>'; return; }
+
+      resultadoEl.innerHTML = 'Processando...';
+      const texto = await arquivo.text();
+      const ehOfx = /<OFX>|<STMTTRN>/i.test(texto) || arquivo.name.toLowerCase().endsWith('.ofx');
+
+      const movimentos = ehOfx ? parseOfx(texto) : parseCsv(texto);
+      if (movimentos === null) {
+        resultadoEl.innerHTML = '<span style="color:#dc2626;">Não consegui identificar as colunas de Data/Valor no CSV — confira se a primeira linha é o cabeçalho (ex: "Data;Descrição;Valor").</span>';
+        return;
+      }
+      if (!movimentos.length) {
+        resultadoEl.innerHTML = '<span style="color:#dc2626;">Nenhum movimento encontrado no arquivo.</span>';
+        return;
+      }
+
+      let inseridos = 0, duplicados = 0, erros = 0;
+      for (const mov of movimentos) {
+        const chaveHash = `${mov.data_movimento}|${mov.valor}|${mov.descricao}|${mov.documento || ''}`;
+        const hash = await calcularHashMovimento(chaveHash);
+        const { error } = await db.from('bancario_movimentos').insert([{
+          conta_bancaria_id: contaId,
+          data_movimento: mov.data_movimento,
+          descricao: mov.descricao || null,
+          valor: mov.valor,
+          documento: mov.documento,
+          hash_movimento: hash,
+          origem: ehOfx ? 'ofx' : 'csv',
+          status_conciliacao: 'pendente',
+        }]);
+        if (error) {
+          if (error.message.includes('duplicate') || error.code === '23505') duplicados++;
+          else erros++;
+        } else inseridos++;
+      }
+
+      resultadoEl.innerHTML = `<span style="color:#059669;">✓ Processado: ${inseridos} movimento(s) importado(s)${duplicados ? `, ${duplicados} já existiam (ignorados)` : ''}${erros ? `, ${erros} com erro` : ''}.</span> <a href="bancario-conciliacao.html" style="color:#1a56db;font-weight:600;">Ir para Conciliação →</a>`;
+      document.getElementById('cb-extrato-arquivo').value = '';
+    }
+
+    document.getElementById('btn-salvar-cb').addEventListener('click', salvarContaBancaria);
+    document.getElementById('btn-importar-extrato').addEventListener('click', processarExtrato);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarContasBancarias();
+      await carregarSelectContaExtrato();
+    });
+  </script>
 </body>
 </html>

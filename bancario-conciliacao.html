@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Conciliação entre extrato bancário e títulos financeiros (contas a pagar/receber).">
+    <meta name="description" content="Conciliação bancária — casamento entre extrato importado e parcelas pagas/recebidas, com alerta de duplicidade — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,202 @@
       <div class="topbar no-print"><h2>🔄 Conciliação Bancária</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>🔄 Conciliação Bancária</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Financeiro (Bancário) — motor de conciliação por confiança (alta/média/baixa).</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> importação de extrato, matching automático por valor+data+documento, alerta de pagamento duplicado.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Sugestões automáticas por valor + data (confiança alta/média/baixa) contra Contas a Pagar já pagas e Contas
+            a Receber já recebidas. Nada é confirmado sozinho — sempre revise antes.
+          </p>
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">⏳</div>
+              <p class="dash-card-title">Pendentes de Conciliação</p>
+              <h3 id="bc-txt-pendentes" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-success">
+              <div class="dash-card-icon">✅</div>
+              <p class="dash-card-title">Alta Confiança</p>
+              <h3 id="bc-txt-alta" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">🤔</div>
+              <p class="dash-card-title">Média/Baixa Confiança</p>
+              <h3 id="bc-txt-media-baixa" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Possível Duplicado</p>
+              <h3 id="bc-txt-duplicados" class="dash-card-value">—</h3>
             </div>
           </div>
+
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;">
+                <label for="bc-filtro-conta">Conta Bancária</label>
+                <select id="bc-filtro-conta" class="form-input-style" style="width:auto;" onchange="carregarConciliacao()"><option value="">Todas</option></select>
+              </div>
+              <button type="button" class="btn-refresh" onclick="carregarConciliacao()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Sugestão</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-conciliacao"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _candidatosPorMovimento = {}; // movimentoId -> [{tipo, id, label, valor, data, diffDias, diffValor}]
+
+    function diferencaDias(dataA, dataB) {
+      const a = new Date(dataA + 'T00:00:00'), b = new Date(dataB + 'T00:00:00');
+      return Math.round(Math.abs(a - b) / 86400000);
+    }
+
+    function classificarConfianca(diffValor, diffDias) {
+      if (diffValor < 0.01 && diffDias === 0) return 'alta';
+      if (diffValor < 0.01 && diffDias <= 3) return 'media';
+      return 'baixa';
+    }
+
+    const CONFIANCA_LABEL = { alta: '✅ Alta', media: '🤔 Média', baixa: '⚠️ Baixa' };
+    const CONFIANCA_COR = { alta: 'success', media: 'warning', baixa: 'danger' };
+
+    async function carregarSelectContaFiltro() {
+      const { data } = await db.from('contas_bancarias').select('id,banco,numero_conta').order('banco');
+      document.getElementById('bc-filtro-conta').innerHTML = '<option value="">Todas</option>' +
+        (data || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.banco)}${c.numero_conta ? ' — ' + escapeHTML(c.numero_conta) : ''}</option>`).join('');
+    }
+
+    async function carregarConciliacao() {
+      const tbody = document.getElementById('tbody-conciliacao');
+      tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Carregando...</td></tr>';
+      _candidatosPorMovimento = {};
+
+      const contaFiltro = document.getElementById('bc-filtro-conta').value;
+
+      let query = db.from('bancario_movimentos').select('*, contas_bancarias(banco)').eq('status_conciliacao', 'pendente').order('data_movimento', { ascending: false }).limit(200);
+      if (contaFiltro) query = query.eq('conta_bancaria_id', contaFiltro);
+      const { data: movimentos, error } = await query;
+      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+
+      // Candidatos: parcelas pagas/recebidas SEM movimento vinculado ainda,
+      // e também as JÁ vinculadas (pra detectar duplicidade).
+      const [pagarPagas, receberRecebidas, jaConciliados] = await Promise.all([
+        db.from('contas_pagar_parcelas').select('id, valor_pago, data_pagamento, conta_pagar_id, contas_pagar(descricao)').eq('status', 'paga'),
+        db.from('contas_receber_parcelas').select('id, valor_recebido, data_recebimento, conta_receber_id, contas_receber(descricao)').eq('status', 'recebida'),
+        db.from('bancario_movimentos').select('conciliado_tipo, conciliado_parcela_id').eq('status_conciliacao', 'conciliado'),
+      ]);
+
+      const idsJaConciliados = new Set((jaConciliados.data || []).map(m => `${m.conciliado_tipo}:${m.conciliado_parcela_id}`));
+
+      let totalAlta = 0, totalMediaBaixa = 0, totalDuplicado = 0;
+
+      if (!movimentos || !movimentos.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhum movimento pendente de conciliação — importe um extrato em Contas Bancárias.</td></tr>';
+      } else {
+        const linhasHtml = movimentos.map(mov => {
+          const ehDebito = Number(mov.valor) < 0;
+          const valorAbs = Math.abs(Number(mov.valor));
+          const pool = ehDebito ? (pagarPagas.data || []) : (receberRecebidas.data || []);
+          const tipoPool = ehDebito ? 'contas_pagar' : 'contas_receber';
+
+          const candidatos = pool.map(p => {
+            const valorParcela = Number(ehDebito ? p.valor_pago : p.valor_recebido) || 0;
+            const dataParcela = ehDebito ? p.data_pagamento : p.data_recebimento;
+            if (!dataParcela) return null;
+            const diffValor = Math.abs(valorParcela - valorAbs);
+            const diffDias = diferencaDias(mov.data_movimento, dataParcela);
+            if (diffValor > valorAbs * 0.02 || diffDias > 15) return null; // fora da faixa razoável
+            const label = ehDebito ? (p.contas_pagar?.descricao || 'Conta a Pagar') : (p.contas_receber?.descricao || 'Conta a Receber');
+            const jaUsado = idsJaConciliados.has(`${tipoPool}:${p.id}`);
+            return { id: p.id, tipo: tipoPool, label, valor: valorParcela, data: dataParcela, diffValor, diffDias, jaUsado };
+          }).filter(Boolean).sort((a, b) => (a.diffValor - b.diffValor) || (a.diffDias - b.diffDias));
+
+          _candidatosPorMovimento[mov.id] = candidatos;
+          const melhor = candidatos[0];
+          const confianca = melhor ? classificarConfianca(melhor.diffValor, melhor.diffDias) : null;
+          const duplicado = melhor?.jaUsado;
+
+          if (duplicado) totalDuplicado++;
+          else if (confianca === 'alta') totalAlta++;
+          else if (confianca) totalMediaBaixa++;
+
+          const opcoes = candidatos.map((c, i) =>
+            `<option value="${i}">${c.tipo === 'contas_pagar' ? '💵' : '💰'} ${escapeHTML(c.label).slice(0, 40)} — R$ ${c.valor.toFixed(2).replace('.', ',')} — ${fmtDate(c.data)}${c.jaUsado ? ' ⚠️ JÁ USADO' : ''}</option>`
+          ).join('');
+
+          return `<tr id="linha-conc-${mov.id}">
+            <td>${fmtDate(mov.data_movimento)}</td>
+            <td style="max-width:220px;">${escapeHTML(mov.descricao || '—')}<br><span style="font-size:10px;color:#a0aec0;">${escapeHTML(mov.contas_bancarias?.banco || '')}</span></td>
+            <td style="color:${ehDebito ? '#dc2626' : '#059669'};font-weight:600;">${ehDebito ? '-' : '+'}R$ ${valorAbs.toFixed(2).replace('.', ',')}</td>
+            <td>
+              ${candidatos.length ? `
+                <select id="sel-conc-${mov.id}" class="form-input-style" style="font-size:11px;padding:4px;">${opcoes}</select>
+                <div style="margin-top:4px;">
+                  <span class="tag-badge ${CONFIANCA_COR[confianca]}">${CONFIANCA_LABEL[confianca]}</span>
+                  ${duplicado ? '<span class="tag-badge danger" style="margin-left:4px;">⚠️ Possível duplicado</span>' : ''}
+                </div>` : '<span style="font-size:11px;color:#a0aec0;">Nenhuma correspondência encontrada</span>'}
+            </td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap;">
+              ${candidatos.length ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="confirmarConciliacao('${escapeHTML(mov.id)}')">✓ Confirmar</button>` : ''}
+              <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="ignorarMovimento('${escapeHTML(mov.id)}')">Ignorar</button>
+            </td>
+          </tr>`;
+        }).join('');
+        tbody.innerHTML = linhasHtml;
+      }
+
+      document.getElementById('bc-txt-pendentes').textContent = (movimentos || []).length;
+      document.getElementById('bc-txt-alta').textContent = totalAlta;
+      document.getElementById('bc-txt-media-baixa').textContent = totalMediaBaixa;
+      document.getElementById('bc-txt-duplicados').textContent = totalDuplicado;
+    }
+
+    async function confirmarConciliacao(movimentoId) {
+      const sel = document.getElementById('sel-conc-' + movimentoId);
+      const candidatos = _candidatosPorMovimento[movimentoId] || [];
+      const escolhido = candidatos[Number(sel.value)];
+      if (!escolhido) return;
+
+      if (escolhido.jaUsado) {
+        if (!confirm('⚠️ Essa parcela já está conciliada com OUTRO movimento — isso é um sinal de possível pagamento duplicado (pago duas vezes, ou o mesmo pagamento apareceu duas vezes no extrato). Confirmar mesmo assim?')) return;
+      } else if (!confirm(`Confirmar conciliação com "${escolhido.label}" (R$ ${escolhido.valor.toFixed(2).replace('.', ',')}, ${fmtDate(escolhido.data)})?`)) {
+        return;
+      }
+
+      const { error } = await db.from('bancario_movimentos').update({
+        status_conciliacao: 'conciliado',
+        conciliado_tipo: escolhido.tipo,
+        conciliado_parcela_id: escolhido.id,
+        conciliado_em: new Date().toISOString(),
+        conciliado_por_nome: window._usuarioAtual?.nome || null,
+      }).eq('id', movimentoId);
+
+      if (error) { toast('Erro ao conciliar: ' + error.message, 'erro'); return; }
+      toast('Movimento conciliado!', 'sucesso');
+      await carregarConciliacao();
+    }
+
+    async function ignorarMovimento(movimentoId) {
+      if (!confirm('Ignorar este movimento? Ele deixa de aparecer na lista de pendentes (ex: transferência entre contas próprias, tarifa bancária sem lançamento correspondente).')) return;
+      const { error } = await db.from('bancario_movimentos').update({ status_conciliacao: 'ignorado' }).eq('id', movimentoId);
+      if (error) { toast('Erro: ' + error.message, 'erro'); return; }
+      await carregarConciliacao();
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectContaFiltro();
+      await carregarConciliacao();
+    });
+  </script>
 </body>
 </html>

@@ -5638,6 +5638,30 @@ async function carregarKpiObrasDashboard() {
 
 // ===================== DASHBOARD — CONTAS A PAGAR (Etapa 14.2) =====================
 // ===================== DASHBOARD — CONTAS A RECEBER (Etapa 14.3) =====================
+// ===================== DASHBOARD — BANCÁRIO (Etapa 14.5) =====================
+async function carregarKpisBancarioDashboard() {
+  if (!$('dash-txt-banco-saldo')) return;
+
+  const [contas, pendentes, conciliados] = await Promise.all([
+    db.from('contas_bancarias').select('saldo_atual').eq('ativo', true),
+    db.from('bancario_movimentos').select('id', { count: 'exact', head: true }).eq('status_conciliacao', 'pendente'),
+    db.from('bancario_movimentos').select('conciliado_tipo, conciliado_parcela_id').eq('status_conciliacao', 'conciliado'),
+  ]);
+
+  const somaSaldo = (contas.data || []).reduce((acc, c) => acc + Number(c.saldo_atual || 0), 0);
+  if ($('dash-txt-banco-saldo')) $('dash-txt-banco-saldo').textContent = 'R$ ' + somaSaldo.toFixed(2).replace('.', ',');
+  if ($('dash-txt-banco-pendentes')) $('dash-txt-banco-pendentes').textContent = pendentes.count ?? 0;
+
+  // Duplicado = mais de um movimento conciliado apontando pra mesma parcela.
+  const contagem = {};
+  (conciliados.data || []).forEach(m => {
+    const chave = `${m.conciliado_tipo}:${m.conciliado_parcela_id}`;
+    contagem[chave] = (contagem[chave] || 0) + 1;
+  });
+  const duplicados = Object.values(contagem).filter(n => n > 1).length;
+  if ($('dash-txt-banco-duplicados')) $('dash-txt-banco-duplicados').textContent = duplicados;
+}
+
 async function carregarKpisContasReceberDashboard() {
   if (!$('dash-txt-cr-a-receber')) return;
 
