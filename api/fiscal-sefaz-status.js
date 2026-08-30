@@ -37,12 +37,39 @@
 
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
+const forge = require('node-forge');
 
 const ENDPOINTS = {
   homologacao: 'https://homologacao.sefaz.mt.gov.br/nfews/v2/services/NfeStatusServico4',
   producao: 'https://nfe.sefaz.mt.gov.br/nfews/v2/services/NfeStatusServico4',
 };
 const CUF_MT = '51';
+
+// O Node 17+ usa OpenSSL 3, que rejeita por padrão PKCS12 cifrados com RC2
+// (algoritmo legado, mas ainda muito comum em certificados A1 emitidos por
+// autoridades certificadoras ICP-Brasil) — daí o erro "Unsupported PKCS12
+// PFX data" ao passar { pfx, passphrase } direto pro https.Agent. Usamos
+// node-forge (implementação pura em JS, não depende do OpenSSL do sistema)
+// pra extrair certificado e chave privada como PEM — o Node não tem
+// nenhum problema em usar PEM depois, só em interpretar o PKCS12 bruto.
+function extrairCertEChavePem(pfxBuffer, senha) {
+  const der = forge.util.createBuffer(pfxBuffer.toString('binary'));
+  const asn1 = forge.asn1.fromDer(der);
+  const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, senha);
+
+  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+  const cert = certBags[forge.pki.oids.certBag]?.[0]?.cert;
+  if (!cert) throw new Error('Certificado não contém um certificado X.509 legível.');
+
+  let keyBag = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+  if (!keyBag) keyBag = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag]?.[0];
+  if (!keyBag?.key) throw new Error('Certificado não contém uma chave privada legível.');
+
+  return {
+    certPem: forge.pki.certificateToPem(cert),
+    keyPem: forge.pki.privateKeyToPem(keyBag.key),
+  };
+}
 
 function montarEnvelopeSoap(ambiente) {
   const tpAmb = ambiente === 'producao' ? '1' : '2';
@@ -65,9 +92,9 @@ function extrairTag(xml, tag) {
   return m ? m[1] : null;
 }
 
-function chamarSefazComCertificado(url, envelope, pfxBuffer, senha) {
+function chamarSefazComCertificado(url, envelope, certPem, keyPem) {
   return new Promise((resolve, reject) => {
-    const agent = new https.Agent({ pfx: pfxBuffer, passphrase: senha });
+    const agent = new https.Agent({ cert: certPem, key: keyPem });
     const body = Buffer.from(envelope, 'utf-8');
     const { hostname, pathname, search } = new URL(url);
 
@@ -132,12 +159,20 @@ module.exports = async function handler(req, res) {
     const { data: senha, error: errSenha } = await supabaseAdmin.rpc('fiscal_vault_ler_segredo', { p_id: cert.senha_secret_id });
     if (errSenha || !senha) { res.status(500).json({ error: 'Falha ao recuperar a senha do Vault.' }); return; }
 
+    let certPem, keyPem;
+    try {
+      ({ certPem, keyPem } = extrairCertEChavePem(pfxBuffer, senha));
+    } catch (e) {
+      res.status(422).json({ error: 'Falha ao interpretar o certificado: ' + e.message });
+      return;
+    }
+
     const ambiente = (req.body?.ambiente === 'producao') ? 'producao' : 'homologacao';
     const url = ENDPOINTS[ambiente];
     const envelope = montarEnvelopeSoap(ambiente);
 
     const inicio = Date.now();
-    const resposta = await chamarSefazComCertificado(url, envelope, pfxBuffer, senha);
+    const resposta = await chamarSefazComCertificado(url, envelope, certPem, keyPem);
     const duracaoMs = Date.now() - inicio;
 
     const cStat = extrairTag(resposta.body, 'cStat');
