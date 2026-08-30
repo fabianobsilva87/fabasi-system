@@ -48,7 +48,7 @@ Diferente do `NFeStatusServico` (baixíssimo custo, sem limite prático), o `dis
 
 ### O que é diferente do `NFeStatusServico`
 
-- **Endpoint é nacional** (Ambiente Nacional), não por estado: `hom.nfe.fazenda.gov.br` / `www1.nfe.fazenda.gov.br` — não usa mais o domínio `sefaz.mt.gov.br`.
+- **Endpoint é nacional** (Ambiente Nacional), não por estado: `hom1.nfe.fazenda.gov.br` / `www1.nfe.fazenda.gov.br` — não usa mais o domínio `sefaz.mt.gov.br`. ⚠️ Cuidado: `hom.nfe.fazenda.gov.br` (sem o "1") foi **desativado em 23/05/2022** especificamente para o `NFeDistribuicaoDFe` — só existe o `hom1`. Foi exatamente esse engano que causou um "The resource cannot be found" no primeiro teste real.
 - **Não precisa de assinatura digital** na requisição (só mTLS) — confirmado via [nfephp-org/sped-nfe](https://github.com/nfephp-org/sped-nfe/blob/master/docs/metodos/DistDFe.md), biblioteca de referência da comunidade. Isso contraria o que o documento de arquitetura original supunha.
 - **Tem estado** (`fiscal_sync_state`, tabela criada na Etapa 13.1): cada chamada usa o `ultimo_nsu` salvo, e só avança esse valor depois de processar a resposta com sucesso — nunca antes.
 - **Regra de bloqueio de 1h** (rejeição 656, "consumo indevido"): se não há nada novo (`ultNSU == maxNSU`), a function já marca `proxima_tentativa_permitida` = agora + 1h automaticamente, e todo `POST` seguinte é recusado (HTTP 429) até esse horário passar — mesmo se você clicar em "Sincronizar Agora" de novo.

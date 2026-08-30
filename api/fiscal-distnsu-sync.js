@@ -32,7 +32,9 @@ const { chamarComCertificado } = require('./_lib/sefaz-http');
 const { parseDocZip, limparCNPJ } = require('./_lib/parser-distnsu');
 
 const ENDPOINTS = {
-  homologacao: 'https://hom.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx',
+  // ATENÇÃO: hom.nfe.fazenda.gov.br (sem o "1") foi DESATIVADO em 23/05/2022
+  // especificamente para o NFeDistribuicaoDFe — o substituto é hom1.
+  homologacao: 'https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx',
   producao: 'https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx',
 };
 const CUF_MT = '51';
