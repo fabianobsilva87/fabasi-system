@@ -199,8 +199,10 @@ async function carregarReqMateriais() {
       ${r.status === 'Pendente' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">aguardando aprovação</span>` : ''}
       ${r.status === 'Aprovada' ? `
         <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="converterReqMaterialEmCompra('${escapeHTML(r.id)}')">🛒 Converter em Compra</button>` : ''}
-      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarReqMaterial('${escapeHTML(r.id)}')">✏️ Editar</button>
-      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirReqMaterial('${escapeHTML(r.id)}')">✕</button>
+      ${r.status === 'Convertida'
+        ? `<span style="font-size:11px;color:#a0aec0;" title="Já foi usada para gerar uma Solicitação de Compra — bloqueada para evitar duplicidade.">🔒 Convertida — bloqueada</span>`
+        : `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarReqMaterial('${escapeHTML(r.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirReqMaterial('${escapeHTML(r.id)}')">✕</button>`}
     </td>
   </tr>`).join('');
 }
@@ -227,6 +229,7 @@ async function aprovarReqMaterial(id) {
 
 async function editarReqMaterial(id) {
   const r = _reqMateriaisCache.find(x => x.id === id); if (!r) return;
+  if (r.status === 'Convertida') { toast('Esta requisição já foi convertida em Solicitação de Compra — não pode mais ser editada.', 'erro'); return; }
   document.getElementById('rm-id-edicao').value  = id;
   document.getElementById('rm-numero').value      = r.numero || '';
   document.getElementById('rm-solicitante').value = r.solicitante || '';
@@ -283,7 +286,9 @@ function resetarFormReqMaterial() {
 }
 
 async function excluirReqMaterial(id) {
-  const numero = _reqMateriaisCache.find(x => x.id === id)?.numero || 'esta requisição';
+  const r = _reqMateriaisCache.find(x => x.id === id);
+  if (r?.status === 'Convertida') { toast('Esta requisição já foi convertida em Solicitação de Compra — não pode mais ser excluída.', 'erro'); return; }
+  const numero = r?.numero || 'esta requisição';
   if (!confirm(`Excluir requisição de material "${numero}"? Os itens vinculados também serão removidos.`)) return;
   const { error } = await db.from('requisicoes_material').delete().eq('id', id);
   if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }

@@ -243,8 +243,10 @@ async function carregarRequisicoes() {
         <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="definirStatusRequisicao('${escapeHTML(r.id)}','Rejeitado')">✕ Rejeitar</button>` : ''}
       ${r.status === 'Solicitado' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">aguardando aprovação</span>` : ''}
       ${r.status === 'Aprovado' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="gerarOrdemDeCompra('${escapeHTML(r.id)}')">🔍 Iniciar Cotação</button>` : ''}
-      <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarRequisicao('${escapeHTML(r.id)}')">✏️ Editar</button>
-      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirRequisicao('${escapeHTML(r.id)}')">✕</button>
+      ${r.status === 'Convertida'
+        ? `<span style="font-size:11px;color:#a0aec0;" title="Já foi usada para gerar uma Ordem de Compra — bloqueada para evitar duplicidade.">🔒 Convertida — bloqueada</span>`
+        : `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarRequisicao('${escapeHTML(r.id)}')">✏️ Editar</button>
+      <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirRequisicao('${escapeHTML(r.id)}')">✕</button>`}
     </td>
   </tr>`).join('');
 }
@@ -277,6 +279,7 @@ function gerarOrdemDeCompra(id) {
 
 async function editarRequisicao(id) {
   const r = _requisicoesCache.find(x => x.id === id); if (!r) return;
+  if (r.status === 'Convertida') { toast('Esta solicitação já foi convertida em Ordem de Compra — não pode mais ser editada.', 'erro'); return; }
 
   document.getElementById('req-id-edicao').value    = id;
   document.getElementById('req-numero').value        = r.numero || '';
@@ -331,7 +334,9 @@ function resetarFormRequisicao() {
 }
 
 async function excluirRequisicao(id) {
-  const numero = _requisicoesCache.find(x => x.id === id)?.numero || 'esta requisição';
+  const r = _requisicoesCache.find(x => x.id === id);
+  if (r?.status === 'Convertida') { toast('Esta solicitação já foi convertida em Ordem de Compra — não pode mais ser excluída.', 'erro'); return; }
+  const numero = r?.numero || 'esta requisição';
   if (!confirm(`Excluir requisição "${numero}"? Os itens vinculados também serão removidos.`)) return;
   const { error } = await db.from('requisicoes_compra').delete().eq('id', id);
   if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }

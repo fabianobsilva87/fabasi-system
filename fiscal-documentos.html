@@ -446,14 +446,26 @@
         <td>R$ ${Number(d.valor_total || 0).toFixed(2).replace('.', ',')}</td>
         <td>${escapeHTML(d.fornecedores?.razao_social || 'Pendente de vínculo')}</td>
         <td><span class="tag-badge ${statusBadge[d.status] || ''}">${escapeHTML(d.status || '—')}</span></td>
-        <td>${
-          d.gerou_conta_pagar
-            ? '<span style="font-size:11px;color:#059669;">✓ Conta a pagar gerada</span>'
-            : (['processada','validada'].includes(d.status)
-                ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="gerarContaPagarFiscal('${escapeHTML(d.id)}')">💰 Gerar Conta a Pagar</button>`
-                : '<span style="font-size:11px;color:#a0aec0;">—</span>')
-        }</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
+          ${
+            d.gerou_conta_pagar
+              ? '<span style="font-size:11px;color:#059669;">✓ Conta a pagar gerada</span>'
+              : (['processada','validada'].includes(d.status)
+                  ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="gerarContaPagarFiscal('${escapeHTML(d.id)}')">💰 Gerar Conta a Pagar</button>`
+                  : '')
+          }
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirDocumentoFiscal('${escapeHTML(d.id)}','${escapeHTML(d.tipo_documento)} ${escapeHTML(d.numero || d.chave_acesso || '')}')">✕ Excluir</button>
+        </td>
       </tr>`).join('');
+    }
+
+    async function excluirDocumentoFiscal(documentoId, identificacao) {
+      if (!confirm(`Excluir o documento "${identificacao}"? Isso remove só o registro local (itens, vínculos, eventos) — não desfaz nada na SEFAZ, nem afeta uma eventual Conta a Pagar já gerada a partir dele.`)) return;
+      const { error } = await db.from('fiscal_documentos').delete().eq('id', documentoId);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      toast('Documento excluído.', 'sucesso');
+      await carregarKpisDocumentosFiscais();
+      await carregarDocumentosFiscais();
     }
 
     async function gerarContaPagarFiscal(documentoId) {
