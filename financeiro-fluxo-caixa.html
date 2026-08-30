@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Fluxo de caixa realizado e projetado — 7/30/60/90 dias.">
+    <meta name="description" content="Fluxo de caixa projetado — saldo atual, recebimentos e pagamentos previstos, alerta de déficit — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="config.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
        O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
@@ -36,23 +37,171 @@
       <div class="topbar no-print"><h2>📈 Fluxo de Caixa</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>📈 Fluxo de Caixa</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Financeiro — visão consolidada de entradas e saídas, realizado x previsto.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> saldo atual, recebimentos e pagamentos previstos, alerta de déficit projetado.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Projeção calculada em cima das parcelas em aberto de Contas a Pagar e Contas a Receber. Sem módulo
+            Bancário ainda, o saldo de partida é um checkpoint manual — atualize sempre que conferir o saldo real.
+          </p>
+
+          <div class="card">
+            <h3 class="card-title">💵 Saldo Atual</h3>
+            <div id="fc-saldo-atual-info" style="font-size:13px;color:#a0aec0;margin-bottom:14px;">Carregando...</div>
+            <div class="form-grid">
+              <div class="form-group"><label for="fc-novo-saldo">Novo Saldo (R$)</label><input type="number" id="fc-novo-saldo" step="0.01" placeholder="0,00"></div>
+              <div class="form-group"><label for="fc-novo-saldo-data">Data de Referência</label><input type="date" id="fc-novo-saldo-data"></div>
+              <div class="form-group" style="grid-column:span 2;"><label for="fc-novo-saldo-obs">Observações (opcional)</label><input type="text" id="fc-novo-saldo-obs" placeholder="Ex: conferido no extrato do banco X"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-saldo" class="btn-primary">💾 Atualizar Saldo</button>
+            </div>
+            <p id="msg-fc-saldo" class="msg-form"></p>
+          </div>
+
+          <div id="fc-alerta-deficit" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;font-size:13px;color:#991b1b;margin-bottom:20px;font-weight:600;"></div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Projeção</h3>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="fc-horizonte" class="form-input-style" style="width:auto;font-size:12px;" onchange="carregarProjecaoFluxoCaixa()">
+                  <option value="30">Próximos 30 dias</option>
+                  <option value="60">Próximos 60 dias</option>
+                  <option value="90">Próximos 90 dias</option>
+                </select>
+                <button type="button" class="btn-refresh" onclick="carregarProjecaoFluxoCaixa()">↺ Atualizar</button>
+              </div>
+            </div>
+            <canvas id="fc-grafico" height="90"></canvas>
+          </div>
+
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Entradas Previstas</th><th>Saídas Previstas</th><th>Saldo Projetado</th></tr></thead>
+                <tbody id="tbody-fluxo-caixa"><tr><td colspan="4" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
             </div>
           </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _graficoFluxoCaixa = null;
+
+    async function carregarSaldoAtual() {
+      const el = document.getElementById('fc-saldo-atual-info');
+      const { data, error } = await db.from('fluxo_caixa_saldo').select('*').order('data_referencia', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) { el.textContent = 'Erro ao carregar: ' + error.message; return null; }
+      if (!data) {
+        el.innerHTML = 'Nenhum saldo cadastrado ainda — informe o saldo atual abaixo para começar a projeção.';
+        return null;
+      }
+      el.innerHTML = `<strong>R$ ${Number(data.saldo).toFixed(2).replace('.', ',')}</strong> — referência: ${fmtDate(data.data_referencia)}${data.observacoes ? ' — ' + escapeHTML(data.observacoes) : ''}`;
+      return data;
+    }
+
+    async function salvarSaldoFluxoCaixa() {
+      const saldo = Number(document.getElementById('fc-novo-saldo').value);
+      const data = document.getElementById('fc-novo-saldo-data').value || new Date().toISOString().slice(0,10);
+      if (isNaN(saldo)) { msgForm('msg-fc-saldo', 'Informe um valor de saldo válido.', 'red'); return; }
+
+      const { error } = await db.from('fluxo_caixa_saldo').insert([{
+        saldo, data_referencia: data,
+        observacoes: document.getElementById('fc-novo-saldo-obs').value.trim() || null,
+      }]);
+      if (error) { msgForm('msg-fc-saldo', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      msgForm('msg-fc-saldo', '✓ Saldo atualizado!', 'green');
+      document.getElementById('fc-novo-saldo').value = '';
+      document.getElementById('fc-novo-saldo-obs').value = '';
+      await carregarSaldoAtual();
+      await carregarProjecaoFluxoCaixa();
+    }
+
+    async function carregarProjecaoFluxoCaixa() {
+      const tbody = document.getElementById('tbody-fluxo-caixa');
+      tbody.innerHTML = '<tr><td colspan="4" class="td-loading">Carregando...</td></tr>';
+      document.getElementById('fc-alerta-deficit').style.display = 'none';
+
+      const saldoAtual = await carregarSaldoAtual();
+      const saldoInicial = saldoAtual ? Number(saldoAtual.saldo) : 0;
+      const dataReferencia = saldoAtual ? saldoAtual.data_referencia : new Date().toISOString().slice(0,10);
+
+      const horizonteDias = Number(document.getElementById('fc-horizonte').value);
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const inicio = new Date(Math.max(new Date(dataReferencia + 'T00:00:00').getTime(), hoje.getTime()));
+      const fim = new Date(inicio); fim.setDate(fim.getDate() + horizonteDias);
+      const inicioStr = inicio.toISOString().slice(0,10);
+      const fimStr = fim.toISOString().slice(0,10);
+
+      const [entradasRes, saidasRes] = await Promise.all([
+        db.from('contas_receber_parcelas').select('valor, data_vencimento').in('status', ['aberta','vencida']).gte('data_vencimento', inicioStr).lte('data_vencimento', fimStr),
+        db.from('contas_pagar_parcelas').select('valor, data_vencimento').in('status', ['aberta','vencida']).gte('data_vencimento', inicioStr).lte('data_vencimento', fimStr),
+      ]);
+
+      const porData = {};
+      (entradasRes.data || []).forEach(p => {
+        if (!p.data_vencimento) return;
+        porData[p.data_vencimento] = porData[p.data_vencimento] || { entradas: 0, saidas: 0 };
+        porData[p.data_vencimento].entradas += Number(p.valor || 0);
+      });
+      (saidasRes.data || []).forEach(p => {
+        if (!p.data_vencimento) return;
+        porData[p.data_vencimento] = porData[p.data_vencimento] || { entradas: 0, saidas: 0 };
+        porData[p.data_vencimento].saidas += Number(p.valor || 0);
+      });
+
+      const datasOrdenadas = Object.keys(porData).sort();
+      let saldoCorrente = saldoInicial;
+      let primeiraDataDeficit = null;
+      const linhas = [];
+
+      for (const data of datasOrdenadas) {
+        const { entradas, saidas } = porData[data];
+        saldoCorrente += entradas - saidas;
+        if (saldoCorrente < 0 && !primeiraDataDeficit) primeiraDataDeficit = data;
+        linhas.push({ data, entradas, saidas, saldo: saldoCorrente });
+      }
+
+      if (!linhas.length) {
+        tbody.innerHTML = `<tr><td colspan="4" class="td-loading">Nenhum recebimento ou pagamento previsto nos próximos ${horizonteDias} dias. Saldo permanece em R$ ${saldoInicial.toFixed(2).replace('.', ',')}.</td></tr>`;
+      } else {
+        tbody.innerHTML = linhas.map(l => `<tr${l.saldo < 0 ? ' style="background:#fef2f2;"' : ''}>
+          <td>${fmtDate(l.data)}</td>
+          <td style="color:#059669;">${l.entradas ? '+R$ ' + l.entradas.toFixed(2).replace('.', ',') : '—'}</td>
+          <td style="color:#dc2626;">${l.saidas ? '-R$ ' + l.saidas.toFixed(2).replace('.', ',') : '—'}</td>
+          <td style="font-weight:700;${l.saldo < 0 ? 'color:#dc2626;' : ''}">R$ ${l.saldo.toFixed(2).replace('.', ',')}</td>
+        </tr>`).join('');
+      }
+
+      if (primeiraDataDeficit) {
+        const el = document.getElementById('fc-alerta-deficit');
+        el.textContent = `⚠️ Déficit projetado: o saldo fica negativo a partir de ${fmtDate(primeiraDataDeficit)}, considerando os recebimentos e pagamentos já cadastrados.`;
+        el.style.display = 'block';
+      }
+
+      // Gráfico — inclui o ponto inicial (data de referência do saldo) para dar contexto visual.
+      const labels = [fmtDate(dataReferencia), ...linhas.map(l => fmtDate(l.data))];
+      const valores = [saldoInicial, ...linhas.map(l => l.saldo)];
+      if (_graficoFluxoCaixa) _graficoFluxoCaixa.destroy();
+      _graficoFluxoCaixa = new Chart(document.getElementById('fc-grafico'), {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'Saldo Projetado (R$)', data: valores, borderColor: '#1a56db', backgroundColor: 'rgba(26,86,219,0.08)', fill: true, tension: 0.2 }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => 'R$ ' + v } } } },
+      });
+    }
+
+    document.getElementById('btn-salvar-saldo').addEventListener('click', salvarSaldoFluxoCaixa);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('fc-novo-saldo-data').value = new Date().toISOString().slice(0,10);
+      await carregarProjecaoFluxoCaixa();
+    });
+  </script>
 </body>
 </html>
