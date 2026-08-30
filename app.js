@@ -5637,6 +5637,27 @@ async function carregarKpiObrasDashboard() {
 }
 
 // ===================== DASHBOARD — CONTAS A PAGAR (Etapa 14.2) =====================
+// ===================== DASHBOARD — CONTAS A RECEBER (Etapa 14.3) =====================
+async function carregarKpisContasReceberDashboard() {
+  if (!$('dash-txt-cr-a-receber')) return;
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const em7 = new Date(hoje); em7.setDate(em7.getDate() + 7);
+  const hojeStr = hoje.toISOString().slice(0,10);
+  const em7Str = em7.toISOString().slice(0,10);
+
+  const [aReceber, vencidas, abertas] = await Promise.all([
+    db.from('contas_receber_parcelas').select('valor').eq('status', 'aberta').gte('data_vencimento', hojeStr).lte('data_vencimento', em7Str),
+    db.from('contas_receber_parcelas').select('valor').in('status', ['aberta','vencida']).lt('data_vencimento', hojeStr),
+    db.from('contas_receber_parcelas').select('valor').in('status', ['aberta','vencida']),
+  ]);
+
+  const soma = (res) => (res.data || []).reduce((acc, r) => acc + Number(r.valor || 0), 0);
+  if ($('dash-txt-cr-a-receber'))   $('dash-txt-cr-a-receber').textContent   = 'R$ ' + soma(aReceber).toFixed(2).replace('.', ',');
+  if ($('dash-txt-cr-vencidas'))    $('dash-txt-cr-vencidas').textContent    = 'R$ ' + soma(vencidas).toFixed(2).replace('.', ',');
+  if ($('dash-txt-cr-total-aberto')) $('dash-txt-cr-total-aberto').textContent = 'R$ ' + soma(abertas).toFixed(2).replace('.', ',');
+}
+
 async function carregarKpisContasPagarDashboard() {
   if (!$('dash-txt-cp-a-vencer')) return;
 

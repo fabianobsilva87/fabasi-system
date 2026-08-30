@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Contas a receber — clientes, contratos, medições e parcelas.">
+    <meta name="description" content="Contas a receber da empresa — clientes, parcelas, vencimentos, centro de custo e plano de contas — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,314 @@
       <div class="topbar no-print"><h2>💰 Contas a Receber</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>💰 Contas a Receber</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Financeiro — direitos a receber gerados por contratos e medições de obra.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> vínculo com contrato/medição, parcelas, recebimento, inadimplência.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Lançamento manual por enquanto — Medição de Obra e faturamento de O.S. ainda não geram receita automaticamente
+            (nenhum dos dois módulos tem campo de valor implementado ainda). Quando isso existir, o mesmo padrão de
+            espelho automático usado no Contas a Pagar entra aqui também.
+          </p>
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">⏳</div>
+              <p class="dash-card-title">A Receber (7 dias)</p>
+              <h3 id="cr-txt-a-receber" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Vencidas (Inadimplência)</p>
+              <h3 id="cr-txt-vencidas" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-success">
+              <div class="dash-card-icon">✅</div>
+              <p class="dash-card-title">Recebido no Mês</p>
+              <h3 id="cr-txt-recebido-mes" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+            <div class="dash-card" style="border-top:3px solid #0891b2;">
+              <div class="dash-card-icon">💰</div>
+              <p class="dash-card-title">Total em Aberto</p>
+              <h3 id="cr-txt-total-aberto" class="dash-card-value" style="font-size:18px;">—</h3>
             </div>
           </div>
+
+          <div class="card" id="foco-formulario-cr">
+            <h3 class="card-title">💰 Nova Conta a Receber (lançamento manual)</h3>
+            <input type="hidden" id="cr-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="cr-descricao">Descrição *</label><input type="text" id="cr-descricao" placeholder="Ex: Medição 3 — Obra Reforma Galpão"></div>
+              <div class="form-group"><label for="cr-cliente">Cliente (Contratante) *</label><select id="cr-cliente" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="cr-centro-custo">Centro de Custo *</label><select id="cr-centro-custo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="cr-plano-conta">Conta (Plano de Contas)</label><select id="cr-plano-conta" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="cr-valor-total">Valor Total (R$) *</label><input type="number" id="cr-valor-total" step="0.01" placeholder="0,00"></div>
+              <div class="form-group"><label for="cr-num-parcelas">Nº de Parcelas</label><input type="number" id="cr-num-parcelas" min="1" value="1"></div>
+              <div class="form-group"><label for="cr-primeiro-vencimento">1º Vencimento *</label><input type="date" id="cr-primeiro-vencimento"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="cr-observacoes">Observações</label><textarea id="cr-observacoes" rows="2"></textarea></div>
+            </div>
+            <p style="font-size:11px;color:#a0aec0;margin-top:-6px;margin-bottom:14px;">As parcelas são geradas automaticamente (valor dividido igualmente, vencimentos a cada 30 dias a partir do 1º vencimento). Ajustes finos de parcela ficam disponíveis depois de salvar, no painel "Parcelas".</p>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-cr" class="btn-primary" style="background:#059669;">💾 Registrar Conta a Receber</button>
+              <button type="button" id="btn-cancelar-cr" class="btn-secondary" style="display:none;" onclick="resetarFormContaReceber()">✕ Cancelar</button>
+            </div>
+            <p id="msg-cr" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;">
+                <label for="cr-filtro-status">Status</label>
+                <select id="cr-filtro-status" class="form-input-style" style="width:auto;" onchange="carregarContasReceber()">
+                  <option value="">Todos</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="recebido_parcial">Recebido Parcial</option>
+                  <option value="recebido">Recebido</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="cr-filtro-cliente">Cliente</label>
+                <select id="cr-filtro-cliente" class="form-input-style" style="width:auto;" onchange="carregarContasReceber()"><option value="">Todos</option></select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="cr-filtro-centro-custo">Centro de Custo</label>
+                <select id="cr-filtro-centro-custo" class="form-input-style" style="width:auto;" onchange="carregarContasReceber()"><option value="">Todos</option></select>
+              </div>
+              <button type="button" class="btn-refresh" onclick="carregarContasReceber()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Descrição</th><th>Cliente</th><th>Centro de Custo</th><th>Origem</th><th>Valor Total</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-contas-receber"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card" id="painel-parcelas-cr" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+              <h3 class="card-title" id="painel-parcelas-cr-titulo" style="margin:0;">Parcelas</h3>
+              <button type="button" class="btn-secondary" onclick="fecharPainelParcelasCR()">✕ Fechar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Recebimento</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-parcelas-cr"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _contasReceberCache = [];
+    let _parcelasPainelCRAtualContaId = null;
+
+    const STATUS_CR_LABEL = { pendente: 'Pendente', recebido_parcial: 'Recebido Parcial', recebido: 'Recebido', cancelado: 'Cancelado' };
+    const STATUS_CR_COR = { pendente: 'warning', recebido_parcial: 'warning', recebido: 'success', cancelado: 'danger' };
+    const ORIGEM_CR_LABEL = { manual: '✍️ Manual', obra: '🏗️ Obra (Medição)', os: '🔧 O.S.' };
+    const STATUS_PARCELA_CR_LABEL = { aberta: 'Aberta', recebida: 'Recebida', vencida: 'Vencida', cancelada: 'Cancelada' };
+    const STATUS_PARCELA_CR_COR = { aberta: '', recebida: 'success', vencida: 'danger', cancelada: '' };
+
+    // ===================== SELECTS =====================
+    async function carregarSelectsContaReceber() {
+      const { data: clientes } = await db.from('empresas').select('id,razao_social').eq('tipo', 'contratante').eq('ativa', true).order('razao_social');
+      const opcoesClientes = (clientes || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.razao_social)}</option>`).join('');
+      document.getElementById('cr-cliente').innerHTML = '<option value="">-- Selecione --</option>' + opcoesClientes;
+      document.getElementById('cr-filtro-cliente').innerHTML = '<option value="">Todos</option>' + opcoesClientes;
+
+      const { data: ccs } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+      const opcoesCC = (ccs || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+      document.getElementById('cr-centro-custo').innerHTML = '<option value="">-- Selecione --</option>' + opcoesCC;
+      document.getElementById('cr-filtro-centro-custo').innerHTML = '<option value="">Todos</option>' + opcoesCC;
+
+      const { data: contas } = await db.from('plano_contas').select('id,codigo,nome,nivel,tipo').eq('ativo', true).eq('tipo', 'receita').order('codigo');
+      document.getElementById('cr-plano-conta').innerHTML = '<option value="">-- Selecione --</option>' +
+        (contas || []).filter(c => c.nivel > 1).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+    }
+
+    // ===================== KPIs =====================
+    async function carregarKpisContasReceber() {
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const em7 = new Date(hoje); em7.setDate(em7.getDate() + 7);
+      const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const hojeStr = hoje.toISOString().slice(0,10);
+      const em7Str = em7.toISOString().slice(0,10);
+      const inicioMesStr = inicioMes.toISOString().slice(0,10);
+
+      const [aReceber, vencidas, recebidasMes, abertas] = await Promise.all([
+        db.from('contas_receber_parcelas').select('valor').eq('status', 'aberta').gte('data_vencimento', hojeStr).lte('data_vencimento', em7Str),
+        db.from('contas_receber_parcelas').select('valor').in('status', ['aberta','vencida']).lt('data_vencimento', hojeStr),
+        db.from('contas_receber_parcelas').select('valor_recebido').eq('status', 'recebida').gte('data_recebimento', inicioMesStr),
+        db.from('contas_receber_parcelas').select('valor').in('status', ['aberta','vencida']),
+      ]);
+
+      const soma = (res, campo) => (res.data || []).reduce((acc, r) => acc + Number(r[campo] || 0), 0);
+      document.getElementById('cr-txt-a-receber').textContent = 'R$ ' + soma(aReceber, 'valor').toFixed(2).replace('.', ',');
+      document.getElementById('cr-txt-vencidas').textContent = 'R$ ' + soma(vencidas, 'valor').toFixed(2).replace('.', ',');
+      document.getElementById('cr-txt-recebido-mes').textContent = 'R$ ' + soma(recebidasMes, 'valor_recebido').toFixed(2).replace('.', ',');
+      document.getElementById('cr-txt-total-aberto').textContent = 'R$ ' + soma(abertas, 'valor').toFixed(2).replace('.', ',');
+    }
+
+    // ===================== FORM (lançamento manual) =====================
+    async function salvarContaReceber() {
+      const descricao = document.getElementById('cr-descricao').value.trim();
+      const clienteId = document.getElementById('cr-cliente').value;
+      const centroCustoId = document.getElementById('cr-centro-custo').value;
+      const valorTotal = Number(document.getElementById('cr-valor-total').value);
+      const primeiroVencimento = document.getElementById('cr-primeiro-vencimento').value;
+      const numParcelas = Math.max(1, Number(document.getElementById('cr-num-parcelas').value) || 1);
+
+      if (!descricao) { msgForm('msg-cr', 'Informe a descrição.', 'red'); return; }
+      if (!clienteId) { msgForm('msg-cr', 'Selecione o cliente.', 'red'); return; }
+      if (!centroCustoId) { msgForm('msg-cr', 'Selecione o centro de custo.', 'red'); return; }
+      if (!valorTotal || valorTotal <= 0) { msgForm('msg-cr', 'Informe um valor total válido.', 'red'); return; }
+      if (!primeiroVencimento) { msgForm('msg-cr', 'Informe o 1º vencimento.', 'red'); return; }
+
+      const payload = {
+        descricao, cliente_id: clienteId, centro_custo_id: centroCustoId,
+        plano_conta_id: document.getElementById('cr-plano-conta').value || null,
+        origem: 'manual', valor_total: valorTotal, data_emissao: new Date().toISOString().slice(0,10),
+        status: 'pendente', observacoes: document.getElementById('cr-observacoes').value.trim() || null,
+      };
+
+      const { data: novaConta, error } = await db.from('contas_receber').insert([payload]).select('id').single();
+      if (error) { msgForm('msg-cr', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      const valorParcela = Math.round((valorTotal / numParcelas) * 100) / 100;
+      const parcelas = [];
+      for (let i = 0; i < numParcelas; i++) {
+        const venc = new Date(primeiroVencimento + 'T00:00:00'); venc.setDate(venc.getDate() + 30 * i);
+        parcelas.push({ conta_receber_id: novaConta.id, numero_parcela: i + 1, valor: valorParcela, data_vencimento: venc.toISOString().slice(0,10), status: 'aberta' });
+      }
+      const { error: errParcelas } = await db.from('contas_receber_parcelas').insert(parcelas);
+      if (errParcelas) { msgForm('msg-cr', 'Conta criada, mas houve erro ao gerar parcelas: ' + errParcelas.message, 'red'); }
+      else { msgForm('msg-cr', '✓ Conta a receber registrada com ' + numParcelas + ' parcela(s)!', 'green'); }
+
+      resetarFormContaReceber();
+      await carregarContasReceber();
+      await carregarKpisContasReceber();
+    }
+
+    function resetarFormContaReceber() {
+      document.getElementById('cr-id-edicao').value = '';
+      ['cr-descricao','cr-valor-total','cr-primeiro-vencimento','cr-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cr-cliente').value = '';
+      document.getElementById('cr-centro-custo').value = '';
+      document.getElementById('cr-plano-conta').value = '';
+      document.getElementById('cr-num-parcelas').value = 1;
+    }
+
+    // ===================== LISTAGEM =====================
+    async function carregarContasReceber() {
+      const tbody = document.getElementById('tbody-contas-receber'); if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+      const status = document.getElementById('cr-filtro-status').value;
+      const clienteId = document.getElementById('cr-filtro-cliente').value;
+      const centroCusto = document.getElementById('cr-filtro-centro-custo').value;
+
+      let query = db.from('contas_receber').select('*, empresas(razao_social), centros_custo(codigo,nome,tipo)').order('created_at', { ascending: false }).limit(200);
+      if (status) query = query.eq('status', status);
+      if (clienteId) query = query.eq('cliente_id', clienteId);
+      if (centroCusto) query = query.eq('centro_custo_id', centroCusto);
+
+      const { data, error } = await query;
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _contasReceberCache = data || [];
+      if (!_contasReceberCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma conta a receber encontrada.</td></tr>'; return; }
+
+      tbody.innerHTML = _contasReceberCache.map(c => `<tr>
+        <td><strong>${escapeHTML(c.descricao)}</strong></td>
+        <td>${escapeHTML(c.empresas?.razao_social || '—')}</td>
+        <td>${c.centros_custo ? (c.centros_custo.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(c.centros_custo.nome) : '—'}</td>
+        <td><span class="tag-badge">${ORIGEM_CR_LABEL[c.origem] || escapeHTML(c.origem)}</span></td>
+        <td>R$ ${Number(c.valor_total || 0).toFixed(2).replace('.', ',')}</td>
+        <td><span class="tag-badge ${STATUS_CR_COR[c.status] || ''}">${STATUS_CR_LABEL[c.status] || escapeHTML(c.status)}</span></td>
+        <td>
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirPainelParcelasCR('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">📋 Parcelas</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== PAINEL DE PARCELAS =====================
+    function fecharPainelParcelasCR() {
+      document.getElementById('painel-parcelas-cr').style.display = 'none';
+      _parcelasPainelCRAtualContaId = null;
+    }
+
+    async function abrirPainelParcelasCR(contaReceberId, descricao) {
+      _parcelasPainelCRAtualContaId = contaReceberId;
+      document.getElementById('painel-parcelas-cr-titulo').textContent = 'Parcelas — ' + descricao;
+      document.getElementById('painel-parcelas-cr').style.display = 'block';
+      await carregarParcelasPainelCR();
+      document.getElementById('painel-parcelas-cr').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function carregarParcelasPainelCR() {
+      const tbody = document.getElementById('tbody-parcelas-cr'); if (!tbody || !_parcelasPainelCRAtualContaId) return;
+      tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Carregando...</td></tr>';
+      const { data, error } = await db.from('contas_receber_parcelas').select('*').eq('conta_receber_id', _parcelasPainelCRAtualContaId).order('numero_parcela');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma parcela cadastrada.</td></tr>'; return; }
+
+      tbody.innerHTML = data.map(p => `<tr>
+        <td>${p.numero_parcela}</td>
+        <td>R$ ${Number(p.valor || 0).toFixed(2).replace('.', ',')}</td>
+        <td>${fmtDate(p.data_vencimento)}</td>
+        <td><span class="tag-badge ${STATUS_PARCELA_CR_COR[p.status] || ''}">${STATUS_PARCELA_CR_LABEL[p.status] || escapeHTML(p.status)}</span></td>
+        <td style="font-size:11px;color:#718096;">${p.status === 'recebida' ? `${fmtDate(p.data_recebimento)} · R$ ${Number(p.valor_recebido || 0).toFixed(2).replace('.', ',')}${p.forma_recebimento ? ' · ' + escapeHTML(p.forma_recebimento) : ''}` : '—'}</td>
+        <td>${p.status !== 'recebida' && p.status !== 'cancelada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarRecebimentoParcela('${escapeHTML(p.id)}', ${p.valor})">💰 Registrar Recebimento</button>` : '—'}</td>
+      </tr>`).join('');
+    }
+
+    async function registrarRecebimentoParcela(parcelaId, valorOriginal) {
+      const valorRecebidoTexto = prompt('Valor efetivamente recebido (R$):', valorOriginal);
+      if (valorRecebidoTexto === null) return;
+      const valorRecebido = Number(valorRecebidoTexto.replace(',', '.'));
+      if (!valorRecebido || valorRecebido <= 0) { toast('Valor inválido.', 'erro'); return; }
+
+      const jurosTexto = prompt('Juros por atraso (R$) — opcional:', '0');
+      const multaTexto = prompt('Multa (R$) — opcional:', '0');
+      const descontoTexto = prompt('Desconto concedido (R$) — opcional:', '0');
+      const formaRecebimento = prompt('Forma de recebimento (pix, boleto, ted, cartão, dinheiro):', 'pix');
+
+      const payload = {
+        status: 'recebida', data_recebimento: new Date().toISOString().slice(0,10), valor_recebido: valorRecebido,
+        juros: Number((jurosTexto || '0').replace(',', '.')) || 0,
+        multa: Number((multaTexto || '0').replace(',', '.')) || 0,
+        desconto: Number((descontoTexto || '0').replace(',', '.')) || 0,
+        forma_recebimento: (formaRecebimento || '').trim() || null,
+      };
+
+      const { data: parcela, error } = await db.from('contas_receber_parcelas').update(payload).eq('id', parcelaId).select('*').single();
+      if (error) { toast('Erro ao registrar recebimento: ' + error.message, 'erro'); return; }
+
+      await atualizarStatusContaReceberAgregado(parcela.conta_receber_id);
+      toast('Recebimento registrado!', 'sucesso');
+      await carregarParcelasPainelCR();
+      await carregarContasReceber();
+      await carregarKpisContasReceber();
+    }
+
+    async function atualizarStatusContaReceberAgregado(contaReceberId) {
+      const { data: parcelas } = await db.from('contas_receber_parcelas').select('status').eq('conta_receber_id', contaReceberId);
+      if (!parcelas || !parcelas.length) return;
+      const todasRecebidas = parcelas.every(p => p.status === 'recebida' || p.status === 'cancelada');
+      const algumaRecebida = parcelas.some(p => p.status === 'recebida');
+      const novoStatus = todasRecebidas ? 'recebido' : (algumaRecebida ? 'recebido_parcial' : null);
+      if (novoStatus) await db.from('contas_receber').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', contaReceberId);
+    }
+
+    document.getElementById('btn-salvar-cr').addEventListener('click', salvarContaReceber);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsContaReceber();
+      await carregarKpisContasReceber();
+      await carregarContasReceber();
+    });
+  </script>
 </body>
 </html>
