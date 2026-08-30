@@ -70,7 +70,9 @@
             <div class="btn-row" style="margin-top:16px;">
               <button type="button" class="btn-primary" onclick="cadastrarCertificadoFiscal()">📤 Cadastrar Certificado</button>
               <button type="button" class="btn-secondary" onclick="testarCertificadoFiscal()">🔎 Testar Certificado</button>
+              <button type="button" class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="testarConexaoSefaz()">📡 Testar Conexão SEFAZ (real)</button>
             </div>
+            <p style="font-size:11px;color:#a0aec0;margin-top:6px;">"Testar Conexão SEFAZ" faz uma chamada real e de baixíssimo custo (NFeStatusServico — não consome cota de importação de notas) para confirmar que o certificado autentica de verdade junto à SEFAZ-MT, em homologação.</p>
             <p id="msg-fiscal-certificado" class="msg-form"></p>
           </div>
 
@@ -172,6 +174,23 @@
         await carregarCertificadoFiscal();
       } catch (e) {
         msgForm('msg-fiscal-certificado', 'Erro inesperado: ' + e.message, 'red');
+      }
+    }
+
+    async function testarConexaoSefaz() {
+      msgForm('msg-fiscal-certificado', 'Conectando na SEFAZ-MT (homologação)...', 'green');
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const resp = await fetch('/api/fiscal-sefaz-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+          body: JSON.stringify({ ambiente: document.getElementById('fiscal-cert-ambiente').value }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) { msgForm('msg-fiscal-certificado', data.error || 'Falha na chamada à SEFAZ.', 'red'); return; }
+        msgForm('msg-fiscal-certificado', `✓ SEFAZ respondeu! cStat=${data.cStat} — "${data.xMotivo}" (${data.duracao_ms}ms)${data.servico_em_operacao ? ' — serviço em operação normal.' : ' — atenção: serviço pode estar fora do ar ou em contingência.'}`, data.servico_em_operacao ? 'green' : 'red');
+      } catch (e) {
+        msgForm('msg-fiscal-certificado', 'Erro inesperado ao chamar /api/fiscal-sefaz-status: ' + e.message, 'red');
       }
     }
 
