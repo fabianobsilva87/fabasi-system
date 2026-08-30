@@ -85,18 +85,10 @@ function extrairCertEChavePem(pfxBuffer, senha) {
 
 function montarEnvelopeSoap(ambiente) {
   const tpAmb = ambiente === 'producao' ? '1' : '2';
-  return `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">
-      <consStatServ xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-        <tpAmb>${tpAmb}</tpAmb>
-        <cUF>${CUF_MT}</cUF>
-        <xServ>STATUS</xServ>
-      </consStatServ>
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>`;
+  // A SEFAZ rejeita (cStat 588) qualquer espaço/quebra de linha entre as
+  // tags da mensagem — precisa ser compacto, sem indentação nenhuma.
+  const consStatServ = `<consStatServ xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><tpAmb>${tpAmb}</tpAmb><cUF>${CUF_MT}</cUF><xServ>STATUS</xServ></consStatServ>`;
+  return `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">${consStatServ}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 }
 
 function extrairTag(xml, tag) {
