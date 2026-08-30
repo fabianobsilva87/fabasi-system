@@ -186,7 +186,13 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
           body: JSON.stringify({ ambiente: document.getElementById('fiscal-cert-ambiente').value }),
         });
-        const data = await resp.json();
+        const textoResposta = await resp.text();
+        let data;
+        try { data = JSON.parse(textoResposta); }
+        catch (_e) {
+          msgForm('msg-fiscal-certificado', `A resposta não veio em JSON (HTTP ${resp.status}) — provável sinal de que a function /api/fiscal-sefaz-status ainda não foi publicada no Vercel (ou as variáveis de ambiente não foram configuradas). Início da resposta: "${textoResposta.slice(0, 150)}"`, 'red');
+          return;
+        }
         if (!resp.ok) { msgForm('msg-fiscal-certificado', data.error || 'Falha na chamada à SEFAZ.', 'red'); return; }
         msgForm('msg-fiscal-certificado', `✓ SEFAZ respondeu! cStat=${data.cStat} — "${data.xMotivo}" (${data.duracao_ms}ms)${data.servico_em_operacao ? ' — serviço em operação normal.' : ' — atenção: serviço pode estar fora do ar ou em contingência.'}`, data.servico_em_operacao ? 'green' : 'red');
       } catch (e) {
