@@ -135,8 +135,8 @@
       // checkpoint manual — assim o usuário não precisa recalcular o saldo
       // na mão toda vez que registra um recebimento/pagamento.
       const [recebidosDesde, pagosDesde] = await Promise.all([
-        db.from('contas_receber_parcelas').select('valor_recebido').eq('status', 'recebida').gt('data_recebimento', dataReferencia),
-        db.from('contas_pagar_parcelas').select('valor_pago').eq('status', 'paga').gt('data_pagamento', dataReferencia),
+        db.from('contas_receber_parcelas').select('valor_recebido').eq('status', 'recebida').gte('data_recebimento', dataReferencia),
+        db.from('contas_pagar_parcelas').select('valor_pago').eq('status', 'paga').gte('data_pagamento', dataReferencia),
       ]);
       const somaRecebidos = (recebidosDesde.data || []).reduce((acc, p) => acc + Number(p.valor_recebido || 0), 0);
       const somaPagos = (pagosDesde.data || []).reduce((acc, p) => acc + Number(p.valor_pago || 0), 0);
