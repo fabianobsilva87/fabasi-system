@@ -287,9 +287,19 @@
     }
 
     async function excluirContaPagar(id, descricao) {
-      if (!confirm(`Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.`)) return;
+      const c = _contasPagarCache.find(x => x.id === id);
+      let aviso = `Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.`;
+      if (c?.origem === 'ordem_compra') aviso += '\n\n⚠️ Essa conta veio de uma Ordem de Compra. Se as parcelas dessa OC forem editadas de novo depois, ela pode ser recriada automaticamente pelo espelho.';
+      if (c?.origem === 'fiscal') aviso += '\n\n⚠️ Essa conta veio de um documento Fiscal. Ao excluir, o documento fica liberado para gerar uma nova Conta a Pagar novamente, se precisar.';
+      if (!confirm(aviso)) return;
+
       const { error } = await db.from('contas_pagar').delete().eq('id', id);
       if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+
+      if (c?.origem === 'fiscal' && c.origem_fiscal_documento_id) {
+        await db.from('fiscal_documentos').update({ gerou_conta_pagar: false }).eq('id', c.origem_fiscal_documento_id);
+      }
+
       toast('Conta a pagar excluída.', 'sucesso');
       await carregarContasPagar();
       await carregarKpisContasPagar();
@@ -337,7 +347,7 @@
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirPainelParcelas('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">📋 Parcelas</button>
           ${c.origem === 'manual' ? `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContaPagar('${escapeHTML(c.id)}')">✏️</button>` : ''}
-          ${c.origem === 'manual' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaPagar('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>` : ''}
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaPagar('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>
           ${c.status === 'pendente_aprovacao' && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarContaPagar('${escapeHTML(c.id)}')">✓ Aprovar</button>` : ''}
           ${c.status === 'pendente_aprovacao' && !podeAprovar() ? `<span style="font-size:11px;color:#a0aec0;">não aprovada</span>` : ''}
         </td>

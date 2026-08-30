@@ -311,7 +311,7 @@
         <td>
           <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="abrirPainelParcelasCR('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">📋 Parcelas</button>
           ${c.origem === 'manual' ? `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContaReceber('${escapeHTML(c.id)}')">✏️</button>` : ''}
-          ${c.origem === 'manual' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaReceber('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>` : ''}
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContaReceber('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>
         </td>
       </tr>`).join('');
     }
