@@ -74,7 +74,7 @@
               <button type="button" class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="testarConexaoSefaz()">📡 Testar Conexão SEFAZ (real)</button>
             </div>
             <p style="font-size:11px;color:#a0aec0;margin-top:6px;">"Testar Conexão SEFAZ" faz uma chamada real e de baixíssimo custo (NFeStatusServico — não consome cota de importação de notas) para confirmar que o certificado autentica de verdade junto à SEFAZ-MT, em homologação.</p>
-            <p id="msg-fiscal-certificado" class="msg-form"></p>
+            <p id="msg-fiscal-certificado" class="msg-form" style="white-space:pre-wrap;"></p>
           </div>
 
           <div class="card">
@@ -219,7 +219,12 @@
           return;
         }
         if (resp.status === 429) { msgForm('msg-fiscal-certificado', '⏳ ' + (data.error || 'Aguardando janela de 1h.') + (data.proxima_tentativa_permitida ? ' Próxima tentativa liberada em: ' + new Date(data.proxima_tentativa_permitida).toLocaleString('pt-BR') : ''), 'red'); return; }
-        if (!resp.ok) { msgForm('msg-fiscal-certificado', data.error || 'Falha na sincronização.', 'red'); return; }
+        if (!resp.ok) {
+          let msg = data.error || 'Falha na sincronização.';
+          if (data.corpo_bruto) msg += '\n\nResposta bruta da SEFAZ (primeiros 2000 caracteres):\n' + data.corpo_bruto;
+          msgForm('msg-fiscal-certificado', msg, 'red');
+          return;
+        }
         msgForm('msg-fiscal-certificado', `✓ Sincronizado! cStat=${data.cStat} — ${data.nada_novo ? 'nenhum documento novo (aguardando 1h para a próxima consulta, conforme regra da SEFAZ).' : data.processados + ' documento(s) processado(s), ' + data.ignorados_duplicados + ' já existiam.'}`, 'green');
         await carregarSincronizacaoFiscal();
       } catch (e) {

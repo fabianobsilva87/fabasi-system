@@ -189,6 +189,11 @@ module.exports = async function handler(req, res) {
       await supabaseAdmin.from('fiscal_sync_state').update({
         status: 'erro', mensagem_erro: `cStat=${cStat}: ${xMotivo}`, updated_at: new Date().toISOString(),
       }).eq('id', syncState.id);
+      await supabaseAdmin.from('fiscal_logs').insert([{
+        empresa_id: cert.empresa_id, execucao_id: execucaoId, nivel: 'erro',
+        mensagem: `distNSU (${ambiente}) — resposta inesperada, cStat=${cStat}`,
+        metadados: { http_status: resposta.statusCode, corpo_bruto: resposta.body.slice(0, 4000) },
+      }]);
       res.status(502).json({ error: `SEFAZ retornou cStat=${cStat}: ${xMotivo}`, corpo_bruto: resposta.body.slice(0, 2000) });
       return;
     }
