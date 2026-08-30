@@ -42,3 +42,24 @@ Se o projeto já está conectado a um repositório Git, só precisa dar `git pus
 
 Diferente do `NFeStatusServico` (baixíssimo custo, sem limite prático), o `distNSU` é o serviço que de fato importa as notas — e tem regras de uso restritas: se não houver nada novo (`ultNSU == maxNSU`), a SEFAZ exige esperar 1h antes de consultar de novo (rejeição 656, "consumo indevido"), e reconsultar antes disso reinicia essa espera. Precisa de controle de estado (`fiscal_sync_state`, já criado na Etapa 13.1) e assinatura da requisição, não só mTLS. Avise quando quiser seguir para essa etapa.
 
+## `/api/fiscal-distnsu-sync` — Etapa 13.4 completa (importação real de notas)
+
+⚠️ **Código não testado contra documentos reais.** A mecânica mTLS/envelope já foi validada (mesmo certificado, mesmo tipo de chamada), mas esta function nunca rodou contra o `distNSU` de verdade — só o `NFeStatusServico` foi confirmado.
+
+### O que é diferente do `NFeStatusServico`
+
+- **Endpoint é nacional** (Ambiente Nacional), não por estado: `hom.nfe.fazenda.gov.br` / `www1.nfe.fazenda.gov.br` — não usa mais o domínio `sefaz.mt.gov.br`.
+- **Não precisa de assinatura digital** na requisição (só mTLS) — confirmado via [nfephp-org/sped-nfe](https://github.com/nfephp-org/sped-nfe/blob/master/docs/metodos/DistDFe.md), biblioteca de referência da comunidade. Isso contraria o que o documento de arquitetura original supunha.
+- **Tem estado** (`fiscal_sync_state`, tabela criada na Etapa 13.1): cada chamada usa o `ultimo_nsu` salvo, e só avança esse valor depois de processar a resposta com sucesso — nunca antes.
+- **Regra de bloqueio de 1h** (rejeição 656, "consumo indevido"): se não há nada novo (`ultNSU == maxNSU`), a function já marca `proxima_tentativa_permitida` = agora + 1h automaticamente, e todo `POST` seguinte é recusado (HTTP 429) até esse horário passar — mesmo se você clicar em "Sincronizar Agora" de novo.
+- **Resposta pode vir com vários documentos gzipados** (`<docZip>`), cada um decodificado via `zlib.gunzipSync` e parseado (`api/_lib/parser-distnsu.js`, testado com XMLs sintéticos de `resNFe` e `procNFe` — não com XML real da SEFAZ).
+- **Limite de 30 documentos por chamada** (`MAX_DOCS_POR_CHAMADA`) — proteção contra timeout da function serverless. Se houver mais que isso pendente, uma próxima chamada continua de onde parou (o NSU só avança até onde foi processado).
+
+### Checklist de teste (com ainda mais cautela que o NFeStatusServico)
+
+1. **Primeira chamada em homologação**: clique em "Sincronizar Agora" em `fiscal-config.html`. É bem provável que não haja nenhum documento de teste disponível no ambiente de homologação vinculado ao seu certificado — nesse caso espera-se `cStat=137` ("nenhum documento localizado") e a resposta deve indicar `nada_novo: true`.
+2. **Confira no painel**: `fiscal_sync_state` deve ter uma linha com `ultimo_nsu`/`maior_nsu` preenchidos e `proxima_tentativa_permitida` setada (já que não há nada novo). `fiscal_logs` deve ter o registro da chamada.
+3. **NÃO clique de novo antes da 1h** — o botão vai recusar (HTTP 429) e mostrar quando pode tentar de novo, mas evite forçar isso via chamada direta à API ignorando a UI.
+4. Se em algum momento houver documentos de teste disponíveis (a SEFAZ eventualmente disponibiliza XMLs de exemplo em homologação para o certificado testado), confira: `fiscal_documentos` recebeu a linha, `fiscal_documento_itens` (se for `procNFe`) recebeu os itens, `fornecedores` ganhou um pré-cadastro se o CNPJ emitente não existia.
+5. **Se der erro de parsing** (documento processado mas campos vazios/errados): provável que o layout real do XML da SEFAZ tenha alguma diferença do que assumi em `api/_lib/parser-distnsu.js` — me manda o XML (depois de descompactado) que eu ajusto o parser.
+
