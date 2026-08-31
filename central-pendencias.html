@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Painel único com tudo que precisa de atenção ou aprovação no sistema.">
+    <meta name="description" content="Central de Pendências — alertas fiscais, aprovações de compras e financeiro, tudo num só lugar — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -33,26 +33,191 @@
     </aside>
 
     <main class="main-content">
-      <div class="topbar no-print"><h2>🔔 Central de Pendências</h2></div>
+      <div class="topbar no-print">
+        <h2>🔔 Central de Pendências</h2>
+        <button type="button" class="btn-refresh" onclick="carregarTudo()">↺ Atualizar Tudo</button>
+      </div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>🔔 Central de Pendências</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Uma das telas mais importantes do ERP — reúne pendências de todos os módulos num só lugar.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> pagamentos aguardando aprovação, materiais/fornecedores aguardando classificação, certificados vencendo, documentos fiscais com erro.
+          <!-- ═══════════ FISCAL (Etapa 13.10 — alertas inteligentes) ═══════════ -->
+          <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;">🧾 FISCAL</p>
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
+            <div class="dash-card" id="card-cert-vencendo" style="cursor:pointer;" onclick="location.href='fiscal-config.html'">
+              <div class="dash-card-icon">🔐</div>
+              <p class="dash-card-title">Certificado</p>
+              <h3 id="pc-txt-certificado" class="dash-card-value" style="font-size:14px;">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='fiscal-conferencia.html'">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Docs com Erro</p>
+              <h3 id="pc-txt-docs-erro" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='fiscal-conferencia.html'">
+              <div class="dash-card-icon">🏷️</div>
+              <p class="dash-card-title">Itens a Classificar</p>
+              <h3 id="pc-txt-itens-pendentes" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='fiscal-conferencia.html'">
+              <div class="dash-card-icon">🏭</div>
+              <p class="dash-card-title">Fornecedores a Confirmar</p>
+              <h3 id="pc-txt-fornecedores-confirmar" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='fornecedores.html'">
+              <div class="dash-card-icon">🚫</div>
+              <p class="dash-card-title">CNPJ Inapto/Baixado</p>
+              <h3 id="pc-txt-cnpj-inapto" class="dash-card-value">—</h3>
             </div>
           </div>
+          <div class="card" id="card-lista-fiscal" style="margin-bottom:24px;">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Alerta</th><th>Detalhe</th><th>Ação</th></tr></thead>
+                <tbody id="tbody-alertas-fiscal"><tr><td colspan="3" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ═══════════ COMPRAS ═══════════ -->
+          <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;">📦 COMPRAS</p>
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px;">
+            <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='requisicao-materiais.html'">
+              <div class="dash-card-icon">📋</div>
+              <p class="dash-card-title">Requisições de Material Pendentes</p>
+              <h3 id="pc-txt-rm-pendentes" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='solicitacoes-compra.html'">
+              <div class="dash-card-icon">🛒</div>
+              <p class="dash-card-title">Solicitações de Compra Pendentes</p>
+              <h3 id="pc-txt-sc-pendentes" class="dash-card-value">—</h3>
+            </div>
+          </div>
+
+          <!-- ═══════════ FINANCEIRO ═══════════ -->
+          <p class="dash-section-label" style="font-size:11px;font-weight:700;color:#a0aec0;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;">💰 FINANCEIRO</p>
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
+            <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='financeiro-contas-pagar.html'">
+              <div class="dash-card-icon">💵</div>
+              <p class="dash-card-title">Contas a Pagar p/ Aprovar</p>
+              <h3 id="pc-txt-cp-aprovar" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='financeiro-contas-pagar.html'">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Parcelas Vencidas a Pagar</p>
+              <h3 id="pc-txt-cp-vencidas" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='financeiro-contas-receber.html'">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Parcelas Vencidas a Receber</p>
+              <h3 id="pc-txt-cr-vencidas" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning" style="cursor:pointer;" onclick="location.href='bancario-conciliacao.html'">
+              <div class="dash-card-icon">🔄</div>
+              <p class="dash-card-title">Extrato a Conciliar</p>
+              <h3 id="pc-txt-conciliacao" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger" style="cursor:pointer;" onclick="location.href='bancario-conciliacao.html'">
+              <div class="dash-card-icon">🚨</div>
+              <p class="dash-card-title">Possíveis Duplicados</p>
+              <h3 id="pc-txt-duplicados" class="dash-card-value">—</h3>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    function badgeContagem(el, n, corSeMaiorQueZero) {
+      el.textContent = n;
+      el.parentElement.classList.toggle(corSeMaiorQueZero, n > 0);
+    }
+
+    async function carregarAlertasFiscal() {
+      const [{ data: cert }, docsErro, itensPendentes, fornPendentes, fornInaptos] = await Promise.all([
+        db.from('fiscal_certificados').select('*').eq('ativo', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        db.from('fiscal_documentos').select('id,tipo_documento,cnpj_emitente,erro_processamento').eq('status', 'erro').limit(50),
+        db.from('fiscal_documento_itens').select('id', { count: 'exact', head: true }).eq('status_classificacao', 'pendente'),
+        db.from('fornecedores').select('id,razao_social,cnpj').eq('status_pre_cadastro', 'aguardando_confirmacao').limit(50),
+        db.from('fornecedores').select('id,razao_social,cnpj,situacao_cadastral').not('situacao_cadastral', 'is', null).neq('situacao_cadastral', 'ATIVA').limit(50),
+      ]);
+
+      // Certificado: alerta se vencido ou vencendo em até 30 dias
+      const elCert = document.getElementById('pc-txt-certificado');
+      const linhasAlerta = [];
+      if (!cert) {
+        elCert.textContent = 'Nenhum';
+        linhasAlerta.push(['🔐 Certificado', 'Nenhum certificado cadastrado ainda', '<a href="fiscal-config.html">Cadastrar</a>']);
+      } else {
+        const diasRestantes = Math.floor((new Date(cert.data_expiracao) - new Date()) / 86400000);
+        elCert.textContent = diasRestantes < 0 ? 'Vencido' : diasRestantes <= 30 ? `${diasRestantes}d restantes` : 'OK';
+        if (diasRestantes < 0) linhasAlerta.push(['🔐 Certificado VENCIDO', `Venceu em ${fmtDate(cert.data_expiracao)}`, '<a href="fiscal-config.html">Renovar</a>']);
+        else if (diasRestantes <= 30) linhasAlerta.push(['🔐 Certificado vencendo', `Vence em ${fmtDate(cert.data_expiracao)} (${diasRestantes} dias)`, '<a href="fiscal-config.html">Ver</a>']);
+      }
+
+      document.getElementById('pc-txt-docs-erro').textContent = (docsErro.data || []).length;
+      (docsErro.data || []).forEach(d => {
+        linhasAlerta.push([`⚠️ ${d.tipo_documento} com erro`, `${escapeHTML(d.cnpj_emitente || '—')} — ${escapeHTML(d.erro_processamento || 'erro não especificado')}`, '<a href="fiscal-conferencia.html">Ver</a>']);
+      });
+
+      document.getElementById('pc-txt-itens-pendentes').textContent = itensPendentes.count ?? 0;
+      document.getElementById('pc-txt-fornecedores-confirmar').textContent = (fornPendentes.data || []).length;
+      (fornPendentes.data || []).forEach(f => {
+        linhasAlerta.push(['🏭 Fornecedor a confirmar', `${escapeHTML(f.razao_social)} (${escapeHTML(f.cnpj || '—')})`, '<a href="fornecedores.html">Ver</a>']);
+      });
+
+      document.getElementById('pc-txt-cnpj-inapto').textContent = (fornInaptos.data || []).length;
+      (fornInaptos.data || []).forEach(f => {
+        linhasAlerta.push([`🚫 CNPJ ${escapeHTML(f.situacao_cadastral)}`, `${escapeHTML(f.razao_social)} (${escapeHTML(f.cnpj || '—')}) — confira antes de negociar/pagar`, '<a href="fornecedores.html">Ver</a>']);
+      });
+
+      const tbody = document.getElementById('tbody-alertas-fiscal');
+      tbody.innerHTML = linhasAlerta.length
+        ? linhasAlerta.map(l => `<tr><td><strong>${l[0]}</strong></td><td style="font-size:12px;">${l[1]}</td><td>${l[2]}</td></tr>`).join('')
+        : '<tr><td colspan="3" class="td-loading">Nenhum alerta fiscal no momento. ✓</td></tr>';
+    }
+
+    async function carregarPendenciasCompras() {
+      const [rm, sc] = await Promise.all([
+        db.from('requisicoes_material').select('id', { count: 'exact', head: true }).eq('status', 'Pendente'),
+        db.from('requisicoes_compra').select('id', { count: 'exact', head: true }).eq('status', 'Solicitado'),
+      ]);
+      document.getElementById('pc-txt-rm-pendentes').textContent = rm.count ?? 0;
+      document.getElementById('pc-txt-sc-pendentes').textContent = sc.count ?? 0;
+    }
+
+    async function carregarPendenciasFinanceiro() {
+      const hojeStr = new Date().toISOString().slice(0, 10);
+      const [cpAprovar, cpVencidas, crVencidas, conciliacao, conciliados] = await Promise.all([
+        db.from('contas_pagar').select('id', { count: 'exact', head: true }).eq('status', 'pendente_aprovacao'),
+        db.from('contas_pagar_parcelas').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'vencida']).lt('data_vencimento', hojeStr),
+        db.from('contas_receber_parcelas').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'vencida']).lt('data_vencimento', hojeStr),
+        db.from('bancario_movimentos').select('id', { count: 'exact', head: true }).eq('status_conciliacao', 'pendente'),
+        db.from('bancario_movimentos').select('conciliado_tipo, conciliado_parcela_id').eq('status_conciliacao', 'conciliado'),
+      ]);
+      document.getElementById('pc-txt-cp-aprovar').textContent = cpAprovar.count ?? 0;
+      document.getElementById('pc-txt-cp-vencidas').textContent = cpVencidas.count ?? 0;
+      document.getElementById('pc-txt-cr-vencidas').textContent = crVencidas.count ?? 0;
+      document.getElementById('pc-txt-conciliacao').textContent = conciliacao.count ?? 0;
+
+      const contagem = {};
+      (conciliados.data || []).forEach(m => {
+        const chave = `${m.conciliado_tipo}:${m.conciliado_parcela_id}`;
+        contagem[chave] = (contagem[chave] || 0) + 1;
+      });
+      document.getElementById('pc-txt-duplicados').textContent = Object.values(contagem).filter(n => n > 1).length;
+    }
+
+    async function carregarTudo() {
+      await Promise.all([carregarAlertasFiscal(), carregarPendenciasCompras(), carregarPendenciasFinanceiro()]);
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarTudo();
+    });
+  </script>
 </body>
 </html>
