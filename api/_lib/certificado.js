@@ -30,12 +30,24 @@ function extrairCertEChavePem(pfxBuffer, senha) {
 
 // Autenticação + autorização compartilhada (master/admin ativo) e obtenção
 // do client "user" (respeitando RLS) e "admin" (service role).
+// Autenticação + autorização compartilhada. Dois caminhos:
+//   1) Usuário logado no navegador (JWT do Supabase Auth) — o normal.
+//   2) Chamada automática (pg_cron via pg_net) — sem usuário, autentica
+//      por segredo compartilhado no header X-Cron-Secret. Usado só pela
+//      Etapa 13.8 (automação) — nunca exposto ao navegador.
 async function autenticarEAutorizar(req, createClient) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
   const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const CRON_SECRET = process.env.CRON_SECRET;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
     return { erro: { status: 500, body: { error: 'Variáveis de ambiente não configuradas no Vercel.' } } };
+  }
+
+  const segredoRecebido = req.headers['x-cron-secret'];
+  if (CRON_SECRET && segredoRecebido && segredoRecebido === CRON_SECRET) {
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    return { supabaseAdmin, ehCron: true };
   }
 
   const authHeader = req.headers['authorization'];

@@ -22,6 +22,8 @@ Painel do Vercel → seu projeto → **Settings → Environment Variables** → 
 
 Diferente das Edge Functions do Supabase, o Vercel **não injeta nada automaticamente** — as 3 têm que ser cadastradas manualmente. Depois de adicionar, é necessário fazer um novo deploy (ou usar "Redeploy" no painel) para elas passarem a valer.
 
+Pra Etapa 13.8 (automação via pg_cron), tem uma 4ª variável — ver seção própria mais abaixo.
+
 ## Deploy
 
 Se o projeto já está conectado a um repositório Git, só precisa dar `git push` — o Vercel builda e publica sozinho. Se você sobe os arquivos manualmente, use `vercel --prod` (CLI do Vercel) na raiz do projeto.
@@ -90,3 +92,39 @@ O caminho exato (`/DFe/{ultimoNSU}`) veio só de relatos de comunidade, não de 
 ### Teste
 
 Em `fiscal-config.html`, botão **"Testar Conexão ADN (NFS-e, exploratório)"**. Qualquer resultado é útil aqui — mesmo um erro 404 me diz que o caminho está errado (e eu ajusto), e uma resposta 200 com JSON me dá o formato real pra escrever o parser de verdade. Me manda a mensagem completa que aparecer, incluindo o "Corpo bruto".
+
+## Automação (Etapa 13.8) — sincronização sem precisar clicar
+
+A automação é `pg_cron` (Postgres) chamando as MESMAS Vercel Functions já validadas, via `pg_net` (HTTP assíncrono), sem usuário logado — por isso as functions ganharam um segundo caminho de autenticação por segredo compartilhado (`X-Cron-Secret`), só usado nessa chamada automática.
+
+### Configuração (nessa ordem)
+
+1. **Gere um segredo forte** — 64+ caracteres aleatórios (ex.: `openssl rand -hex 32` no Git Bash).
+2. **Vercel** → Settings → Environment Variables → adicione `CRON_SECRET` = o segredo gerado, Type: Secret. Redeploy.
+3. **Supabase SQL Editor** → guarde o mesmo segredo no Vault (nunca em texto puro numa tabela normal):
+   ```sql
+   select fiscal_vault_criar_segredo('COLE_O_MESMO_SEGREDO_DO_PASSO_1', 'fiscal_cron_secret');
+   ```
+   Anote o `uuid` que essa função devolve.
+4. Abra `migrations/2026-08-30_automacao-fiscal-pgcron_etapa13-8.sql`, troque `COLE_O_SECRET_ID_AQUI` (2 ocorrências) pelo uuid do passo 3, e `https://SEU-DOMINIO.vercel.app` pelo domínio real do projeto. Rode a migration.
+
+### Por padrão, agenda contra HOMOLOGAÇÃO
+
+De propósito — só troque pra produção quando tiver confiança (edite o `'ambiente'` no `body` de cada job e rode o `select cron.schedule(...)` de novo, mesmo nome atualiza em vez de duplicar).
+
+### Por que rodar a cada 30 min não é perigoso
+
+A trava de "consumo indevido" (Etapa 13.4) já vive dentro da própria Vercel Function — se não passou a janela de espera, ela recusa (HTTP 429) sem sequer tentar a SEFAZ/ADN de novo. O cron rodando "à toa" não gasta cota nenhuma; só dispara a chamada real quando já é seguro fazer isso.
+
+### ⚠️ Atenção ao plano do Vercel
+
+O `net.http_post` já está com `timeout_milliseconds := 45000` (45s) — mas se o projeto estiver no plano Hobby do Vercel, funções serverless têm limite de execução menor por padrão (historicamente 10s), o que pode matar a function antes dela terminar de processar um lote grande de documentos. Se isso acontecer (job aparece como falho em `cron.job_run_details` ou sem log correspondente em `fiscal_logs`), pode ser necessário aumentar o `maxDuration` da function (configurável via `vercel.json` ou export `config` no arquivo da function) ou considerar o plano Pro.
+
+### Monitorar
+
+```sql
+select * from cron.job;                                                          -- jobs agendados
+select * from cron.job_run_details order by start_time desc limit 20;            -- histórico de execução do pg_cron
+select * from net._http_response order by created desc limit 20;                 -- respostas HTTP brutas (só ficam 6h)
+```
+E claro, `fiscal_logs` (já usado por todas as functions) continua sendo a fonte mais completa — tem o `cStat`/`xMotivo` de cada tentativa, com ou sem sucesso.
