@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Orçamento administrativo mensal por categoria, com comparação previsto x realizado — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Orçamento Administrativo</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>🏢 Orçamento Administrativo</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Orçamento recorrente mensal (o valor previsto vale todo mês até você editar) — cobre todas as categorias
+            administrativas do Plano de Contas, não só Pessoal. O custo de colaboradores alocados ao administrativo
+            entra automaticamente no "realizado" da categoria Pessoal quando os lançamentos do mês forem gerados em
+            <a href="rh-custo-colaboradores.html">RH → Custo de Colaboradores</a>.
+          </p>
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card">
+              <div class="dash-card-icon">📐</div>
+              <p class="dash-card-title">Total Orçado (mês)</p>
+              <h3 id="oa-txt-total-orcado" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">💸</div>
+              <p class="dash-card-title">Total Realizado (mês corrente)</p>
+              <h3 id="oa-txt-total-realizado" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+            <div class="dash-card" id="oa-card-saldo">
+              <div class="dash-card-icon">⚖️</div>
+              <p class="dash-card-title">Saldo</p>
+              <h3 id="oa-txt-saldo" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">➕ Nova Linha Orçamentária</h3>
+            <input type="hidden" id="oa-item-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group"><label for="oa-item-centro-custo">Centro de Custo *</label><select id="oa-item-centro-custo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="oa-item-plano-conta">Categoria (Plano de Contas) *</label><select id="oa-item-plano-conta" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="oa-item-valor">Valor Previsto Mensal (R$) *</label><input type="number" id="oa-item-valor" step="0.01"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="oa-item-descricao">Observações</label><input type="text" id="oa-item-descricao"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-oa-item" class="btn-primary">💾 Adicionar Linha</button>
+              <button type="button" id="btn-cancelar-oa-item" class="btn-secondary" style="display:none;" onclick="resetarFormOrcamentoAdm()">✕ Cancelar</button>
+            </div>
+            <p id="msg-oa-item" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">📊 Previsto x Realizado (mês corrente)</h3>
+            <canvas id="oa-grafico" height="90"></canvas>
+          </div>
+
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Centro de Custo</th><th>Categoria</th><th>Previsto/mês</th><th>Realizado (mês)</th><th>Saldo</th><th>% Consumido</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-orcamento-adm"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _orcamentoAdmCache = [];
+    let _graficoOrcamentoAdm = null;
+
+    async function carregarSelectsOrcamentoAdm() {
+      const { data: ccs } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+      document.getElementById('oa-item-centro-custo').innerHTML = '<option value="">-- Selecione --</option>' +
+        (ccs || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+
+      const { data: contas } = await db.from('plano_contas').select('id,codigo,nome,nivel,tipo').eq('ativo', true).in('tipo', ['custo','despesa']).order('codigo');
+      document.getElementById('oa-item-plano-conta').innerHTML = '<option value="">-- Selecione --</option>' +
+        (contas || []).filter(c => c.nivel > 1).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+    }
+
+    async function salvarItemOrcamentoAdm() {
+      const centroCustoId = document.getElementById('oa-item-centro-custo').value;
+      const planoContaId = document.getElementById('oa-item-plano-conta').value;
+      const valor = Number(document.getElementById('oa-item-valor').value);
+      if (!centroCustoId) { msgForm('msg-oa-item', 'Selecione o centro de custo.', 'red'); return; }
+      if (!planoContaId) { msgForm('msg-oa-item', 'Selecione a categoria.', 'red'); return; }
+      if (!valor || valor <= 0) { msgForm('msg-oa-item', 'Informe um valor previsto válido.', 'red'); return; }
+
+      const payload = {
+        centro_custo_id: centroCustoId, plano_conta_id: planoContaId, valor_previsto_mensal: valor,
+        observacoes: document.getElementById('oa-item-descricao').value.trim() || null,
+      };
+
+      const idEd = document.getElementById('oa-item-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('orcamento_administrativo_itens').update(payload).eq('id', idEd)
+        : await db.from('orcamento_administrativo_itens').insert([payload]);
+
+      if (error) { msgForm('msg-oa-item', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-oa-item', '✓ Linha orçamentária salva!', 'green');
+      resetarFormOrcamentoAdm();
+      await carregarOrcamentoAdm();
+    }
+
+    function resetarFormOrcamentoAdm() {
+      document.getElementById('oa-item-id-edicao').value = '';
+      document.getElementById('oa-item-centro-custo').value = '';
+      document.getElementById('oa-item-plano-conta').value = '';
+      document.getElementById('oa-item-valor').value = '';
+      document.getElementById('oa-item-descricao').value = '';
+      document.getElementById('btn-salvar-oa-item').textContent = '💾 Adicionar Linha';
+      document.getElementById('btn-cancelar-oa-item').style.display = 'none';
+    }
+
+    function editarItemOrcamentoAdm(id) {
+      const item = _orcamentoAdmCache.find(x => x.id === id); if (!item) return;
+      document.getElementById('oa-item-id-edicao').value = id;
+      document.getElementById('oa-item-centro-custo').value = item.centro_custo_id || '';
+      document.getElementById('oa-item-plano-conta').value = item.plano_conta_id || '';
+      document.getElementById('oa-item-valor').value = item.valor_previsto_mensal || '';
+      document.getElementById('oa-item-descricao').value = item.observacoes || '';
+      document.getElementById('btn-salvar-oa-item').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-oa-item').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirItemOrcamentoAdm(id, categoria) {
+      if (!confirm(`Excluir a linha "${categoria}"?`)) return;
+      const { error } = await db.from('orcamento_administrativo_itens').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarOrcamentoAdm();
+    }
+
+    async function carregarOrcamentoAdm() {
+      const tbody = document.getElementById('tbody-orcamento-adm');
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+      const hoje = new Date();
+      const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0,10);
+      const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().slice(0,10);
+
+      const [{ data: itens, error }, { data: realizado }] = await Promise.all([
+        db.from('orcamento_administrativo_itens').select('*, centros_custo(codigo,nome,tipo), plano_contas(codigo,nome)').order('created_at'),
+        db.from('contas_pagar').select('centro_custo_id, plano_conta_id, valor_total').gte('data_emissao', inicioMes).lte('data_emissao', fimMes),
+      ]);
+
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _orcamentoAdmCache = itens || [];
+
+      const realizadoPorChave = {};
+      (realizado || []).forEach(cp => {
+        if (!cp.centro_custo_id || !cp.plano_conta_id) return;
+        const chave = `${cp.centro_custo_id}:${cp.plano_conta_id}`;
+        realizadoPorChave[chave] = (realizadoPorChave[chave] || 0) + Number(cp.valor_total || 0);
+      });
+
+      if (!_orcamentoAdmCache.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma linha orçamentária cadastrada ainda.</td></tr>';
+      } else {
+        tbody.innerHTML = _orcamentoAdmCache.map(item => {
+          const chave = `${item.centro_custo_id}:${item.plano_conta_id}`;
+          const realizadoValor = realizadoPorChave[chave] || 0;
+          const previsto = Number(item.valor_previsto_mensal || 0);
+          const saldo = previsto - realizadoValor;
+          const pct = previsto > 0 ? (realizadoValor / previsto) * 100 : 0;
+          return `<tr${saldo < 0 ? ' style="background:#fef2f2;"' : ''}>
+            <td>${item.centros_custo ? (item.centros_custo.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(item.centros_custo.nome) : '—'}</td>
+            <td>${escapeHTML(item.plano_contas?.codigo || '—')} — ${escapeHTML(item.plano_contas?.nome || '—')}</td>
+            <td>R$ ${previsto.toFixed(2).replace('.', ',')}</td>
+            <td>R$ ${realizadoValor.toFixed(2).replace('.', ',')}</td>
+            <td style="font-weight:700;${saldo < 0 ? 'color:#dc2626;' : 'color:#059669;'}">R$ ${saldo.toFixed(2).replace('.', ',')}</td>
+            <td>${pct.toFixed(0)}%${pct > 100 ? ' ⚠️' : ''}</td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarItemOrcamentoAdm('${escapeHTML(item.id)}')">✏️</button>
+              <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirItemOrcamentoAdm('${escapeHTML(item.id)}','${escapeHTML(item.plano_contas?.nome || '')}')">✕</button>
+            </td>
+          </tr>`;
+        }).join('');
+      }
+
+      const totalOrcado = _orcamentoAdmCache.reduce((acc, i) => acc + Number(i.valor_previsto_mensal || 0), 0);
+      const totalRealizado = _orcamentoAdmCache.reduce((acc, i) => acc + (realizadoPorChave[`${i.centro_custo_id}:${i.plano_conta_id}`] || 0), 0);
+      const saldoTotal = totalOrcado - totalRealizado;
+      document.getElementById('oa-txt-total-orcado').textContent = 'R$ ' + totalOrcado.toFixed(2).replace('.', ',');
+      document.getElementById('oa-txt-total-realizado').textContent = 'R$ ' + totalRealizado.toFixed(2).replace('.', ',');
+      document.getElementById('oa-txt-saldo').textContent = 'R$ ' + saldoTotal.toFixed(2).replace('.', ',');
+      document.getElementById('oa-card-saldo').classList.toggle('dash-card-danger', saldoTotal < 0);
+
+      const labels = _orcamentoAdmCache.map(i => i.plano_contas?.nome || '—');
+      const previstos = _orcamentoAdmCache.map(i => Number(i.valor_previsto_mensal || 0));
+      const realizados = _orcamentoAdmCache.map(i => realizadoPorChave[`${i.centro_custo_id}:${i.plano_conta_id}`] || 0);
+      if (_graficoOrcamentoAdm) _graficoOrcamentoAdm.destroy();
+      _graficoOrcamentoAdm = new Chart(document.getElementById('oa-grafico'), {
+        type: 'bar',
+        data: { labels, datasets: [
+          { label: 'Previsto/mês', data: previstos, backgroundColor: 'rgba(26,86,219,0.5)' },
+          { label: 'Realizado (mês)', data: realizados, backgroundColor: 'rgba(220,38,38,0.5)' },
+        ] },
+        options: { responsive: true, scales: { y: { ticks: { callback: v => 'R$ ' + v } } } },
+      });
+    }
+
+    document.getElementById('btn-salvar-oa-item').addEventListener('click', salvarItemOrcamentoAdm);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsOrcamentoAdm();
+      await carregarOrcamentoAdm();
+    });
+  </script>
+</body>
+</html>

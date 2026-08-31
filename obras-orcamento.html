@@ -45,10 +45,14 @@
           </p>
 
           <div class="card">
-            <h3 class="card-title">📐 Selecionar Obra</h3>
-            <div class="form-grid">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 class="card-title" style="margin:0;">📐 Selecionar Obra</h3>
+              <a href="orcamento-composicoes.html" style="font-size:12px;color:#1a56db;">🧮 Gerenciar Insumos e Composições →</a>
+            </div>
+            <div class="form-grid" style="margin-top:14px;">
               <div class="form-group" style="grid-column:span 2;"><label for="orc-obra">Obra *</label><select id="orc-obra" class="form-input-style" onchange="carregarOrcamentoDaObra()"><option value="">-- Selecione --</option></select></div>
               <div class="form-group"><label>Valor do Contrato</label><div id="orc-valor-contrato" style="padding:8px 0;font-weight:700;">—</div></div>
+              <div class="form-group"><label for="orc-bdi">BDI da Obra (%)</label><input type="number" id="orc-bdi" step="0.01" onchange="salvarBdiObra()"></div>
             </div>
           </div>
 
@@ -77,8 +81,23 @@
               <div class="form-grid">
                 <div class="form-group"><label for="orc-item-plano-conta">Categoria (Plano de Contas) *</label><select id="orc-item-plano-conta" class="form-input-style"><option value="">-- Selecione --</option></select></div>
                 <div class="form-group" style="grid-column:span 2;"><label for="orc-item-descricao">Descrição (opcional)</label><input type="text" id="orc-item-descricao" placeholder="Ex: Cimento e agregados"></div>
+              </div>
+
+              <div style="display:flex;gap:16px;margin:14px 0;font-size:13px;">
+                <label><input type="radio" name="orc-modo" value="direto" checked onchange="aoTrocarModoLinhaOrcamento()"> Valor direto</label>
+                <label><input type="radio" name="orc-modo" value="composicao" onchange="aoTrocarModoLinhaOrcamento()"> Por composição (quantidade × custo unitário + BDI)</label>
+              </div>
+
+              <div id="orc-wrap-direto" class="form-grid">
                 <div class="form-group"><label for="orc-item-valor">Valor Previsto (R$) *</label><input type="number" id="orc-item-valor" step="0.01"></div>
               </div>
+
+              <div id="orc-wrap-composicao" class="form-grid" style="display:none;">
+                <div class="form-group" style="grid-column:span 2;"><label for="orc-item-composicao">Composição *</label><select id="orc-item-composicao" class="form-input-style" onchange="atualizarPreviaComposicao()"><option value="">-- Selecione --</option></select></div>
+                <div class="form-group"><label for="orc-item-quantidade">Quantidade *</label><input type="number" id="orc-item-quantidade" step="0.0001" oninput="atualizarPreviaComposicao()"></div>
+                <div class="form-group" style="grid-column:span 3;"><label>Prévia do Cálculo</label><div id="orc-previa-composicao" style="padding:8px 0;font-size:13px;color:#4a5568;">Selecione a composição e a quantidade.</div></div>
+              </div>
+
               <div class="btn-row" style="margin-top:16px;">
                 <button type="button" id="btn-salvar-orc-item" class="btn-primary">💾 Adicionar Linha</button>
                 <button type="button" id="btn-cancelar-orc-item" class="btn-secondary" style="display:none;" onclick="resetarFormOrcamentoItem()">✕ Cancelar</button>
@@ -113,7 +132,7 @@
     let _graficoOrcamento = null;
 
     async function carregarSelectsOrcamento() {
-      const { data: obras } = await db.from('obras').select('id,nome,valor_contrato').order('nome');
+      const { data: obras } = await db.from('obras').select('id,nome,valor_contrato,bdi_percentual').order('nome');
       window._orcObrasCache = obras || [];
       document.getElementById('orc-obra').innerHTML = '<option value="">-- Selecione --</option>' +
         (obras || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
@@ -121,6 +140,49 @@
       const { data: contas } = await db.from('plano_contas').select('id,codigo,nome,nivel,tipo').eq('ativo', true).in('tipo', ['custo','despesa']).order('codigo');
       document.getElementById('orc-item-plano-conta').innerHTML = '<option value="">-- Selecione --</option>' +
         (contas || []).filter(c => c.nivel > 1).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+
+      const { data: composicoes } = await db.from('composicoes_orcamento').select('id,codigo,descricao,unidade,composicao_insumos(coeficiente,insumos_orcamento(custo_unitario_referencia))').eq('ativo', true).order('descricao');
+      window._composicoesParaOrcamentoCache = composicoes || [];
+      document.getElementById('orc-item-composicao').innerHTML = '<option value="">-- Selecione --</option>' +
+        (composicoes || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.codigo || '')} ${escapeHTML(c.descricao)} (${escapeHTML(c.unidade)})</option>`).join('');
+    }
+
+    function aoTrocarModoLinhaOrcamento() {
+      const modo = document.querySelector('input[name="orc-modo"]:checked').value;
+      document.getElementById('orc-wrap-direto').style.display = modo === 'direto' ? 'grid' : 'none';
+      document.getElementById('orc-wrap-composicao').style.display = modo === 'composicao' ? 'grid' : 'none';
+    }
+
+    function custoUnitarioComposicao(composicaoId) {
+      const c = (window._composicoesParaOrcamentoCache || []).find(x => x.id === composicaoId);
+      if (!c) return 0;
+      return (c.composicao_insumos || []).reduce((acc, li) => acc + Number(li.coeficiente || 0) * Number(li.insumos_orcamento?.custo_unitario_referencia || 0), 0);
+    }
+
+    function atualizarPreviaComposicao() {
+      const composicaoId = document.getElementById('orc-item-composicao').value;
+      const quantidade = Number(document.getElementById('orc-item-quantidade').value) || 0;
+      const el = document.getElementById('orc-previa-composicao');
+      if (!composicaoId || !quantidade) { el.textContent = 'Selecione a composição e a quantidade.'; return; }
+
+      const custoUnit = custoUnitarioComposicao(composicaoId);
+      const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
+      const bdi = Number(obra?.bdi_percentual || 0);
+      const custoDireto = custoUnit * quantidade;
+      const valorComBdi = custoDireto * (1 + bdi / 100);
+
+      el.innerHTML = `Custo unitário da composição: <strong>R$ ${custoUnit.toFixed(2).replace('.', ',')}</strong> × ${quantidade} = R$ ${custoDireto.toFixed(2).replace('.', ',')} custo direto` +
+        (bdi > 0 ? ` + BDI ${bdi}% = <strong>R$ ${valorComBdi.toFixed(2).replace('.', ',')}</strong>` : ` = <strong>R$ ${valorComBdi.toFixed(2).replace('.', ',')}</strong> (obra sem BDI cadastrado)`);
+    }
+
+    async function salvarBdiObra() {
+      if (!_obraSelecionadaId) return;
+      const bdi = Number(document.getElementById('orc-bdi').value) || 0;
+      await db.from('obras').update({ bdi_percentual: bdi }).eq('id', _obraSelecionadaId);
+      const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
+      if (obra) obra.bdi_percentual = bdi;
+      atualizarPreviaComposicao();
+      await carregarTabelaOrcamento();
     }
 
     async function carregarOrcamentoDaObra() {
@@ -129,6 +191,7 @@
 
       const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
       document.getElementById('orc-valor-contrato').textContent = obra?.valor_contrato ? 'R$ ' + Number(obra.valor_contrato).toFixed(2).replace('.', ',') : '—';
+      document.getElementById('orc-bdi').value = obra?.bdi_percentual || 0;
       document.getElementById('orc-painel-obra').style.display = 'block';
 
       await carregarTabelaOrcamento();
@@ -136,15 +199,28 @@
 
     async function salvarItemOrcamento() {
       const planoContaId = document.getElementById('orc-item-plano-conta').value;
-      const valor = Number(document.getElementById('orc-item-valor').value);
       if (!planoContaId) { msgForm('msg-orc-item', 'Selecione a categoria.', 'red'); return; }
-      if (!valor || valor <= 0) { msgForm('msg-orc-item', 'Informe um valor previsto válido.', 'red'); return; }
 
-      const payload = {
+      const modo = document.querySelector('input[name="orc-modo"]:checked').value;
+      let payload = {
         obra_id: _obraSelecionadaId, plano_conta_id: planoContaId,
         descricao: document.getElementById('orc-item-descricao').value.trim() || null,
-        valor_previsto: valor,
       };
+
+      if (modo === 'direto') {
+        const valor = Number(document.getElementById('orc-item-valor').value);
+        if (!valor || valor <= 0) { msgForm('msg-orc-item', 'Informe um valor previsto válido.', 'red'); return; }
+        payload = { ...payload, valor_previsto: valor, composicao_id: null, quantidade: null };
+      } else {
+        const composicaoId = document.getElementById('orc-item-composicao').value;
+        const quantidade = Number(document.getElementById('orc-item-quantidade').value);
+        if (!composicaoId) { msgForm('msg-orc-item', 'Selecione a composição.', 'red'); return; }
+        if (!quantidade || quantidade <= 0) { msgForm('msg-orc-item', 'Informe uma quantidade válida.', 'red'); return; }
+        const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
+        const bdi = Number(obra?.bdi_percentual || 0);
+        const valorCalculado = custoUnitarioComposicao(composicaoId) * quantidade * (1 + bdi / 100);
+        payload = { ...payload, valor_previsto: valorCalculado, composicao_id: composicaoId, quantidade };
+      }
 
       const idEd = document.getElementById('orc-item-id-edicao').value;
       const { error } = idEd
@@ -162,6 +238,10 @@
       document.getElementById('orc-item-plano-conta').value = '';
       document.getElementById('orc-item-descricao').value = '';
       document.getElementById('orc-item-valor').value = '';
+      document.getElementById('orc-item-composicao').value = '';
+      document.getElementById('orc-item-quantidade').value = '';
+      document.querySelector('input[name="orc-modo"][value="direto"]').checked = true;
+      aoTrocarModoLinhaOrcamento();
       document.getElementById('btn-salvar-orc-item').textContent = '💾 Adicionar Linha';
       document.getElementById('btn-cancelar-orc-item').style.display = 'none';
     }
@@ -171,7 +251,17 @@
       document.getElementById('orc-item-id-edicao').value = id;
       document.getElementById('orc-item-plano-conta').value = item.plano_conta_id || '';
       document.getElementById('orc-item-descricao').value = item.descricao || '';
-      document.getElementById('orc-item-valor').value = item.valor_previsto || '';
+      if (item.composicao_id) {
+        document.querySelector('input[name="orc-modo"][value="composicao"]').checked = true;
+        document.getElementById('orc-item-composicao').value = item.composicao_id;
+        document.getElementById('orc-item-quantidade').value = item.quantidade || '';
+        aoTrocarModoLinhaOrcamento();
+        atualizarPreviaComposicao();
+      } else {
+        document.querySelector('input[name="orc-modo"][value="direto"]').checked = true;
+        document.getElementById('orc-item-valor').value = item.valor_previsto || '';
+        aoTrocarModoLinhaOrcamento();
+      }
       document.getElementById('btn-salvar-orc-item').textContent = '💾 Salvar Alterações';
       document.getElementById('btn-cancelar-orc-item').style.display = 'inline-block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -220,7 +310,7 @@
           const pctConsumido = previsto > 0 ? (realizado / previsto) * 100 : 0;
           return `<tr${saldo < 0 ? ' style="background:#fef2f2;"' : ''}>
             <td>${escapeHTML(item.plano_contas?.codigo || '—')} — ${escapeHTML(item.plano_contas?.nome || '—')}</td>
-            <td>${escapeHTML(item.descricao || '—')}</td>
+            <td>${escapeHTML(item.descricao || '—')}${item.composicao_id ? `<br><span style="font-size:10px;color:#7c3aed;">🧮 composição × ${item.quantidade}</span>` : ''}</td>
             <td>R$ ${previsto.toFixed(2).replace('.', ',')}</td>
             <td>R$ ${realizado.toFixed(2).replace('.', ',')}</td>
             <td style="font-weight:700;${saldo < 0 ? 'color:#dc2626;' : 'color:#059669;'}">R$ ${saldo.toFixed(2).replace('.', ',')}</td>

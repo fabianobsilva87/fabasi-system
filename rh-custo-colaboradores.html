@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Custo projetado de colaboradores — salário, encargos e provisões de férias/13º/rescisão — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Custo de Colaboradores</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>👷 Custo de Colaboradores</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;font-size:12px;color:#92400e;margin-bottom:20px;line-height:1.5;">
+            ⚠️ <strong>Os percentuais abaixo são padrão de mercado (regime CLT fora do Simples Nacional)</strong> — servem como ponto de partida editável, não como cálculo fiscal definitivo. Valide com o contador da Fabasi antes de usar como base real, especialmente se a empresa for optante do Simples Nacional (o INSS patronal já vem dentro do DAS nesse caso, e o percentual abaixo deveria ser zerado).
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">⚙️ Parâmetros de Encargos</h3>
+            <div class="form-grid">
+              <div class="form-group"><label for="rh-inss">INSS Patronal (%)</label><input type="number" id="rh-inss" step="0.01"></div>
+              <div class="form-group"><label for="rh-rat">RAT — Risco de Acidente (%)</label><input type="number" id="rh-rat" step="0.01"></div>
+              <div class="form-group"><label for="rh-sistemas">Sistema S (%)</label><input type="number" id="rh-sistemas" step="0.01"></div>
+              <div class="form-group"><label for="rh-fgts">FGTS (%)</label><input type="number" id="rh-fgts" step="0.01"></div>
+              <div class="form-group"><label for="rh-multa">Multa FGTS na Rescisão (%)</label><input type="number" id="rh-multa" step="0.01"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-parametros" class="btn-primary">💾 Salvar Parâmetros</button>
+            </div>
+            <p id="msg-parametros" class="msg-form"></p>
+          </div>
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card">
+              <div class="dash-card-icon">👷</div>
+              <p class="dash-card-title">Colaboradores com Salário Cadastrado</p>
+              <h3 id="rh-txt-total-colab" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card" style="border-top:3px solid #0891b2;">
+              <div class="dash-card-icon">💰</div>
+              <p class="dash-card-title">Custo Total Projetado (mês)</p>
+              <h3 id="rh-txt-custo-total" class="dash-card-value" style="font-size:18px;">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">🏗️</div>
+              <p class="dash-card-title">Não Alocados a Centro de Custo</p>
+              <h3 id="rh-txt-nao-alocados" class="dash-card-value">—</h3>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Custo Projetado por Colaborador</h3>
+              <button type="button" class="btn-refresh" onclick="carregarCustosColaboradores()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Colaborador</th><th>Alocado em</th><th>Salário</th><th>Benefícios</th><th>Encargos + Provisões</th><th>Custo Total/mês</th><th>Detalhe</th></tr></thead>
+                <tbody id="tbody-custo-colaboradores"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">📤 Gerar Lançamentos do Mês</h3>
+            <p style="font-size:12px;color:#718096;margin-bottom:14px;">
+              Cria uma Conta a Pagar (categoria "Pessoal Administrativo" ou o centro de custo da alocação de cada
+              colaborador) com o custo total projetado do mês — só pros colaboradores que já têm salário e centro de
+              custo cadastrados. Não duplica se já existir lançamento deste mês para o colaborador.
+            </p>
+            <div class="btn-row">
+              <button type="button" id="btn-gerar-lancamentos" class="btn-primary" style="background:#059669;">📤 Gerar Lançamentos do Mês</button>
+            </div>
+            <p id="msg-lancamentos" class="msg-form"></p>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _parametrosEncargos = null;
+    let _colaboradoresCustoCache = [];
+
+    async function carregarParametrosEncargos() {
+      const { data } = await db.from('rh_parametros_encargos').select('*').order('data_vigencia', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      _parametrosEncargos = data;
+      if (data) {
+        document.getElementById('rh-inss').value = data.inss_patronal_pct;
+        document.getElementById('rh-rat').value = data.rat_pct;
+        document.getElementById('rh-sistemas').value = data.sistema_s_pct;
+        document.getElementById('rh-fgts').value = data.fgts_pct;
+        document.getElementById('rh-multa').value = data.multa_fgts_rescisao_pct;
+      }
+    }
+
+    async function salvarParametrosEncargos() {
+      const payload = {
+        inss_patronal_pct: Number(document.getElementById('rh-inss').value) || 0,
+        rat_pct: Number(document.getElementById('rh-rat').value) || 0,
+        sistema_s_pct: Number(document.getElementById('rh-sistemas').value) || 0,
+        fgts_pct: Number(document.getElementById('rh-fgts').value) || 0,
+        multa_fgts_rescisao_pct: Number(document.getElementById('rh-multa').value) || 0,
+      };
+      const { error } = _parametrosEncargos
+        ? await db.from('rh_parametros_encargos').update(payload).eq('id', _parametrosEncargos.id)
+        : await db.from('rh_parametros_encargos').insert([payload]);
+      if (error) { msgForm('msg-parametros', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-parametros', '✓ Parâmetros salvos!', 'green');
+      await carregarParametrosEncargos();
+      await carregarCustosColaboradores();
+    }
+
+    // Cálculo transparente, linha a linha — devolve o detalhamento completo,
+    // não só o total, pra ficar auditável.
+    function calcularCustoColaborador(colab, parametros) {
+      const S = Number(colab.salario || 0);
+      const beneficios = Number(colab.vale_transporte || 0) + Number(colab.vale_refeicao || 0) + Number(colab.plano_saude || 0) + Number(colab.outros_beneficios || 0);
+
+      const encargosDiretos = S * (parametros.inss_patronal_pct + parametros.rat_pct + parametros.sistema_s_pct) / 100;
+      const fgtsSalario = S * parametros.fgts_pct / 100;
+      const provisao13 = S / 12;
+      const provisaoFerias = (S / 12) * (4 / 3);
+      const fgtsProvisoes = (provisao13 + provisaoFerias) * parametros.fgts_pct / 100;
+      const fgtsTotalMensal = fgtsSalario + fgtsProvisoes;
+      const provisaoMultaRescisoria = fgtsTotalMensal * parametros.multa_fgts_rescisao_pct / 100;
+
+      const encargosEProvisoes = encargosDiretos + fgtsSalario + provisao13 + provisaoFerias + fgtsProvisoes + provisaoMultaRescisoria;
+      const custoTotal = S + beneficios + encargosEProvisoes;
+
+      return { S, beneficios, encargosDiretos, fgtsSalario, provisao13, provisaoFerias, fgtsProvisoes, provisaoMultaRescisoria, encargosEProvisoes, custoTotal };
+    }
+
+    function alternarDetalheCusto(id) {
+      const el = document.getElementById('detalhe-custo-' + id);
+      if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function carregarCustosColaboradores() {
+      const tbody = document.getElementById('tbody-custo-colaboradores');
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+      if (!_parametrosEncargos) await carregarParametrosEncargos();
+
+      const { data: colaboradores, error } = await db.from('colaboradores').select('*, centros_custo(codigo,nome,tipo)').order('nome');
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+
+      _colaboradoresCustoCache = (colaboradores || []).filter(c => Number(c.salario) > 0);
+      const semSalario = (colaboradores || []).length - _colaboradoresCustoCache.length;
+
+      document.getElementById('rh-txt-total-colab').textContent = _colaboradoresCustoCache.length;
+      document.getElementById('rh-txt-nao-alocados').textContent = _colaboradoresCustoCache.filter(c => !c.centro_custo_id).length;
+
+      if (!_colaboradoresCustoCache.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="td-loading">Nenhum colaborador com salário cadastrado ainda${semSalario ? ' (' + semSalario + ' sem salário informado)' : ''}.</td></tr>`;
+        document.getElementById('rh-txt-custo-total').textContent = 'R$ 0,00';
+        return;
+      }
+
+      let custoTotalGeral = 0;
+      tbody.innerHTML = _colaboradoresCustoCache.map(c => {
+        const calc = calcularCustoColaborador(c, _parametrosEncargos);
+        custoTotalGeral += calc.custoTotal;
+        const cc = c.centros_custo;
+        return `<tr>
+          <td><strong>${escapeHTML(c.nome)}</strong></td>
+          <td>${cc ? (cc.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(cc.nome) : '<span style="color:#d97706;">Não alocado</span>'}</td>
+          <td>R$ ${calc.S.toFixed(2).replace('.', ',')}</td>
+          <td>R$ ${calc.beneficios.toFixed(2).replace('.', ',')}</td>
+          <td>R$ ${calc.encargosEProvisoes.toFixed(2).replace('.', ',')}</td>
+          <td style="font-weight:700;">R$ ${calc.custoTotal.toFixed(2).replace('.', ',')}</td>
+          <td>
+            <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarDetalheCusto('${c.id}')">Ver</button>
+            <div id="detalhe-custo-${c.id}" style="display:none;margin-top:6px;font-size:11px;background:#f8fafc;border-radius:6px;padding:8px;min-width:260px;">
+              <div>Salário: R$ ${calc.S.toFixed(2).replace('.', ',')}</div>
+              <div>Benefícios (VT+VR+Saúde+Outros): R$ ${calc.beneficios.toFixed(2).replace('.', ',')}</div>
+              <div>Encargos diretos (INSS+RAT+Sistema S): R$ ${calc.encargosDiretos.toFixed(2).replace('.', ',')}</div>
+              <div>FGTS sobre salário: R$ ${calc.fgtsSalario.toFixed(2).replace('.', ',')}</div>
+              <div>Provisão 13º: R$ ${calc.provisao13.toFixed(2).replace('.', ',')}</div>
+              <div>Provisão férias (+1/3): R$ ${calc.provisaoFerias.toFixed(2).replace('.', ',')}</div>
+              <div>FGTS sobre provisões: R$ ${calc.fgtsProvisoes.toFixed(2).replace('.', ',')}</div>
+              <div>Provisão multa rescisória (FGTS): R$ ${calc.provisaoMultaRescisoria.toFixed(2).replace('.', ',')}</div>
+              <div style="margin-top:4px;font-weight:700;">Total: R$ ${calc.custoTotal.toFixed(2).replace('.', ',')}</div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('rh-txt-custo-total').textContent = 'R$ ' + custoTotalGeral.toFixed(2).replace('.', ',');
+    }
+
+    async function gerarLancamentosDoMes() {
+      const mesAno = new Date().toISOString().slice(0, 7); // AAAA-MM
+      const descricaoBase = `Folha ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+      if (!confirm(`Gerar lançamentos de Contas a Pagar para ${_colaboradoresCustoCache.length} colaborador(es) com salário cadastrado? Isso cria um título por colaborador com vencimento no dia 5 do mês seguinte.`)) return;
+
+      let criados = 0, jaExistiam = 0, semCentroCusto = 0;
+      const plano_conta_pessoal = await buscarPlanoContaPessoal();
+
+      for (const c of _colaboradoresCustoCache) {
+        if (!c.centro_custo_id) { semCentroCusto++; continue; }
+
+        const descricao = `${descricaoBase} — ${c.nome}`;
+        const { data: existente } = await db.from('contas_pagar').select('id').eq('descricao', descricao).eq('centro_custo_id', c.centro_custo_id).maybeSingle();
+        if (existente) { jaExistiam++; continue; }
+
+        const calc = calcularCustoColaborador(c, _parametrosEncargos);
+        const vencimento = new Date(); vencimento.setMonth(vencimento.getMonth() + 1); vencimento.setDate(5);
+
+        const { data: novaConta, error } = await db.from('contas_pagar').insert([{
+          descricao, centro_custo_id: c.centro_custo_id, plano_conta_id: plano_conta_pessoal,
+          origem: 'manual', valor_total: calc.custoTotal, data_emissao: new Date().toISOString().slice(0,10),
+          status: 'pendente_aprovacao', observacoes: 'Gerado automaticamente por RH → Custo de Colaboradores.',
+        }]).select('id').single();
+        if (error) continue;
+
+        await db.from('contas_pagar_parcelas').insert([{
+          conta_pagar_id: novaConta.id, numero_parcela: 1, valor: calc.custoTotal,
+          data_vencimento: vencimento.toISOString().slice(0,10), status: 'aberta',
+        }]);
+        criados++;
+      }
+
+      msgForm('msg-lancamentos', `✓ ${criados} lançamento(s) criado(s)${jaExistiam ? `, ${jaExistiam} já existiam` : ''}${semCentroCusto ? `, ${semCentroCusto} sem centro de custo (não alocados, pulados)` : ''}.`, 'green');
+    }
+
+    async function buscarPlanoContaPessoal() {
+      const { data } = await db.from('plano_contas').select('id').ilike('nome', '%Pessoal Administrativo%').maybeSingle();
+      return data?.id || null;
+    }
+
+    document.getElementById('btn-salvar-parametros').addEventListener('click', salvarParametrosEncargos);
+    document.getElementById('btn-gerar-lancamentos').addEventListener('click', gerarLancamentosDoMes);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('btn-gerar-lancamentos').textContent = '📤 Gerar Lançamentos de ' + new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      await carregarParametrosEncargos();
+      await carregarCustosColaboradores();
+    });
+  </script>
+</body>
+</html>

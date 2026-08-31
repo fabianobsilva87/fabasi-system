@@ -757,16 +757,21 @@ const MENU_SECTIONS = [
     { icon: '🏭', label: 'Fornecedores', href: 'fornecedores.html' },
     { icon: '🗂️', label: 'Cadastro de Materiais', href: 'cadastro-materiais.html' },
     { icon: '🤝', label: 'Clientes', href: 'clientes.html' },
-    { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
     { icon: '🦺', label: 'Resp. de Segurança', href: 'empresas.html' },
     { icon: '📍', label: 'Locais', href: 'locais.html' },
     { icon: '📊', label: 'Centro de Custo e Plano de Contas', href: 'centro-custo-plano-contas.html' },
+    { icon: '🧮', label: 'Insumos e Composições', href: 'orcamento-composicoes.html' },
   ]},
   // NÚCLEO FINANCEIRO — inclui Bancário (mesclado a pedido: na prática as
   // duas coisas operam juntas — pagar/receber e conciliar extrato são
   // etapas do mesmo fluxo). Os arquivos continuam com os nomes
   // "bancario-*.html" para não reescrever histórico/links; só a seção de
   // menu que virou uma só.
+  { id: 'rh', label: 'RH', items: [
+    { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
+    { icon: '💰', label: 'Custo de Colaboradores', href: 'rh-custo-colaboradores.html' },
+    { icon: '🏢', label: 'Orçamento Administrativo', href: 'orcamento-administrativo.html' },
+  ]},
   { id: 'financeiro', label: 'Financeiro', items: [
     { icon: '💵', label: 'Contas a Pagar', href: 'financeiro-contas-pagar.html' },
     { icon: '💰', label: 'Contas a Receber', href: 'financeiro-contas-receber.html' },
@@ -2476,6 +2481,12 @@ if ($('btn-salvar-colaborador')) {
       cpf:              cpf.replace(/\D/g,''),
       funcao_id:        $('colab-funcao')?.value || null,
       data_contratacao: $('colab-contratacao')?.value || null,
+      salario:            $('colab-salario')?.value || null,
+      vale_transporte:    $('colab-vt')?.value || 0,
+      vale_refeicao:      $('colab-vr')?.value || 0,
+      plano_saude:        $('colab-plano-saude')?.value || 0,
+      outros_beneficios:  $('colab-outros-beneficios')?.value || 0,
+      centro_custo_id:    $('colab-centro-custo')?.value || null,
       assinatura_url,
     };
 

@@ -56,6 +56,17 @@
             <div class="form-group"><label for="colab-contratacao">Data de Contratação</label><input type="date" id="colab-contratacao"></div>
           </div>
 
+          <h4 style="font-size:13px;margin:16px 0 8px;">💰 Salário e Benefícios (para custo/RH)</h4>
+          <div class="form-grid">
+            <div class="form-group"><label for="colab-salario">Salário (R$)</label><input type="number" id="colab-salario" step="0.01" placeholder="0,00"></div>
+            <div class="form-group"><label for="colab-vt">Vale Transporte (R$/mês)</label><input type="number" id="colab-vt" step="0.01" placeholder="0,00"></div>
+            <div class="form-group"><label for="colab-vr">Vale Refeição/Alimentação (R$/mês)</label><input type="number" id="colab-vr" step="0.01" placeholder="0,00"></div>
+            <div class="form-group"><label for="colab-plano-saude">Plano de Saúde (R$/mês)</label><input type="number" id="colab-plano-saude" step="0.01" placeholder="0,00"></div>
+            <div class="form-group"><label for="colab-outros-beneficios">Outros Benefícios (R$/mês)</label><input type="number" id="colab-outros-beneficios" step="0.01" placeholder="0,00"></div>
+            <div class="form-group"><label for="colab-centro-custo">Alocado em (Centro de Custo)</label><select id="colab-centro-custo" class="form-input-style"><option value="">-- Não alocado --</option></select></div>
+          </div>
+          <p style="font-size:11px;color:#a0aec0;margin-top:-4px;">Custo total projetado (com encargos e provisões) fica disponível em <a href="rh-custo-colaboradores.html">RH → Custo de Colaboradores</a>.</p>
+
           <!-- ASSINATURA DIGITAL -->
           <div style="margin-top:20px; padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
             <label style="font-weight:600; font-size:13px; display:block; margin-bottom:4px;">🖋️ Assinatura Digital do Técnico</label>
@@ -181,6 +192,12 @@ function editarColaborador(id) {
   document.getElementById('colab-cpf').value = cpfF;
   document.getElementById('colab-funcao').value = c.funcao_id || '';
   document.getElementById('colab-contratacao').value = c.data_contratacao || '';
+  document.getElementById('colab-salario').value = c.salario || '';
+  document.getElementById('colab-vt').value = c.vale_transporte || '';
+  document.getElementById('colab-vr').value = c.vale_refeicao || '';
+  document.getElementById('colab-plano-saude').value = c.plano_saude || '';
+  document.getElementById('colab-outros-beneficios').value = c.outros_beneficios || '';
+  document.getElementById('colab-centro-custo').value = c.centro_custo_id || '';
 
   // Bug 1 fix: usa lerAssinaturaURL para checar Storage URL e Base64 legado
   const urlAssin = lerAssinaturaURL(c, 'assinatura_url', 'assinatura_digital');
@@ -208,6 +225,12 @@ function resetarFormColaborador() {
   document.getElementById('colab-cpf').value = '';
   document.getElementById('colab-funcao').value = '';
   document.getElementById('colab-contratacao').value = '';
+  document.getElementById('colab-salario').value = '';
+  document.getElementById('colab-vt').value = '';
+  document.getElementById('colab-vr').value = '';
+  document.getElementById('colab-plano-saude').value = '';
+  document.getElementById('colab-outros-beneficios').value = '';
+  document.getElementById('colab-centro-custo').value = '';
   document.getElementById('assinatura-preview-existente').style.display = 'none';
   _mostrarCanvas(true);
   limparCanvasColabAssinatura();
@@ -226,10 +249,17 @@ function alternarAbasColab(aba) {
 }
 
 // ===================== INIT =====================
+async function carregarSelectCentroCustoColab() {
+  const sel = document.getElementById('colab-centro-custo'); if (!sel) return;
+  const { data } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+  sel.innerHTML = '<option value="">-- Não alocado --</option>' +
+    (data || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   inicializarCanvasColaborador();
   await atualizarSelectFuncoes();
-  await Promise.all([carregarColaboradores(), carregarFuncoes()]);
+  await Promise.all([carregarColaboradores(), carregarFuncoes(), carregarSelectCentroCustoColab()]);
 });
 </script>
 </body>

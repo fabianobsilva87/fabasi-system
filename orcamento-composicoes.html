@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Insumos e composições de custo — base para orçamento de obra por composição — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Insumos e Composições</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <button type="button" class="btn-refresh" onclick="alternarAbaComp('insumos')">🧱 Insumos</button>
+        <button type="button" class="btn-refresh" style="background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="alternarAbaComp('composicoes')">🧮 Composições</button>
+      </div>
+      <div class="section-content">
+
+<div id="aba-insumos" class="app-sub-panel">
+        <div class="card">
+          <h3 class="card-title">🧱 Novo Insumo</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Insumo = item básico com custo unitário (material, mão de obra por hora, ou equipamento por hora/dia). Uma composição combina vários insumos.</p>
+          <input type="hidden" id="ins-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="ins-tipo">Tipo *</label>
+              <select id="ins-tipo" class="form-input-style" onchange="aoTrocarTipoInsumo()">
+                <option value="material">Material</option>
+                <option value="mao_obra">Mão de Obra</option>
+                <option value="equipamento">Equipamento</option>
+              </select>
+            </div>
+            <div class="form-group" id="ins-wrap-material" style="grid-column:span 2;"><label for="ins-material">Material do Cadastro (opcional)</label><select id="ins-material" class="form-input-style" onchange="aoSelecionarMaterialInsumo()"><option value="">-- Nenhum (descrição livre) --</option></select></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="ins-descricao">Descrição *</label><input type="text" id="ins-descricao" placeholder="Ex: Pedreiro (hora), Betoneira 400L (dia)"></div>
+            <div class="form-group"><label for="ins-unidade">Unidade *</label><input type="text" id="ins-unidade" placeholder="kg, m³, h, dia, un..."></div>
+            <div class="form-group"><label for="ins-custo">Custo Unitário de Referência (R$) *</label><input type="number" id="ins-custo" step="0.0001"></div>
+          </div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-insumo" class="btn-primary">💾 Registrar Insumo</button>
+            <button type="button" id="btn-cancelar-insumo" class="btn-secondary" style="display:none;" onclick="resetarFormInsumo()">✕ Cancelar</button>
+          </div>
+          <p id="msg-insumo" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Insumos Cadastrados</h3>
+            <button type="button" class="btn-refresh" onclick="carregarInsumos()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tipo</th><th>Descrição</th><th>Unidade</th><th>Custo Unitário</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-insumos"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+<div id="aba-composicoes" class="app-sub-panel" style="display:none;">
+        <div class="card">
+          <h3 class="card-title">🧮 Nova Composição</h3>
+          <p style="font-size:12px;color:#718096;margin-bottom:14px;">Composição = "receita" que combina insumos pra formar 1 unidade de um serviço (ex.: 1 m² de alvenaria = X tijolos + Y argamassa + Z h de pedreiro).</p>
+          <input type="hidden" id="comp-id-edicao" value="">
+          <div class="form-grid">
+            <div class="form-group"><label for="comp-codigo">Código</label><input type="text" id="comp-codigo" placeholder="Opcional"></div>
+            <div class="form-group" style="grid-column:span 2;"><label for="comp-descricao">Descrição *</label><input type="text" id="comp-descricao" placeholder="Ex: Alvenaria de vedação em bloco cerâmico"></div>
+            <div class="form-group"><label for="comp-unidade">Unidade *</label><input type="text" id="comp-unidade" placeholder="m², m³, un, vb..."></div>
+          </div>
+
+          <h4 style="font-size:13px;margin:16px 0 8px;">Insumos desta composição</h4>
+          <div id="comp-linhas-insumos"></div>
+          <button type="button" class="btn-secondary" style="font-size:12px;margin-top:8px;" onclick="adicionarLinhaInsumoComposicao()">+ Adicionar Insumo</button>
+
+          <div class="btn-row" style="margin-top:16px;">
+            <button type="button" id="btn-salvar-composicao" class="btn-primary" style="background:#7c3aed;">💾 Registrar Composição</button>
+            <button type="button" id="btn-cancelar-composicao" class="btn-secondary" style="display:none;" onclick="resetarFormComposicao()">✕ Cancelar</button>
+          </div>
+          <p id="msg-composicao" class="msg-form"></p>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 class="card-title" style="margin:0;">Composições Cadastradas</h3>
+            <button type="button" class="btn-refresh" onclick="carregarComposicoes()">↺ Atualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Descrição</th><th>Unidade</th><th>Custo Unitário (soma dos insumos)</th><th>Ações</th></tr></thead>
+              <tbody id="tbody-composicoes"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    function paraNumero(v) { return Number(v); }
+
+    function alternarAbaComp(aba) {
+      ['insumos','composicoes'].forEach(a => {
+        const el = document.getElementById('aba-' + a);
+        if (el) el.style.display = a === aba ? 'block' : 'none';
+      });
+    }
+
+    // ===================== INSUMOS =====================
+    let _insumosCache = [];
+    const TIPO_INSUMO_LABEL = { material: '🧱 Material', mao_obra: '👷 Mão de Obra', equipamento: '🚜 Equipamento' };
+
+    function aoTrocarTipoInsumo() {
+      document.getElementById('ins-wrap-material').style.display = document.getElementById('ins-tipo').value === 'material' ? 'block' : 'none';
+    }
+
+    async function carregarSelectMaterialInsumo() {
+      const { data } = await db.from('materiais').select('id,nome,unidade,valor_referencia').eq('ativo', true).order('nome');
+      window._materiaisParaInsumoCache = data || [];
+      document.getElementById('ins-material').innerHTML = '<option value="">-- Nenhum (descrição livre) --</option>' +
+        (data || []).map(m => `<option value="${escapeHTML(m.id)}">${escapeHTML(m.nome)}</option>`).join('');
+    }
+
+    function aoSelecionarMaterialInsumo() {
+      const id = document.getElementById('ins-material').value;
+      const m = (window._materiaisParaInsumoCache || []).find(x => x.id === id);
+      if (m) {
+        document.getElementById('ins-descricao').value = m.nome;
+        if (m.unidade) document.getElementById('ins-unidade').value = m.unidade;
+        if (m.valor_referencia) document.getElementById('ins-custo').value = m.valor_referencia;
+      }
+    }
+
+    async function salvarInsumo() {
+      const descricao = document.getElementById('ins-descricao').value.trim();
+      const unidade = document.getElementById('ins-unidade').value.trim();
+      const custo = Number(document.getElementById('ins-custo').value);
+      if (!descricao) { msgForm('msg-insumo', 'Informe a descrição.', 'red'); return; }
+      if (!unidade) { msgForm('msg-insumo', 'Informe a unidade.', 'red'); return; }
+      if (!custo || custo <= 0) { msgForm('msg-insumo', 'Informe um custo unitário válido.', 'red'); return; }
+
+      const payload = {
+        tipo: document.getElementById('ins-tipo').value,
+        material_id: document.getElementById('ins-material').value || null,
+        descricao, unidade, custo_unitario_referencia: custo,
+      };
+
+      const idEd = document.getElementById('ins-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('insumos_orcamento').update(payload).eq('id', idEd)
+        : await db.from('insumos_orcamento').insert([payload]);
+
+      if (error) { msgForm('msg-insumo', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-insumo', '✓ Insumo salvo!', 'green');
+      resetarFormInsumo();
+      await carregarInsumos();
+    }
+
+    function resetarFormInsumo() {
+      document.getElementById('ins-id-edicao').value = '';
+      document.getElementById('ins-tipo').value = 'material';
+      document.getElementById('ins-material').value = '';
+      ['ins-descricao','ins-unidade','ins-custo'].forEach(id => document.getElementById(id).value = '');
+      aoTrocarTipoInsumo();
+      document.getElementById('btn-salvar-insumo').textContent = '💾 Registrar Insumo';
+      document.getElementById('btn-cancelar-insumo').style.display = 'none';
+    }
+
+    function editarInsumo(id) {
+      const i = _insumosCache.find(x => x.id === id); if (!i) return;
+      document.getElementById('ins-id-edicao').value = id;
+      document.getElementById('ins-tipo').value = i.tipo;
+      document.getElementById('ins-material').value = i.material_id || '';
+      document.getElementById('ins-descricao').value = i.descricao || '';
+      document.getElementById('ins-unidade').value = i.unidade || '';
+      document.getElementById('ins-custo').value = i.custo_unitario_referencia || '';
+      aoTrocarTipoInsumo();
+      document.getElementById('btn-salvar-insumo').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-insumo').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirInsumo(id, descricao) {
+      if (!confirm(`Excluir o insumo "${descricao}"? Se ele for usado em alguma composição, aquela linha da composição fica órfã.`)) return;
+      const { error } = await db.from('insumos_orcamento').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarInsumos();
+    }
+
+    async function carregarInsumos() {
+      const tbody = document.getElementById('tbody-insumos'); if (!tbody) return;
+      const { data, error } = await db.from('insumos_orcamento').select('*').eq('ativo', true).order('tipo').order('descricao');
+      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _insumosCache = data || [];
+      window._insumosParaComposicaoCache = _insumosCache;
+      if (!_insumosCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhum insumo cadastrado ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _insumosCache.map(i => `<tr>
+        <td><span class="tag-badge">${TIPO_INSUMO_LABEL[i.tipo] || escapeHTML(i.tipo)}</span></td>
+        <td>${escapeHTML(i.descricao)}</td>
+        <td>${escapeHTML(i.unidade || '—')}</td>
+        <td>R$ ${Number(i.custo_unitario_referencia || 0).toFixed(4).replace('.', ',')}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarInsumo('${escapeHTML(i.id)}')">✏️</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirInsumo('${escapeHTML(i.id)}','${escapeHTML(i.descricao)}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== COMPOSIÇÕES =====================
+    let _composicoesCache = [];
+    let _linhasInsumoComposicao = []; // [{insumo_id, coeficiente}]
+
+    function renderizarLinhasInsumoComposicao() {
+      const wrap = document.getElementById('comp-linhas-insumos');
+      const opcoesInsumo = (window._insumosParaComposicaoCache || []).map(i => `<option value="${escapeHTML(i.id)}">${TIPO_INSUMO_LABEL[i.tipo]?.split(' ')[0] || ''} ${escapeHTML(i.descricao)} (${escapeHTML(i.unidade || '')})</option>`).join('');
+      wrap.innerHTML = _linhasInsumoComposicao.map((linha, idx) => `
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <select class="form-input-style" style="flex:2;" onchange="_linhasInsumoComposicao[${idx}].insumo_id = this.value">
+            <option value="">-- Selecione o insumo --</option>${opcoesInsumo}
+          </select>
+          <input type="number" class="form-input-style" style="flex:1;" step="0.000001" placeholder="Coeficiente" value="${linha.coeficiente || ''}" oninput="_linhasInsumoComposicao[${idx}].coeficiente = paraNumero(this.value)">
+          <button type="button" class="btn-excluir" onclick="removerLinhaInsumoComposicao(${idx})">✕</button>
+        </div>`).join('');
+      // Restaura o insumo_id selecionado em cada select (innerHTML acima não preserva value automaticamente).
+      wrap.querySelectorAll('select').forEach((sel, idx) => { sel.value = _linhasInsumoComposicao[idx].insumo_id || ''; });
+    }
+
+    function adicionarLinhaInsumoComposicao() {
+      _linhasInsumoComposicao.push({ insumo_id: '', coeficiente: 0 });
+      renderizarLinhasInsumoComposicao();
+    }
+
+    function removerLinhaInsumoComposicao(idx) {
+      _linhasInsumoComposicao.splice(idx, 1);
+      renderizarLinhasInsumoComposicao();
+    }
+
+    async function salvarComposicao() {
+      const descricao = document.getElementById('comp-descricao').value.trim();
+      const unidade = document.getElementById('comp-unidade').value.trim();
+      if (!descricao) { msgForm('msg-composicao', 'Informe a descrição.', 'red'); return; }
+      if (!unidade) { msgForm('msg-composicao', 'Informe a unidade.', 'red'); return; }
+      const linhasValidas = _linhasInsumoComposicao.filter(l => l.insumo_id && l.coeficiente > 0);
+      if (!linhasValidas.length) { msgForm('msg-composicao', 'Adicione ao menos um insumo com coeficiente válido.', 'red'); return; }
+
+      const payload = { codigo: document.getElementById('comp-codigo').value.trim() || null, descricao, unidade };
+      const idEd = document.getElementById('comp-id-edicao').value;
+
+      let composicaoId = idEd;
+      if (idEd) {
+        const { error } = await db.from('composicoes_orcamento').update(payload).eq('id', idEd);
+        if (error) { msgForm('msg-composicao', 'Erro ao salvar: ' + error.message, 'red'); return; }
+        await db.from('composicao_insumos').delete().eq('composicao_id', idEd); // substitui tudo (mesmo padrão de itens de outras telas)
+      } else {
+        const { data, error } = await db.from('composicoes_orcamento').insert([payload]).select('id').single();
+        if (error) { msgForm('msg-composicao', 'Erro ao salvar: ' + error.message, 'red'); return; }
+        composicaoId = data.id;
+      }
+
+      const { error: errLinhas } = await db.from('composicao_insumos').insert(linhasValidas.map(l => ({ composicao_id: composicaoId, insumo_id: l.insumo_id, coeficiente: l.coeficiente })));
+      if (errLinhas) { msgForm('msg-composicao', 'Composição salva, mas erro nos insumos: ' + errLinhas.message, 'red'); return; }
+
+      msgForm('msg-composicao', '✓ Composição salva!', 'green');
+      resetarFormComposicao();
+      await carregarComposicoes();
+    }
+
+    function resetarFormComposicao() {
+      document.getElementById('comp-id-edicao').value = '';
+      ['comp-codigo','comp-descricao','comp-unidade'].forEach(id => document.getElementById(id).value = '');
+      _linhasInsumoComposicao = [];
+      renderizarLinhasInsumoComposicao();
+      document.getElementById('btn-salvar-composicao').textContent = '💾 Registrar Composição';
+      document.getElementById('btn-cancelar-composicao').style.display = 'none';
+    }
+
+    async function editarComposicao(id) {
+      const c = _composicoesCache.find(x => x.id === id); if (!c) return;
+      document.getElementById('comp-id-edicao').value = id;
+      document.getElementById('comp-codigo').value = c.codigo || '';
+      document.getElementById('comp-descricao').value = c.descricao || '';
+      document.getElementById('comp-unidade').value = c.unidade || '';
+
+      const { data: linhas } = await db.from('composicao_insumos').select('*').eq('composicao_id', id);
+      _linhasInsumoComposicao = (linhas || []).map(l => ({ insumo_id: l.insumo_id, coeficiente: l.coeficiente }));
+      renderizarLinhasInsumoComposicao();
+
+      document.getElementById('btn-salvar-composicao').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-composicao').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirComposicao(id, descricao) {
+      if (!confirm(`Excluir a composição "${descricao}"?`)) return;
+      const { error } = await db.from('composicoes_orcamento').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarComposicoes();
+    }
+
+    async function carregarComposicoes() {
+      const tbody = document.getElementById('tbody-composicoes'); if (!tbody) return;
+      const { data, error } = await db.from('composicoes_orcamento').select('*, composicao_insumos(coeficiente, insumos_orcamento(custo_unitario_referencia))').eq('ativo', true).order('descricao');
+      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _composicoesCache = data || [];
+      if (!_composicoesCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma composição cadastrada ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _composicoesCache.map(c => {
+        const custoTotal = (c.composicao_insumos || []).reduce((acc, li) => acc + Number(li.coeficiente || 0) * Number(li.insumos_orcamento?.custo_unitario_referencia || 0), 0);
+        return `<tr>
+          <td>${escapeHTML(c.codigo || '—')}</td>
+          <td>${escapeHTML(c.descricao)}</td>
+          <td>${escapeHTML(c.unidade)}</td>
+          <td>R$ ${custoTotal.toFixed(2).replace('.', ',')}</td>
+          <td style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarComposicao('${escapeHTML(c.id)}')">✏️</button>
+            <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirComposicao('${escapeHTML(c.id)}','${escapeHTML(c.descricao)}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('btn-salvar-insumo').addEventListener('click', salvarInsumo);
+    document.getElementById('btn-salvar-composicao').addEventListener('click', salvarComposicao);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectMaterialInsumo();
+      await carregarInsumos();
+      await carregarComposicoes();
+      renderizarLinhasInsumoComposicao();
+    });
+  </script>
+</body>
+</html>
