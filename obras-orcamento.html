@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Orçamento de obra por etapa/serviço/insumo, com base SINAPI/SETOP e BDI.">
+    <meta name="description" content="Orçamento de obra por categoria, com comparação previsto x realizado — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="config.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
        O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
@@ -36,23 +37,230 @@
       <div class="topbar no-print"><h2>📐 Orçamento de Obra</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>📐 Orçamento de Obra</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Obras — orçamento de custo x venda, composições por insumo, Curva ABC.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> composições de preço unitário, tabelas oficiais (SINAPI/SETOP), simulação de BDI e margem, Curva ABC (peso de cada item no orçamento), comparação orçado x contratado x realizado.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Orçamento gerencial por categoria (não é composição de insumo tipo SINAPI/SICRO) — quanto está previsto
+            gastar em cada categoria do plano de contas, comparado com o que já foi lançado de verdade em Contas a
+            Pagar para essa obra.
+          </p>
+
+          <div class="card">
+            <h3 class="card-title">📐 Selecionar Obra</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="orc-obra">Obra *</label><select id="orc-obra" class="form-input-style" onchange="carregarOrcamentoDaObra()"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label>Valor do Contrato</label><div id="orc-valor-contrato" style="padding:8px 0;font-weight:700;">—</div></div>
             </div>
           </div>
+
+          <div id="orc-painel-obra" style="display:none;">
+            <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+              <div class="dash-card">
+                <div class="dash-card-icon">📐</div>
+                <p class="dash-card-title">Total Orçado</p>
+                <h3 id="orc-txt-total-orcado" class="dash-card-value" style="font-size:18px;">—</h3>
+              </div>
+              <div class="dash-card">
+                <div class="dash-card-icon">💸</div>
+                <p class="dash-card-title">Total Realizado</p>
+                <h3 id="orc-txt-total-realizado" class="dash-card-value" style="font-size:18px;">—</h3>
+              </div>
+              <div class="dash-card" id="orc-card-saldo">
+                <div class="dash-card-icon">⚖️</div>
+                <p class="dash-card-title">Saldo (Orçado − Realizado)</p>
+                <h3 id="orc-txt-saldo" class="dash-card-value" style="font-size:18px;">—</h3>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">➕ Nova Linha Orçamentária</h3>
+              <input type="hidden" id="orc-item-id-edicao" value="">
+              <div class="form-grid">
+                <div class="form-group"><label for="orc-item-plano-conta">Categoria (Plano de Contas) *</label><select id="orc-item-plano-conta" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+                <div class="form-group" style="grid-column:span 2;"><label for="orc-item-descricao">Descrição (opcional)</label><input type="text" id="orc-item-descricao" placeholder="Ex: Cimento e agregados"></div>
+                <div class="form-group"><label for="orc-item-valor">Valor Previsto (R$) *</label><input type="number" id="orc-item-valor" step="0.01"></div>
+              </div>
+              <div class="btn-row" style="margin-top:16px;">
+                <button type="button" id="btn-salvar-orc-item" class="btn-primary">💾 Adicionar Linha</button>
+                <button type="button" id="btn-cancelar-orc-item" class="btn-secondary" style="display:none;" onclick="resetarFormOrcamentoItem()">✕ Cancelar</button>
+              </div>
+              <p id="msg-orc-item" class="msg-form"></p>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">📊 Previsto x Realizado por Categoria</h3>
+              <canvas id="orc-grafico" height="90"></canvas>
+            </div>
+
+            <div class="card">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Categoria</th><th>Descrição</th><th>Previsto</th><th>Realizado</th><th>Saldo</th><th>% Consumido</th><th>Ações</th></tr></thead>
+                  <tbody id="tbody-orcamento"><tr><td colspan="7" class="td-loading">Selecione uma obra.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _obraSelecionadaId = null;
+    let _orcamentoItensCache = [];
+    let _graficoOrcamento = null;
+
+    async function carregarSelectsOrcamento() {
+      const { data: obras } = await db.from('obras').select('id,nome,valor_contrato').order('nome');
+      window._orcObrasCache = obras || [];
+      document.getElementById('orc-obra').innerHTML = '<option value="">-- Selecione --</option>' +
+        (obras || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+
+      const { data: contas } = await db.from('plano_contas').select('id,codigo,nome,nivel,tipo').eq('ativo', true).in('tipo', ['custo','despesa']).order('codigo');
+      document.getElementById('orc-item-plano-conta').innerHTML = '<option value="">-- Selecione --</option>' +
+        (contas || []).filter(c => c.nivel > 1).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+    }
+
+    async function carregarOrcamentoDaObra() {
+      _obraSelecionadaId = document.getElementById('orc-obra').value;
+      if (!_obraSelecionadaId) { document.getElementById('orc-painel-obra').style.display = 'none'; return; }
+
+      const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
+      document.getElementById('orc-valor-contrato').textContent = obra?.valor_contrato ? 'R$ ' + Number(obra.valor_contrato).toFixed(2).replace('.', ',') : '—';
+      document.getElementById('orc-painel-obra').style.display = 'block';
+
+      await carregarTabelaOrcamento();
+    }
+
+    async function salvarItemOrcamento() {
+      const planoContaId = document.getElementById('orc-item-plano-conta').value;
+      const valor = Number(document.getElementById('orc-item-valor').value);
+      if (!planoContaId) { msgForm('msg-orc-item', 'Selecione a categoria.', 'red'); return; }
+      if (!valor || valor <= 0) { msgForm('msg-orc-item', 'Informe um valor previsto válido.', 'red'); return; }
+
+      const payload = {
+        obra_id: _obraSelecionadaId, plano_conta_id: planoContaId,
+        descricao: document.getElementById('orc-item-descricao').value.trim() || null,
+        valor_previsto: valor,
+      };
+
+      const idEd = document.getElementById('orc-item-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('orcamento_obra_itens').update(payload).eq('id', idEd)
+        : await db.from('orcamento_obra_itens').insert([payload]);
+
+      if (error) { msgForm('msg-orc-item', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-orc-item', '✓ Linha orçamentária salva!', 'green');
+      resetarFormOrcamentoItem();
+      await carregarTabelaOrcamento();
+    }
+
+    function resetarFormOrcamentoItem() {
+      document.getElementById('orc-item-id-edicao').value = '';
+      document.getElementById('orc-item-plano-conta').value = '';
+      document.getElementById('orc-item-descricao').value = '';
+      document.getElementById('orc-item-valor').value = '';
+      document.getElementById('btn-salvar-orc-item').textContent = '💾 Adicionar Linha';
+      document.getElementById('btn-cancelar-orc-item').style.display = 'none';
+    }
+
+    function editarItemOrcamento(id) {
+      const item = _orcamentoItensCache.find(x => x.id === id); if (!item) return;
+      document.getElementById('orc-item-id-edicao').value = id;
+      document.getElementById('orc-item-plano-conta').value = item.plano_conta_id || '';
+      document.getElementById('orc-item-descricao').value = item.descricao || '';
+      document.getElementById('orc-item-valor').value = item.valor_previsto || '';
+      document.getElementById('btn-salvar-orc-item').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-orc-item').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirItemOrcamento(id, categoria) {
+      if (!confirm(`Excluir a linha "${categoria}" do orçamento?`)) return;
+      const { error } = await db.from('orcamento_obra_itens').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarTabelaOrcamento();
+    }
+
+    async function carregarTabelaOrcamento() {
+      const tbody = document.getElementById('tbody-orcamento');
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+
+      // Precisa do centro de custo da obra (criado automaticamente, 1:1) pra
+      // buscar o realizado em Contas a Pagar.
+      const { data: centroCusto } = await db.from('centros_custo').select('id').eq('obra_id', _obraSelecionadaId).maybeSingle();
+
+      const [{ data: itens, error }, realizadoRes] = await Promise.all([
+        db.from('orcamento_obra_itens').select('*, plano_contas(codigo,nome)').eq('obra_id', _obraSelecionadaId).order('created_at'),
+        centroCusto
+          ? db.from('contas_pagar').select('plano_conta_id, valor_total').eq('centro_custo_id', centroCusto.id)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _orcamentoItensCache = itens || [];
+
+      // Soma o realizado por plano_conta_id (pode ter mais de uma conta a
+      // pagar na mesma categoria).
+      const realizadoPorConta = {};
+      (realizadoRes.data || []).forEach(cp => {
+        if (!cp.plano_conta_id) return;
+        realizadoPorConta[cp.plano_conta_id] = (realizadoPorConta[cp.plano_conta_id] || 0) + Number(cp.valor_total || 0);
+      });
+
+      if (!_orcamentoItensCache.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma linha orçamentária cadastrada ainda para esta obra.</td></tr>';
+      } else {
+        tbody.innerHTML = _orcamentoItensCache.map(item => {
+          const realizado = realizadoPorConta[item.plano_conta_id] || 0;
+          const previsto = Number(item.valor_previsto || 0);
+          const saldo = previsto - realizado;
+          const pctConsumido = previsto > 0 ? (realizado / previsto) * 100 : 0;
+          return `<tr${saldo < 0 ? ' style="background:#fef2f2;"' : ''}>
+            <td>${escapeHTML(item.plano_contas?.codigo || '—')} — ${escapeHTML(item.plano_contas?.nome || '—')}</td>
+            <td>${escapeHTML(item.descricao || '—')}</td>
+            <td>R$ ${previsto.toFixed(2).replace('.', ',')}</td>
+            <td>R$ ${realizado.toFixed(2).replace('.', ',')}</td>
+            <td style="font-weight:700;${saldo < 0 ? 'color:#dc2626;' : 'color:#059669;'}">R$ ${saldo.toFixed(2).replace('.', ',')}</td>
+            <td>${pctConsumido.toFixed(0)}%${pctConsumido > 100 ? ' ⚠️' : ''}</td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap;">
+              <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarItemOrcamento('${escapeHTML(item.id)}')">✏️</button>
+              <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirItemOrcamento('${escapeHTML(item.id)}','${escapeHTML(item.plano_contas?.nome || '')}')">✕</button>
+            </td>
+          </tr>`;
+        }).join('');
+      }
+
+      const totalOrcado = _orcamentoItensCache.reduce((acc, i) => acc + Number(i.valor_previsto || 0), 0);
+      const totalRealizado = _orcamentoItensCache.reduce((acc, i) => acc + (realizadoPorConta[i.plano_conta_id] || 0), 0);
+      const saldoTotal = totalOrcado - totalRealizado;
+      document.getElementById('orc-txt-total-orcado').textContent = 'R$ ' + totalOrcado.toFixed(2).replace('.', ',');
+      document.getElementById('orc-txt-total-realizado').textContent = 'R$ ' + totalRealizado.toFixed(2).replace('.', ',');
+      document.getElementById('orc-txt-saldo').textContent = 'R$ ' + saldoTotal.toFixed(2).replace('.', ',');
+      document.getElementById('orc-card-saldo').classList.toggle('dash-card-danger', saldoTotal < 0);
+
+      const labels = _orcamentoItensCache.map(i => i.plano_contas?.nome || '—');
+      const previstos = _orcamentoItensCache.map(i => Number(i.valor_previsto || 0));
+      const realizados = _orcamentoItensCache.map(i => realizadoPorConta[i.plano_conta_id] || 0);
+      if (_graficoOrcamento) _graficoOrcamento.destroy();
+      _graficoOrcamento = new Chart(document.getElementById('orc-grafico'), {
+        type: 'bar',
+        data: { labels, datasets: [
+          { label: 'Previsto', data: previstos, backgroundColor: 'rgba(26,86,219,0.5)' },
+          { label: 'Realizado', data: realizados, backgroundColor: 'rgba(220,38,38,0.5)' },
+        ] },
+        options: { responsive: true, scales: { y: { ticks: { callback: v => 'R$ ' + v } } } },
+      });
+    }
+
+    document.getElementById('btn-salvar-orc-item').addEventListener('click', salvarItemOrcamento);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsOrcamento();
+    });
+  </script>
 </body>
 </html>
