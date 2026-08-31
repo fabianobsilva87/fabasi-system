@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Trilha de auditoria — quem fez o quê, quando, e o que mudou.">
+    <meta name="description" content="Log de auditoria do sistema — quem criou, editou, excluiu ou aprovou o quê, e quando — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,224 @@
       <div class="topbar no-print"><h2>📜 Auditoria</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>📜 Auditoria</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Registro de alterações relevantes em todos os módulos do sistema.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> usuário, data/hora, ação, entidade, valor anterior x valor novo, filtros por módulo e período.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Registro automático (via trigger de banco) de criação, edição e exclusão nas tabelas mais sensíveis do
+            sistema — dinheiro, aprovações e cadastros estruturais. Pega qualquer alteração, independente de por
+            onde ela chegou. Só master/admin têm acesso a esta tela.
+          </p>
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card">
+              <div class="dash-card-icon">📋</div>
+              <p class="dash-card-title">Ações Hoje</p>
+              <h3 id="aud-txt-hoje" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">📅</div>
+              <p class="dash-card-title">Ações Últimos 7 dias</p>
+              <h3 id="aud-txt-semana" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">🗑️</div>
+              <p class="dash-card-title">Exclusões (7 dias)</p>
+              <h3 id="aud-txt-exclusoes" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">👤</div>
+              <p class="dash-card-title">Usuário Mais Ativo (7 dias)</p>
+              <h3 id="aud-txt-mais-ativo" class="dash-card-value" style="font-size:15px;">—</h3>
             </div>
           </div>
+
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;">
+                <label for="aud-filtro-tabela">Tabela</label>
+                <select id="aud-filtro-tabela" class="form-input-style" style="width:auto;" onchange="carregarAuditoria()">
+                  <option value="">Todas</option>
+                  <option value="contas_pagar">Contas a Pagar</option>
+                  <option value="contas_pagar_parcelas">Parcelas — Contas a Pagar</option>
+                  <option value="contas_receber">Contas a Receber</option>
+                  <option value="contas_receber_parcelas">Parcelas — Contas a Receber</option>
+                  <option value="requisicoes_material">Requisição de Material</option>
+                  <option value="requisicoes_compra">Solicitação de Compra</option>
+                  <option value="ordens_compra">Ordem de Compra</option>
+                  <option value="obras">Obras</option>
+                  <option value="centros_custo">Centro de Custo</option>
+                  <option value="plano_contas">Plano de Contas</option>
+                  <option value="fornecedores">Fornecedores</option>
+                  <option value="bancario_movimentos">Movimentos Bancários</option>
+                  <option value="fiscal_certificados">Certificado Fiscal</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="aud-filtro-acao">Ação</label>
+                <select id="aud-filtro-acao" class="form-input-style" style="width:auto;" onchange="carregarAuditoria()">
+                  <option value="">Todas</option>
+                  <option value="INSERT">Criação</option>
+                  <option value="UPDATE">Edição</option>
+                  <option value="DELETE">Exclusão</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="aud-filtro-de">De</label>
+                <input type="date" id="aud-filtro-de" class="form-input-style" onchange="carregarAuditoria()">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="aud-filtro-ate">Até</label>
+                <input type="date" id="aud-filtro-ate" class="form-input-style" onchange="carregarAuditoria()">
+              </div>
+              <button type="button" class="btn-refresh" onclick="carregarAuditoria()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Tabela</th><th>Registro</th><th>Detalhes</th></tr></thead>
+                <tbody id="tbody-auditoria"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const TABELA_LABEL = {
+      contas_pagar: 'Contas a Pagar', contas_pagar_parcelas: 'Parcelas — Contas a Pagar',
+      contas_receber: 'Contas a Receber', contas_receber_parcelas: 'Parcelas — Contas a Receber',
+      requisicoes_material: 'Requisição de Material', requisicoes_compra: 'Solicitação de Compra',
+      ordens_compra: 'Ordem de Compra', obras: 'Obras', centros_custo: 'Centro de Custo',
+      plano_contas: 'Plano de Contas', fornecedores: 'Fornecedores', bancario_movimentos: 'Movimentos Bancários',
+      fiscal_certificados: 'Certificado Fiscal',
+    };
+    const ACAO_LABEL = { INSERT: 'Criação', UPDATE: 'Edição', DELETE: 'Exclusão' };
+    const ACAO_COR = { INSERT: 'success', UPDATE: 'warning', DELETE: 'danger' };
+
+    function formatarValorCampo(v) {
+      if (v === null || v === undefined) return '—';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    }
+
+    // Monta um diff simples campo-a-campo entre dados_antigos e dados_novos.
+    function montarDiff(antigos, novos) {
+      if (!antigos && novos) return Object.entries(novos).map(([k, v]) => `<div><strong>${escapeHTML(k)}:</strong> ${escapeHTML(formatarValorCampo(v))}</div>`).join('');
+      if (antigos && !novos) return Object.entries(antigos).map(([k, v]) => `<div><strong>${escapeHTML(k)}:</strong> ${escapeHTML(formatarValorCampo(v))}</div>`).join('');
+      if (!antigos && !novos) return '—';
+      const chaves = new Set([...Object.keys(antigos), ...Object.keys(novos)]);
+      const linhas = [];
+      chaves.forEach(k => {
+        const vAntigo = formatarValorCampo(antigos[k]);
+        const vNovo = formatarValorCampo(novos[k]);
+        if (vAntigo !== vNovo) linhas.push(`<div><strong>${escapeHTML(k)}:</strong> <span style="color:#dc2626;text-decoration:line-through;">${escapeHTML(vAntigo)}</span> → <span style="color:#059669;">${escapeHTML(vNovo)}</span></div>`);
+      });
+      return linhas.length ? linhas.join('') : '<em>Nenhum campo alterado (talvez só updated_at)</em>';
+    }
+
+    function alternarDetalhe(id) {
+      const el = document.getElementById('detalhe-' + id);
+      if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function carregarKpisAuditoria() {
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      const seteDiasAtras = new Date(hoje); seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+      const hojeStr = hoje.toISOString();
+      const seteDiasStr = seteDiasAtras.toISOString();
+
+      const [hoje7, semana7, exclusoes7] = await Promise.all([
+        db.from('auditoria_sistema').select('id', { count: 'exact', head: true }).gte('created_at', hojeStr),
+        db.from('auditoria_sistema').select('usuario_nome').gte('created_at', seteDiasStr),
+        db.from('auditoria_sistema').select('id', { count: 'exact', head: true }).eq('acao', 'DELETE').gte('created_at', seteDiasStr),
+      ]);
+
+      document.getElementById('aud-txt-hoje').textContent = hoje7.count ?? 0;
+      document.getElementById('aud-txt-semana').textContent = (semana7.data || []).length;
+      document.getElementById('aud-txt-exclusoes').textContent = exclusoes7.count ?? 0;
+
+      const contagem = {};
+      (semana7.data || []).forEach(r => { const nome = r.usuario_nome || 'Sistema/Automação'; contagem[nome] = (contagem[nome] || 0) + 1; });
+      const maisAtivo = Object.entries(contagem).sort((a, b) => b[1] - a[1])[0];
+      document.getElementById('aud-txt-mais-ativo').textContent = maisAtivo ? `${maisAtivo[0]} (${maisAtivo[1]})` : '—';
+    }
+
+    async function carregarAuditoria() {
+      const tbody = document.getElementById('tbody-auditoria');
+      tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Carregando...</td></tr>';
+
+      const tabelaFiltro = document.getElementById('aud-filtro-tabela').value;
+      const acaoFiltro = document.getElementById('aud-filtro-acao').value;
+      const de = document.getElementById('aud-filtro-de').value;
+      const ate = document.getElementById('aud-filtro-ate').value;
+
+      let linhas = [];
+
+      if (!tabelaFiltro || tabelaFiltro !== 'fiscal_certificados') {
+        let query = db.from('auditoria_sistema').select('*').order('created_at', { ascending: false }).limit(200);
+        if (tabelaFiltro) query = query.eq('tabela', tabelaFiltro);
+        if (acaoFiltro) query = query.eq('acao', acaoFiltro);
+        if (de) query = query.gte('created_at', de + 'T00:00:00');
+        if (ate) query = query.lte('created_at', ate + 'T23:59:59');
+        const { data, error } = await query;
+        if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+        linhas = (data || []).map(r => ({
+          created_at: r.created_at, usuario_nome: r.usuario_nome, acao: r.acao,
+          tabela: r.tabela, registro_id: r.registro_id,
+          dados_antigos: r.dados_antigos, dados_novos: r.dados_novos, id: r.id,
+        }));
+      }
+
+      // Certificado fiscal tem log próprio (fiscal_certificado_auditoria) —
+      // junta na mesma listagem quando o filtro permite.
+      if (!tabelaFiltro || tabelaFiltro === 'fiscal_certificados') {
+        if (!acaoFiltro || acaoFiltro === 'UPDATE' || acaoFiltro === 'INSERT') {
+          let queryCert = db.from('fiscal_certificado_auditoria').select('*, profiles(nome)').order('created_at', { ascending: false }).limit(100);
+          if (de) queryCert = queryCert.gte('created_at', de + 'T00:00:00');
+          if (ate) queryCert = queryCert.lte('created_at', ate + 'T23:59:59');
+          const { data: certData } = await queryCert;
+          (certData || []).forEach(r => {
+            linhas.push({
+              created_at: r.created_at, usuario_nome: r.profiles?.nome || null,
+              acao: r.acao === 'cadastrado' ? 'INSERT' : 'UPDATE',
+              tabela: 'fiscal_certificados', registro_id: r.certificado_id,
+              dados_antigos: null, dados_novos: { acao: r.acao, ...r.detalhe }, id: r.id,
+            });
+          });
+        }
+      }
+
+      linhas.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      linhas = linhas.slice(0, 200);
+
+      if (!linhas.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum registro de auditoria encontrado para esse filtro.</td></tr>'; return; }
+
+      tbody.innerHTML = linhas.map(r => `<tr>
+        <td style="font-size:12px;white-space:nowrap;">${new Date(r.created_at).toLocaleString('pt-BR')}</td>
+        <td>${escapeHTML(r.usuario_nome || 'Sistema/Automação')}</td>
+        <td><span class="tag-badge ${ACAO_COR[r.acao] || ''}">${ACAO_LABEL[r.acao] || escapeHTML(r.acao)}</span></td>
+        <td>${escapeHTML(TABELA_LABEL[r.tabela] || r.tabela)}</td>
+        <td style="font-family:monospace;font-size:11px;">${escapeHTML((r.registro_id || '').toString().slice(0, 8))}</td>
+        <td>
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarDetalhe('${r.id}')">Ver</button>
+          <div id="detalhe-${r.id}" style="display:none;margin-top:6px;font-size:11px;background:#f8fafc;border-radius:6px;padding:8px;max-width:420px;">
+            ${montarDiff(r.dados_antigos, r.dados_novos)}
+          </div>
+        </td>
+      </tr>`).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      if (!podeAprovar()) {
+        document.querySelector('.app-sub-panel').innerHTML = '<div class="card"><p style="color:#dc2626;">Acesso restrito a master/admin.</p></div>';
+        return;
+      }
+      await carregarKpisAuditoria();
+      await carregarAuditoria();
+    });
+  </script>
 </body>
 </html>
