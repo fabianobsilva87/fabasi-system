@@ -722,6 +722,8 @@ const MENU_SECTIONS = [
   { id: 'obras', label: 'Obras', items: [
     { icon: '🏗️', label: 'Cadastro de Obra', href: 'obras.html' },
     { icon: '📐', label: 'Orçamento de Obra', href: 'obras-orcamento.html' },
+    { icon: '💲', label: 'Tabela de Preços do Contrato', href: 'obras-tabela-precos.html' },
+    { icon: '🧾', label: 'Ordens de Serviço de Obra', href: 'obras-ordens-servico.html' },
     { icon: '📅', label: 'Cronograma de Obra', href: 'obras-cronograma.html' },
     { icon: '📊', label: 'Medição de Obra', href: 'obras-medicao.html' },
     { icon: '📄', label: 'Contratos', href: 'contratos.html' },

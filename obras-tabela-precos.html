@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Tabela de preços do contrato por obra — base para as Ordens de Serviço — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Tabela de Preços do Contrato</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>💲 Tabela de Preços do Contrato</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Para contratos de preço unitário (ex.: cliente já fornece a planilha de referência) — os itens cadastrados
+            aqui aparecem pré-selecionáveis ao montar uma Ordem de Serviço para esta obra.
+          </p>
+
+          <div class="card">
+            <h3 class="card-title">💲 Selecionar Obra</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="tp-obra">Obra *</label><select id="tp-obra" class="form-input-style" onchange="carregarTabelaPrecosDaObra()"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="tp-bdi">BDI da Obra (%)</label><input type="number" id="tp-bdi" step="0.01" onchange="salvarBdiObraTp()"></div>
+            </div>
+          </div>
+
+          <div id="tp-painel-obra" style="display:none;">
+            <div class="card">
+              <h3 class="card-title">➕ Novo Item da Tabela de Preços</h3>
+              <input type="hidden" id="tp-item-id-edicao" value="">
+              <div class="form-grid">
+                <div class="form-group"><label for="tp-item-numero">Item Nº</label><input type="number" id="tp-item-numero"></div>
+                <div class="form-group" style="grid-column:span 2;"><label for="tp-item-descricao">Descrição *</label><input type="text" id="tp-item-descricao" placeholder="Ex: PEDREIRO"></div>
+                <div class="form-group"><label for="tp-item-tipo">Tipo *</label>
+                  <select id="tp-item-tipo" class="form-input-style">
+                    <option value="material">Material</option>
+                    <option value="mao_obra">Mão de Obra</option>
+                    <option value="locacao">Locação</option>
+                    <option value="servico">Serviço</option>
+                  </select>
+                </div>
+                <div class="form-group"><label for="tp-item-unidade">Unidade *</label><input type="text" id="tp-item-unidade" placeholder="DIÁRIA, HORA, M², M, VB, PC..."></div>
+                <div class="form-group"><label for="tp-item-quantidade">Quantidade Contratada (opcional)</label><input type="number" id="tp-item-quantidade" step="0.0001"></div>
+                <div class="form-group"><label for="tp-item-custo">Custo Unitário S/BDI (R$) *</label><input type="number" id="tp-item-custo" step="0.0001"></div>
+              </div>
+              <div class="btn-row" style="margin-top:16px;">
+                <button type="button" id="btn-salvar-tp-item" class="btn-primary">💾 Registrar Item</button>
+                <button type="button" id="btn-cancelar-tp-item" class="btn-secondary" style="display:none;" onclick="resetarFormTabelaPrecoItem()">✕ Cancelar</button>
+              </div>
+              <p id="msg-tp-item" class="msg-form"></p>
+            </div>
+
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <h3 class="card-title" style="margin:0;">Itens Cadastrados</h3>
+                <button type="button" class="btn-refresh" onclick="carregarTabelaPrecosDaObra()">↺ Atualizar</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Item</th><th>Descrição</th><th>Tipo</th><th>Unid.</th><th>Custo S/BDI</th><th>Custo C/BDI</th><th>Ações</th></tr></thead>
+                  <tbody id="tbody-tabela-precos"><tr><td colspan="7" class="td-loading">Nenhuma obra selecionada.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _obraTpSelecionadaId = null;
+    let _tabelaPrecosCache = [];
+    const TIPO_TP_LABEL = { material: '🧱 Material', mao_obra: '👷 Mão de Obra', locacao: '🚜 Locação', servico: '🔧 Serviço' };
+
+    async function carregarSelectObraTp() {
+      const { data } = await db.from('obras').select('id,nome,bdi_percentual').order('nome');
+      window._obrasParaTpCache = data || [];
+      document.getElementById('tp-obra').innerHTML = '<option value="">-- Selecione --</option>' +
+        (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+    }
+
+    async function salvarBdiObraTp() {
+      if (!_obraTpSelecionadaId) return;
+      const bdi = Number(document.getElementById('tp-bdi').value) || 0;
+      await db.from('obras').update({ bdi_percentual: bdi }).eq('id', _obraTpSelecionadaId);
+      const obra = (window._obrasParaTpCache || []).find(o => o.id === _obraTpSelecionadaId);
+      if (obra) obra.bdi_percentual = bdi;
+      await carregarTabelaPrecosDaObra();
+    }
+
+    async function carregarTabelaPrecosDaObra() {
+      _obraTpSelecionadaId = document.getElementById('tp-obra').value;
+      if (!_obraTpSelecionadaId) { document.getElementById('tp-painel-obra').style.display = 'none'; return; }
+
+      const obra = (window._obrasParaTpCache || []).find(o => o.id === _obraTpSelecionadaId);
+      document.getElementById('tp-bdi').value = obra?.bdi_percentual || 0;
+      document.getElementById('tp-painel-obra').style.display = 'block';
+
+      const tbody = document.getElementById('tbody-tabela-precos');
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
+      const { data, error } = await db.from('tabela_precos_contrato').select('*').eq('obra_id', _obraTpSelecionadaId).eq('ativo', true).order('item_numero');
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _tabelaPrecosCache = data || [];
+
+      if (!_tabelaPrecosCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhum item cadastrado ainda.</td></tr>'; return; }
+
+      const bdi = Number(obra?.bdi_percentual || 0);
+      tbody.innerHTML = _tabelaPrecosCache.map(item => {
+        const custoComBdi = Number(item.custo_unitario_sem_bdi || 0) * (1 + bdi / 100);
+        return `<tr>
+          <td>${item.item_numero ?? '—'}</td>
+          <td>${escapeHTML(item.descricao)}</td>
+          <td><span class="tag-badge">${TIPO_TP_LABEL[item.tipo] || escapeHTML(item.tipo)}</span></td>
+          <td>${escapeHTML(item.unidade || '—')}</td>
+          <td>R$ ${Number(item.custo_unitario_sem_bdi || 0).toFixed(4).replace('.', ',')}</td>
+          <td>R$ ${custoComBdi.toFixed(4).replace('.', ',')}</td>
+          <td style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarTabelaPrecoItem('${escapeHTML(item.id)}')">✏️</button>
+            <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirTabelaPrecoItem('${escapeHTML(item.id)}','${escapeHTML(item.descricao)}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function salvarTabelaPrecoItem() {
+      const descricao = document.getElementById('tp-item-descricao').value.trim();
+      const unidade = document.getElementById('tp-item-unidade').value.trim();
+      const custo = Number(document.getElementById('tp-item-custo').value);
+      if (!descricao) { msgForm('msg-tp-item', 'Informe a descrição.', 'red'); return; }
+      if (!unidade) { msgForm('msg-tp-item', 'Informe a unidade.', 'red'); return; }
+      if (!custo || custo <= 0) { msgForm('msg-tp-item', 'Informe um custo unitário válido.', 'red'); return; }
+
+      const payload = {
+        obra_id: _obraTpSelecionadaId,
+        item_numero: document.getElementById('tp-item-numero').value || null,
+        descricao, tipo: document.getElementById('tp-item-tipo').value, unidade,
+        quantidade_contratada: document.getElementById('tp-item-quantidade').value || null,
+        custo_unitario_sem_bdi: custo,
+      };
+
+      const idEd = document.getElementById('tp-item-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('tabela_precos_contrato').update(payload).eq('id', idEd)
+        : await db.from('tabela_precos_contrato').insert([payload]);
+
+      if (error) { msgForm('msg-tp-item', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-tp-item', '✓ Item salvo!', 'green');
+      resetarFormTabelaPrecoItem();
+      await carregarTabelaPrecosDaObra();
+    }
+
+    function resetarFormTabelaPrecoItem() {
+      document.getElementById('tp-item-id-edicao').value = '';
+      ['tp-item-numero','tp-item-descricao','tp-item-unidade','tp-item-quantidade','tp-item-custo'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('tp-item-tipo').value = 'material';
+      document.getElementById('btn-salvar-tp-item').textContent = '💾 Registrar Item';
+      document.getElementById('btn-cancelar-tp-item').style.display = 'none';
+    }
+
+    function editarTabelaPrecoItem(id) {
+      const item = _tabelaPrecosCache.find(x => x.id === id); if (!item) return;
+      document.getElementById('tp-item-id-edicao').value = id;
+      document.getElementById('tp-item-numero').value = item.item_numero || '';
+      document.getElementById('tp-item-descricao').value = item.descricao || '';
+      document.getElementById('tp-item-tipo').value = item.tipo || 'material';
+      document.getElementById('tp-item-unidade').value = item.unidade || '';
+      document.getElementById('tp-item-quantidade').value = item.quantidade_contratada || '';
+      document.getElementById('tp-item-custo').value = item.custo_unitario_sem_bdi || '';
+      document.getElementById('btn-salvar-tp-item').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-tp-item').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirTabelaPrecoItem(id, descricao) {
+      if (!confirm(`Excluir o item "${descricao}"?`)) return;
+      const { error } = await db.from('tabela_precos_contrato').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarTabelaPrecosDaObra();
+    }
+
+    document.getElementById('btn-salvar-tp-item').addEventListener('click', salvarTabelaPrecoItem);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectObraTp();
+    });
+  </script>
+</body>
+</html>

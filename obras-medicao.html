@@ -77,6 +77,7 @@
                 <div class="form-group"><label for="med-periodo-inicio">Período — Início</label><input type="date" id="med-periodo-inicio"></div>
                 <div class="form-group"><label for="med-periodo-fim">Período — Fim</label><input type="date" id="med-periodo-fim"></div>
                 <div class="form-group" style="grid-column:span 3;"><label for="med-observacoes">Observações</label><input type="text" id="med-observacoes"></div>
+                <div class="form-group" style="grid-column:span 3;"><label for="med-fotos">📷 Registro Fotográfico (opcional, várias fotos)</label><input type="file" id="med-fotos" accept="image/*" multiple capture="environment"></div>
               </div>
 
               <div class="table-wrap" style="margin-top:14px;">
@@ -236,8 +237,15 @@
       const { error: errItens } = await db.from('medicao_itens').insert(linhas.map(l => ({ ...l, medicao_id: novaMedicao.id })));
       if (errItens) { msgForm('msg-medicao', 'Medição criada, mas erro nos itens: ' + errItens.message, 'red'); return; }
 
+      const arquivosFoto = document.getElementById('med-fotos').files;
+      if (arquivosFoto && arquivosFoto.length) {
+        const urls = await uploadFotos(arquivosFoto, `medicoes-obra/${novaMedicao.id}`, 'msg-medicao');
+        if (urls.length) await db.from('medicoes_obra').update({ fotos_urls: urls }).eq('id', novaMedicao.id);
+      }
+
       msgForm('msg-medicao', `✓ Medição Nº ${numeroMedicao} registrada como rascunho! Valor: R$ ${valorTotal.toFixed(2).replace('.', ',')}`, 'green');
       document.getElementById('med-observacoes').value = '';
+      document.getElementById('med-fotos').value = '';
       await carregarMedicoesDaObra();
     }
 
@@ -245,19 +253,57 @@
       const tbody = document.getElementById('tbody-medicoes');
       if (!_medicoesCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma medição registrada ainda.</td></tr>'; return; }
 
-      tbody.innerHTML = _medicoesCache.map(m => `<tr>
+      tbody.innerHTML = _medicoesCache.map(m => {
+        const fotos = lerFotos(m);
+        return `<tr>
         <td>${m.numero_medicao}</td>
         <td style="font-size:12px;">${fmtDate(m.periodo_inicio)} → ${fmtDate(m.periodo_fim)}</td>
         <td>${fmtDate(m.data_medicao)}</td>
         <td>R$ ${Number(m.valor_total_medicao || 0).toFixed(2).replace('.', ',')}</td>
-        <td><span class="tag-badge ${STATUS_MEDICAO_COR[m.status] || ''}">${STATUS_MEDICAO_LABEL[m.status] || escapeHTML(m.status)}</span>${m.aprovado_em ? seloAprovacao(m.aprovado_por_nome, m.aprovado_em) : ''}</td>
-        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+        <td><span class="tag-badge ${STATUS_MEDICAO_COR[m.status] || ''}">${STATUS_MEDICAO_LABEL[m.status] || escapeHTML(m.status)}</span> <span class="tag-badge" style="font-size:10px;">${m.origem === 'ordens_servico' ? '📋 Via OS' : '📊 Avanço Físico'}</span>${m.aprovado_em ? seloAprovacao(m.aprovado_por_nome, m.aprovado_em) : ''}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarFotosMedicao('${escapeHTML(m.id)}')">📷 Fotos (${fotos.length})</button>
           ${m.status === 'rascunho' && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarMedicao('${escapeHTML(m.id)}')">✓ Aprovar</button>` : ''}
           ${m.status === 'rascunho' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMedicao('${escapeHTML(m.id)}', ${m.numero_medicao})">✕</button>` : ''}
           ${m.status === 'aprovada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#0e7490;" onclick="gerarContaReceberMedicao('${escapeHTML(m.id)}')">📤 Gerar Conta a Receber</button>` : ''}
           ${m.status === 'faturada' ? '<span style="font-size:11px;color:#059669;">✓ Faturada</span>' : ''}
         </td>
-      </tr>`).join('');
+      </tr>
+      <tr id="fotos-medicao-${m.id}" style="display:none;">
+        <td colspan="6" style="background:#f8fafc;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            ${fotos.length ? fotos.map(f => `<a href="${escapeHTML(f.url)}" target="_blank" rel="noopener"><img src="${escapeHTML(f.url)}" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;"></a>`).join('') : '<span style="font-size:12px;color:#a0aec0;">Nenhuma foto registrada ainda.</span>'}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="file" id="fotos-input-${m.id}" accept="image/*" multiple capture="environment" style="font-size:12px;">
+            <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="adicionarFotosMedicaoExistente('${escapeHTML(m.id)}')">📤 Adicionar</button>
+          </div>
+        </td>
+      </tr>`;
+      }).join('');
+    }
+
+    function alternarFotosMedicao(medicaoId) {
+      const el = document.getElementById('fotos-medicao-' + medicaoId);
+      if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    async function adicionarFotosMedicaoExistente(medicaoId) {
+      const input = document.getElementById('fotos-input-' + medicaoId);
+      const arquivos = input.files;
+      if (!arquivos || !arquivos.length) { toast('Selecione ao menos uma foto.', 'erro'); return; }
+
+      const medicao = _medicoesCache.find(m => m.id === medicaoId);
+      const fotosAtuais = lerFotos(medicao).map(f => f.url);
+      const novasUrls = await uploadFotos(arquivos, `medicoes-obra/${medicaoId}`, null);
+      if (!novasUrls.length) { toast('Falha ao enviar as fotos.', 'erro'); return; }
+
+      const { error } = await db.from('medicoes_obra').update({ fotos_urls: [...fotosAtuais, ...novasUrls] }).eq('id', medicaoId);
+      if (error) { toast('Erro ao salvar as fotos: ' + error.message, 'erro'); return; }
+
+      toast('Fotos adicionadas!', 'sucesso');
+      await carregarMedicoesDaObra();
+      alternarFotosMedicao(medicaoId);
     }
 
     async function aprovarMedicao(id) {

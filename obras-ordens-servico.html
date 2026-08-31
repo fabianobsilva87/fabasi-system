@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Ordens de Serviço de Obra — material, mão de obra, locação e registro fotográfico, com sincronização para Medição — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Ordens de Serviço de Obra</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>🧾 Ordens de Serviço de Obra</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="card">
+            <h3 class="card-title">🧾 Selecionar Obra</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="oso-obra">Obra *</label><select id="oso-obra" class="form-input-style" onchange="carregarOsDaObra()"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label>BDI da Obra</label><div id="oso-bdi-info" style="padding:8px 0;font-weight:700;">—</div></div>
+            </div>
+            <p style="font-size:11px;color:#a0aec0;margin-top:8px;">Cadastre os preços em <a href="obras-tabela-precos.html">Tabela de Preços do Contrato</a> antes de montar a OS.</p>
+          </div>
+
+          <div id="oso-painel-obra" style="display:none;">
+
+            <div class="card">
+              <h3 class="card-title">➕ Nova Ordem de Serviço</h3>
+              <div class="form-grid">
+                <div class="form-group" style="grid-column:span 2;"><label for="oso-descricao">Descrição do Serviço *</label><input type="text" id="oso-descricao" placeholder="Ex: Troca de luminárias e lâmpadas"></div>
+                <div class="form-group"><label for="oso-data">Data de Execução</label><input type="date" id="oso-data"></div>
+                <div class="form-group" style="grid-column:span 3;"><label for="oso-observacoes">Observações</label><input type="text" id="oso-observacoes" placeholder="Ex: foi trocado 3 luminárias de 36w e 4 lâmpadas"></div>
+              </div>
+
+              <h4 style="font-size:13px;margin:16px 0 8px;">Itens (material / mão de obra / locação / serviço)</h4>
+              <div id="oso-linhas-itens"></div>
+              <button type="button" class="btn-secondary" style="font-size:12px;margin-top:8px;" onclick="adicionarLinhaItemOS()">+ Adicionar Item</button>
+
+              <div style="margin-top:14px;font-size:14px;font-weight:700;">Valor Total da OS: <span id="oso-total-nova">R$ 0,00</span></div>
+
+              <h4 style="font-size:13px;margin:16px 0 8px;">📷 Registro Fotográfico</h4>
+              <div class="form-grid">
+                <div class="form-group"><label for="oso-fotos-antes">Fotos Antes</label><input type="file" id="oso-fotos-antes" accept="image/*" multiple capture="environment"></div>
+                <div class="form-group"><label for="oso-fotos-depois">Fotos Depois</label><input type="file" id="oso-fotos-depois" accept="image/*" multiple capture="environment"></div>
+              </div>
+
+              <div class="btn-row" style="margin-top:16px;">
+                <button type="button" id="btn-salvar-os" class="btn-primary">💾 Registrar OS</button>
+              </div>
+              <p id="msg-os" class="msg-form"></p>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">🔄 Sincronizar OS Concluídas para Medição</h3>
+              <p style="font-size:12px;color:#718096;margin-bottom:14px;">Escolha quais OS já concluídas entram nesta medição — o valor da medição é a soma das OS selecionadas.</p>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th></th><th>Nº</th><th>Descrição</th><th>Data</th><th>Valor</th></tr></thead>
+                  <tbody id="tbody-os-concluidas"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+              <div style="margin-top:10px;font-size:13px;font-weight:700;">Total Selecionado: <span id="oso-total-selecionado">R$ 0,00</span></div>
+              <div class="btn-row" style="margin-top:12px;">
+                <button type="button" id="btn-gerar-medicao-os" class="btn-primary" style="background:#0e7490;">📤 Gerar Medição com as Selecionadas</button>
+              </div>
+              <p id="msg-sync-medicao" class="msg-form"></p>
+            </div>
+
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <h3 class="card-title" style="margin:0;">Histórico de Ordens de Serviço</h3>
+                <button type="button" class="btn-refresh" onclick="carregarOsDaObra()">↺ Atualizar</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Nº</th><th>Descrição</th><th>Data</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                  <tbody id="tbody-historico-os"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _obraOsSelecionadaId = null;
+    let _tabelaPrecosParaOsCache = [];
+    let _itensOsAtual = [];
+    let _osCache = [];
+    let _fiscalDocumentosCache = [];
+
+    const TIPO_TP_LABEL2 = { material: '🧱 Material', mao_obra: '👷 Mão de Obra', locacao: '🚜 Locação', servico: '🔧 Serviço' };
+    const STATUS_OS_LABEL = { aberta: 'Aberta', concluida: 'Concluída', sincronizada: 'Sincronizada' };
+    const STATUS_OS_COR = { aberta: '', concluida: 'warning', sincronizada: 'success' };
+
+    async function carregarSelectObraOs() {
+      const { data } = await db.from('obras').select('id,nome,bdi_percentual,cliente_id').order('nome');
+      window._obrasParaOsCache = data || [];
+      document.getElementById('oso-obra').innerHTML = '<option value="">-- Selecione --</option>' +
+        (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+    }
+
+    async function carregarFiscalDocumentosParaOs() {
+      const { data } = await db.from('fiscal_documentos').select('id,tipo_documento,numero,cnpj_emitente,valor_total').order('data_emissao', { ascending: false }).limit(150);
+      _fiscalDocumentosCache = data || [];
+    }
+
+    async function carregarOsDaObra() {
+      _obraOsSelecionadaId = document.getElementById('oso-obra').value;
+      if (!_obraOsSelecionadaId) { document.getElementById('oso-painel-obra').style.display = 'none'; return; }
+
+      const obra = (window._obrasParaOsCache || []).find(o => o.id === _obraOsSelecionadaId);
+      document.getElementById('oso-bdi-info').textContent = (obra?.bdi_percentual || 0) + '%';
+      document.getElementById('oso-painel-obra').style.display = 'block';
+
+      const { data: tp } = await db.from('tabela_precos_contrato').select('*').eq('obra_id', _obraOsSelecionadaId).eq('ativo', true).order('item_numero');
+      _tabelaPrecosParaOsCache = tp || [];
+
+      const { data: osList } = await db.from('ordens_servico_obra').select('*').eq('obra_id', _obraOsSelecionadaId).order('numero_os', { ascending: false });
+      _osCache = osList || [];
+
+      _itensOsAtual = [];
+      renderizarLinhasItensOS();
+      renderizarHistoricoOS();
+      renderizarOsConcluidas();
+    }
+
+    // ===================== ITENS DA NOVA OS =====================
+    function renderizarLinhasItensOS() {
+      const wrap = document.getElementById('oso-linhas-itens');
+      const opcoesTabelaPrecos = _tabelaPrecosParaOsCache.map(tp => `<option value="${escapeHTML(tp.id)}">${TIPO_TP_LABEL2[tp.tipo]?.split(' ')[0] || ''} ${escapeHTML(tp.descricao)} (${escapeHTML(tp.unidade || '')})</option>`).join('');
+      const opcoesFiscal = _fiscalDocumentosCache.map(f => `<option value="${escapeHTML(f.id)}">${f.tipo_documento === 'NFE' ? 'NF-e' : 'NFS-e'} ${escapeHTML(f.numero || '')} — ${escapeHTML(f.cnpj_emitente || '')} — R$ ${Number(f.valor_total || 0).toFixed(2).replace('.', ',')}</option>`).join('');
+
+      wrap.innerHTML = _itensOsAtual.map((item, idx) => `
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:2;min-width:200px;">
+              <label style="font-size:11px;">Da Tabela de Preços (opcional)</label>
+              <select class="form-input-style" style="font-size:12px;" onchange="aoEscolherItemTabelaPrecoOS(${idx}, this.value)">
+                <option value="">-- item avulso --</option>${opcoesTabelaPrecos}
+              </select>
+            </div>
+            <div style="flex:1;min-width:100px;">
+              <label style="font-size:11px;">Tipo</label>
+              <select class="form-input-style" style="font-size:12px;" onchange="_itensOsAtual[${idx}].tipo = this.value; renderizarLinhasItensOS();">
+                <option value="material" ${item.tipo === 'material' ? 'selected' : ''}>🧱 Material</option>
+                <option value="mao_obra" ${item.tipo === 'mao_obra' ? 'selected' : ''}>👷 Mão de Obra</option>
+                <option value="locacao" ${item.tipo === 'locacao' ? 'selected' : ''}>🚜 Locação</option>
+                <option value="servico" ${item.tipo === 'servico' ? 'selected' : ''}>🔧 Serviço</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px;">
+            <div style="flex:2;min-width:200px;">
+              <label style="font-size:11px;">Descrição</label>
+              <input type="text" class="form-input-style" style="font-size:12px;" value="${escapeHTML(item.descricao || '')}" oninput="_itensOsAtual[${idx}].descricao = this.value">
+            </div>
+            <div style="width:90px;">
+              <label style="font-size:11px;">Quantidade</label>
+              <input type="number" class="form-input-style" style="font-size:12px;" step="0.0001" value="${item.quantidade || ''}" oninput="_itensOsAtual[${idx}].quantidade = paraNumeroOS(this.value); atualizarTotalNovaOS();">
+            </div>
+            <div style="width:110px;">
+              <label style="font-size:11px;">Custo Unit. S/BDI</label>
+              <input type="number" class="form-input-style" style="font-size:12px;" step="0.0001" value="${item.custo_unitario_sem_bdi || ''}" oninput="_itensOsAtual[${idx}].custo_unitario_sem_bdi = paraNumeroOS(this.value); atualizarTotalNovaOS();">
+            </div>
+            <div style="width:100px;font-size:12px;text-align:right;">
+              <label style="font-size:11px;display:block;">Total</label>
+              <span class="oso-valor-linha" data-idx="${idx}">R$ 0,00</span>
+            </div>
+            <button type="button" class="btn-excluir" onclick="removerLinhaItemOS(${idx})">✕</button>
+          </div>
+          ${item.tipo === 'material' ? `
+          <div style="margin-top:6px;">
+            <label style="font-size:11px;">Vincular Nota Fiscal (opcional)</label>
+            <select class="form-input-style" style="font-size:12px;" onchange="_itensOsAtual[${idx}].fiscal_documento_id = this.value || null">
+              <option value="">-- Nenhuma --</option>${opcoesFiscal}
+            </select>
+          </div>` : ''}
+        </div>`).join('');
+
+      // Restaura valores selecionados (innerHTML não preserva <select> value automaticamente).
+      const blocos = wrap.querySelectorAll('div[style*="border:1px solid"]');
+      _itensOsAtual.forEach((item, idx) => {
+        const bloco = blocos[idx]; if (!bloco) return;
+        const selects = bloco.querySelectorAll('select');
+        if (selects[0]) selects[0].value = item.tabela_preco_item_id || '';
+        if (selects[2]) selects[2].value = item.fiscal_documento_id || '';
+      });
+
+      atualizarTotalNovaOS();
+    }
+
+    function paraNumeroOS(v) { return Number(v) || 0; }
+
+    function aoEscolherItemTabelaPrecoOS(idx, tabelaPrecoId) {
+      const tp = _tabelaPrecosParaOsCache.find(x => x.id === tabelaPrecoId);
+      if (!tp) { _itensOsAtual[idx].tabela_preco_item_id = null; return; }
+      _itensOsAtual[idx] = {
+        ..._itensOsAtual[idx],
+        tabela_preco_item_id: tp.id, tipo: tp.tipo, descricao: tp.descricao,
+        custo_unitario_sem_bdi: Number(tp.custo_unitario_sem_bdi || 0),
+      };
+      renderizarLinhasItensOS();
+    }
+
+    function adicionarLinhaItemOS() {
+      _itensOsAtual.push({ tipo: 'material', descricao: '', quantidade: 1, custo_unitario_sem_bdi: 0, tabela_preco_item_id: null, fiscal_documento_id: null });
+      renderizarLinhasItensOS();
+    }
+
+    function removerLinhaItemOS(idx) {
+      _itensOsAtual.splice(idx, 1);
+      renderizarLinhasItensOS();
+    }
+
+    function atualizarTotalNovaOS() {
+      const obra = (window._obrasParaOsCache || []).find(o => o.id === _obraOsSelecionadaId);
+      const bdi = Number(obra?.bdi_percentual || 0);
+      let total = 0;
+      document.querySelectorAll('.oso-valor-linha').forEach(span => {
+        const idx = Number(span.dataset.idx);
+        const item = _itensOsAtual[idx]; if (!item) return;
+        const custoComBdi = Number(item.custo_unitario_sem_bdi || 0) * (1 + bdi / 100);
+        const valorLinha = custoComBdi * Number(item.quantidade || 0);
+        total += valorLinha;
+        span.textContent = 'R$ ' + valorLinha.toFixed(2).replace('.', ',');
+      });
+      document.getElementById('oso-total-nova').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+    }
+
+    // ===================== SALVAR OS =====================
+    async function salvarOS() {
+      const descricao = document.getElementById('oso-descricao').value.trim();
+      if (!descricao) { msgForm('msg-os', 'Informe a descrição do serviço.', 'red'); return; }
+      const itensValidos = _itensOsAtual.filter(i => i.descricao && i.quantidade > 0);
+      if (!itensValidos.length) { msgForm('msg-os', 'Adicione ao menos um item válido.', 'red'); return; }
+
+      const obra = (window._obrasParaOsCache || []).find(o => o.id === _obraOsSelecionadaId);
+      const bdi = Number(obra?.bdi_percentual || 0);
+      const numeroOS = (_osCache[0]?.numero_os || 0) + 1;
+
+      const itensCalculados = itensValidos.map(i => {
+        const custoComBdi = Number(i.custo_unitario_sem_bdi || 0) * (1 + bdi / 100);
+        return { ...i, custo_unitario_com_bdi: custoComBdi, valor_total: custoComBdi * Number(i.quantidade || 0) };
+      });
+      const valorTotalOS = itensCalculados.reduce((acc, i) => acc + i.valor_total, 0);
+
+      msgForm('msg-os', 'Salvando...', 'green');
+      const { data: novaOS, error } = await db.from('ordens_servico_obra').insert([{
+        obra_id: _obraOsSelecionadaId, numero_os: numeroOS, descricao_servico: descricao,
+        data_execucao: document.getElementById('oso-data').value || new Date().toISOString().slice(0,10),
+        status: 'aberta', valor_total: valorTotalOS,
+        observacoes: document.getElementById('oso-observacoes').value.trim() || null,
+        criado_por_nome: window._usuarioAtual?.nome || null,
+      }]).select('id').single();
+
+      if (error) { msgForm('msg-os', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      const { error: errItens } = await db.from('os_obra_itens').insert(itensCalculados.map(i => ({
+        os_id: novaOS.id, tipo: i.tipo, tabela_preco_item_id: i.tabela_preco_item_id || null,
+        fiscal_documento_id: i.fiscal_documento_id || null, descricao: i.descricao,
+        quantidade: i.quantidade, custo_unitario_sem_bdi: i.custo_unitario_sem_bdi,
+        custo_unitario_com_bdi: i.custo_unitario_com_bdi, valor_total: i.valor_total,
+      })));
+      if (errItens) { msgForm('msg-os', 'OS criada, mas erro nos itens: ' + errItens.message, 'red'); return; }
+
+      const arquivosAntes = document.getElementById('oso-fotos-antes').files;
+      const arquivosDepois = document.getElementById('oso-fotos-depois').files;
+      const fotos = [];
+      if (arquivosAntes.length) {
+        const urls = await uploadFotos(arquivosAntes, `os-obra/${novaOS.id}`, 'msg-os');
+        urls.forEach(url => fotos.push({ url, tipo: 'antes' }));
+      }
+      if (arquivosDepois.length) {
+        const urls = await uploadFotos(arquivosDepois, `os-obra/${novaOS.id}`, 'msg-os');
+        urls.forEach(url => fotos.push({ url, tipo: 'depois' }));
+      }
+      if (fotos.length) await db.from('ordens_servico_obra').update({ fotos_urls: fotos }).eq('id', novaOS.id);
+
+      msgForm('msg-os', `✓ OS Nº ${numeroOS} registrada! Valor: R$ ${valorTotalOS.toFixed(2).replace('.', ',')}`, 'green');
+      document.getElementById('oso-descricao').value = '';
+      document.getElementById('oso-observacoes').value = '';
+      document.getElementById('oso-fotos-antes').value = '';
+      document.getElementById('oso-fotos-depois').value = '';
+      _itensOsAtual = [];
+      renderizarLinhasItensOS();
+      await carregarOsDaObra();
+    }
+
+    // ===================== HISTÓRICO =====================
+    function alternarFotosOS(osId) {
+      const el = document.getElementById('fotos-os-' + osId);
+      if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    function renderizarHistoricoOS() {
+      const tbody = document.getElementById('tbody-historico-os');
+      if (!_osCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma OS registrada ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _osCache.map(os => {
+        const fotos = lerFotos(os);
+        const fotosAntes = fotos.filter(f => f.tipo === 'antes');
+        const fotosDepois = fotos.filter(f => f.tipo === 'depois');
+        return `<tr>
+          <td>${os.numero_os}</td>
+          <td>${escapeHTML(os.descricao_servico)}</td>
+          <td>${fmtDate(os.data_execucao)}</td>
+          <td>R$ ${Number(os.valor_total || 0).toFixed(2).replace('.', ',')}</td>
+          <td><span class="tag-badge ${STATUS_OS_COR[os.status] || ''}">${STATUS_OS_LABEL[os.status] || escapeHTML(os.status)}</span></td>
+          <td style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarFotosOS('${escapeHTML(os.id)}')">📷 (${fotos.length})</button>
+            ${os.status === 'aberta' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="concluirOS('${escapeHTML(os.id)}')">✓ Concluir</button>` : ''}
+            ${os.status === 'aberta' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirOsObra('${escapeHTML(os.id)}', ${os.numero_os})">✕</button>` : ''}
+          </td>
+        </tr>
+        <tr id="fotos-os-${os.id}" style="display:none;">
+          <td colspan="6" style="background:#f8fafc;">
+            <div style="margin-bottom:6px;font-size:11px;font-weight:600;color:#718096;">ANTES</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              ${fotosAntes.length ? fotosAntes.map(f => `<a href="${escapeHTML(f.url)}" target="_blank" rel="noopener"><img src="${escapeHTML(f.url)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;"></a>`).join('') : '<span style="font-size:12px;color:#a0aec0;">Sem fotos antes.</span>'}
+            </div>
+            <div style="margin-bottom:6px;font-size:11px;font-weight:600;color:#718096;">DEPOIS</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${fotosDepois.length ? fotosDepois.map(f => `<a href="${escapeHTML(f.url)}" target="_blank" rel="noopener"><img src="${escapeHTML(f.url)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;"></a>`).join('') : '<span style="font-size:12px;color:#a0aec0;">Sem fotos depois.</span>'}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function concluirOS(id) {
+      if (!confirm('Marcar esta OS como concluída? Ela passa a poder ser selecionada para gerar uma Medição.')) return;
+      const { error } = await db.from('ordens_servico_obra').update({ status: 'concluida' }).eq('id', id);
+      if (error) { toast('Erro: ' + error.message, 'erro'); return; }
+      await carregarOsDaObra();
+    }
+
+    async function excluirOsObra(id, numero) {
+      if (!confirm(`Excluir a OS Nº ${numero}?`)) return;
+      const { error } = await db.from('ordens_servico_obra').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarOsDaObra();
+    }
+
+    // ===================== SINCRONIZAR PARA MEDIÇÃO =====================
+    function renderizarOsConcluidas() {
+      const tbody = document.getElementById('tbody-os-concluidas');
+      const concluidas = _osCache.filter(os => os.status === 'concluida' && !os.medicao_id);
+      if (!concluidas.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma OS concluída aguardando sincronização.</td></tr>'; atualizarTotalSelecionadoOS(); return; }
+
+      tbody.innerHTML = concluidas.map(os => `<tr>
+        <td><input type="checkbox" class="oso-check-sync" value="${escapeHTML(os.id)}" data-valor="${os.valor_total}" onchange="atualizarTotalSelecionadoOS()"></td>
+        <td>${os.numero_os}</td>
+        <td>${escapeHTML(os.descricao_servico)}</td>
+        <td>${fmtDate(os.data_execucao)}</td>
+        <td>R$ ${Number(os.valor_total || 0).toFixed(2).replace('.', ',')}</td>
+      </tr>`).join('');
+      atualizarTotalSelecionadoOS();
+    }
+
+    function atualizarTotalSelecionadoOS() {
+      let total = 0;
+      document.querySelectorAll('.oso-check-sync:checked').forEach(chk => { total += Number(chk.dataset.valor || 0); });
+      document.getElementById('oso-total-selecionado').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+    }
+
+    async function gerarMedicaoComOS() {
+      const selecionadas = Array.from(document.querySelectorAll('.oso-check-sync:checked')).map(chk => chk.value);
+      if (!selecionadas.length) { msgForm('msg-sync-medicao', 'Selecione ao menos uma OS.', 'red'); return; }
+      if (!confirm(`Gerar uma Medição com ${selecionadas.length} OS(s) selecionada(s)?`)) return;
+
+      const osSelecionadas = _osCache.filter(os => selecionadas.includes(os.id));
+      const valorTotal = osSelecionadas.reduce((acc, os) => acc + Number(os.valor_total || 0), 0);
+      const numeroMedicao = await proximoNumeroMedicao(_obraOsSelecionadaId);
+
+      const { data: novaMedicao, error } = await db.from('medicoes_obra').insert([{
+        obra_id: _obraOsSelecionadaId, numero_medicao: numeroMedicao, origem: 'ordens_servico',
+        status: 'rascunho', valor_total_medicao: valorTotal, data_medicao: new Date().toISOString().slice(0,10),
+        observacoes: `Gerada a partir de ${selecionadas.length} OS: ${osSelecionadas.map(os => 'Nº' + os.numero_os).join(', ')}.`,
+      }]).select('id').single();
+
+      if (error) { msgForm('msg-sync-medicao', 'Erro ao gerar medição: ' + error.message, 'red'); return; }
+
+      await db.from('ordens_servico_obra').update({ status: 'sincronizada', medicao_id: novaMedicao.id }).in('id', selecionadas);
+
+      msgForm('msg-sync-medicao', `✓ Medição criada com ${selecionadas.length} OS! Vá em Medição de Obra para aprovar e gerar a Conta a Receber.`, 'green');
+      await carregarOsDaObra();
+    }
+
+    async function proximoNumeroMedicao(obraId) {
+      const { data } = await db.from('medicoes_obra').select('numero_medicao').eq('obra_id', obraId).order('numero_medicao', { ascending: false }).limit(1).maybeSingle();
+      return (data?.numero_medicao || 0) + 1;
+    }
+
+    document.getElementById('btn-salvar-os').addEventListener('click', salvarOS);
+    document.getElementById('btn-gerar-medicao-os').addEventListener('click', gerarMedicaoComOS);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectObraOs();
+      await carregarFiscalDocumentosParaOs();
+    });
+  </script>
+</body>
+</html>
