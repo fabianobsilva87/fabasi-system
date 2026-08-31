@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Medição de avanço físico e financeiro da obra, com aprovação e faturamento.">
+    <meta name="description" content="Medição de obra por avanço físico acumulado, com geração automática de Conta a Receber — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -33,26 +33,288 @@
     </aside>
 
     <main class="main-content">
-      <div class="topbar no-print"><h2>📊 Medição de Obra</h2></div>
+      <div class="topbar no-print"><h2>📏 Medição de Obra</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>📊 Medição de Obra</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Obras — elo entre Cronograma/Orçamento e Financeiro (contas a receber).</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> medição por período/serviço, percentual de avanço, aprovação, geração de documento fiscal e conta a receber vinculada ao contrato.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Medição por avanço físico acumulado, item a item do orçamento. O valor desta medição é a diferença entre
+            o percentual acumulado agora e o da última medição aprovada — não o percentual em si.
+          </p>
+
+          <div class="card">
+            <h3 class="card-title">📏 Selecionar Obra</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="med-obra">Obra *</label><select id="med-obra" class="form-input-style" onchange="carregarMedicoesDaObra()"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label>Valor do Contrato</label><div id="med-valor-contrato" style="padding:8px 0;font-weight:700;">—</div></div>
             </div>
           </div>
+
+          <div id="med-painel-obra" style="display:none;">
+
+            <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+              <div class="dash-card">
+                <div class="dash-card-icon">📐</div>
+                <p class="dash-card-title">Total Orçado</p>
+                <h3 id="med-txt-total-orcado" class="dash-card-value" style="font-size:18px;">—</h3>
+              </div>
+              <div class="dash-card">
+                <div class="dash-card-icon">📏</div>
+                <p class="dash-card-title">Total Medido (aprovado)</p>
+                <h3 id="med-txt-total-medido" class="dash-card-value" style="font-size:18px;">—</h3>
+              </div>
+              <div class="dash-card">
+                <div class="dash-card-icon">📊</div>
+                <p class="dash-card-title">% Físico Acumulado</p>
+                <h3 id="med-txt-pct-fisico" class="dash-card-value" style="font-size:18px;">—</h3>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">➕ Nova Medição</h3>
+              <p style="font-size:12px;color:#718096;margin-bottom:14px;">Informe o percentual acumulado de execução de cada item até hoje (não o desta medição — o sistema calcula a diferença sozinho).</p>
+              <div class="form-grid">
+                <div class="form-group"><label for="med-periodo-inicio">Período — Início</label><input type="date" id="med-periodo-inicio"></div>
+                <div class="form-group"><label for="med-periodo-fim">Período — Fim</label><input type="date" id="med-periodo-fim"></div>
+                <div class="form-group" style="grid-column:span 3;"><label for="med-observacoes">Observações</label><input type="text" id="med-observacoes"></div>
+              </div>
+
+              <div class="table-wrap" style="margin-top:14px;">
+                <table>
+                  <thead><tr><th>Categoria</th><th>Previsto</th><th>% Acumulado (anterior)</th><th>% Acumulado (agora) *</th><th>Valor desta Medição</th></tr></thead>
+                  <tbody id="tbody-nova-medicao"><tr><td colspan="5" class="td-loading">Selecione uma obra com orçamento cadastrado.</td></tr></tbody>
+                </table>
+              </div>
+
+              <div style="margin-top:14px;font-size:14px;font-weight:700;">Valor Total desta Medição: <span id="med-total-nova">R$ 0,00</span></div>
+
+              <div class="btn-row" style="margin-top:16px;">
+                <button type="button" id="btn-salvar-medicao" class="btn-primary">💾 Registrar Medição (Rascunho)</button>
+              </div>
+              <p id="msg-medicao" class="msg-form"></p>
+            </div>
+
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <h3 class="card-title" style="margin:0;">Histórico de Medições</h3>
+                <button type="button" class="btn-refresh" onclick="carregarMedicoesDaObra()">↺ Atualizar</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Nº</th><th>Período</th><th>Data</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                  <tbody id="tbody-medicoes"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _obraMedicaoSelecionadaId = null;
+    let _orcamentoItensParaMedicao = [];
+    let _percentuaisAnteriores = {}; // orcamento_item_id -> percentual_acumulado da última medição aprovada
+    let _medicoesCache = [];
+
+    const STATUS_MEDICAO_LABEL = { rascunho: 'Rascunho', aprovada: 'Aprovada', faturada: 'Faturada' };
+    const STATUS_MEDICAO_COR = { rascunho: '', aprovada: 'warning', faturada: 'success' };
+
+    async function carregarSelectObraMedicao() {
+      const { data } = await db.from('obras').select('id,nome,valor_contrato,cliente_id').order('nome');
+      window._obrasParaMedicaoCache = data || [];
+      document.getElementById('med-obra').innerHTML = '<option value="">-- Selecione --</option>' +
+        (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+    }
+
+    async function carregarMedicoesDaObra() {
+      _obraMedicaoSelecionadaId = document.getElementById('med-obra').value;
+      if (!_obraMedicaoSelecionadaId) { document.getElementById('med-painel-obra').style.display = 'none'; return; }
+
+      const obra = (window._obrasParaMedicaoCache || []).find(o => o.id === _obraMedicaoSelecionadaId);
+      document.getElementById('med-valor-contrato').textContent = obra?.valor_contrato ? 'R$ ' + Number(obra.valor_contrato).toFixed(2).replace('.', ',') : '—';
+      document.getElementById('med-painel-obra').style.display = 'block';
+
+      const { data: orcamento } = await db.from('orcamento_obra_itens').select('*, plano_contas(codigo,nome)').eq('obra_id', _obraMedicaoSelecionadaId).order('created_at');
+      _orcamentoItensParaMedicao = orcamento || [];
+
+      const { data: medicoes } = await db.from('medicoes_obra').select('*').eq('obra_id', _obraMedicaoSelecionadaId).order('numero_medicao', { ascending: false });
+      _medicoesCache = medicoes || [];
+
+      // Percentuais anteriores = última medição aprovada ou faturada.
+      const ultimaAprovada = _medicoesCache.find(m => m.status === 'aprovada' || m.status === 'faturada');
+      _percentuaisAnteriores = {};
+      if (ultimaAprovada) {
+        const { data: itensAnteriores } = await db.from('medicao_itens').select('orcamento_item_id, percentual_acumulado').eq('medicao_id', ultimaAprovada.id);
+        (itensAnteriores || []).forEach(it => { _percentuaisAnteriores[it.orcamento_item_id] = Number(it.percentual_acumulado || 0); });
+      }
+
+      renderizarTabelaNovaMedicao();
+      renderizarHistoricoMedicoes();
+      atualizarKpisMedicao(ultimaAprovada);
+    }
+
+    function atualizarKpisMedicao(ultimaAprovada) {
+      const totalOrcado = _orcamentoItensParaMedicao.reduce((acc, i) => acc + Number(i.valor_previsto || 0), 0);
+      let totalMedido = 0;
+      _orcamentoItensParaMedicao.forEach(i => {
+        const pct = _percentuaisAnteriores[i.id] || 0;
+        totalMedido += (pct / 100) * Number(i.valor_previsto || 0);
+      });
+      document.getElementById('med-txt-total-orcado').textContent = 'R$ ' + totalOrcado.toFixed(2).replace('.', ',');
+      document.getElementById('med-txt-total-medido').textContent = 'R$ ' + totalMedido.toFixed(2).replace('.', ',');
+      document.getElementById('med-txt-pct-fisico').textContent = (totalOrcado > 0 ? (totalMedido / totalOrcado * 100) : 0).toFixed(1) + '%';
+    }
+
+    function renderizarTabelaNovaMedicao() {
+      const tbody = document.getElementById('tbody-nova-medicao');
+      if (!_orcamentoItensParaMedicao.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Esta obra ainda não tem itens de orçamento cadastrados — vá em Orçamento de Obra primeiro.</td></tr>'; return; }
+
+      tbody.innerHTML = _orcamentoItensParaMedicao.map(item => {
+        const pctAnterior = _percentuaisAnteriores[item.id] || 0;
+        return `<tr data-item-id="${escapeHTML(item.id)}">
+          <td>${escapeHTML(item.plano_contas?.codigo || '—')} — ${escapeHTML(item.plano_contas?.nome || '—')}</td>
+          <td>R$ ${Number(item.valor_previsto || 0).toFixed(2).replace('.', ',')}</td>
+          <td>${pctAnterior.toFixed(1)}%</td>
+          <td><input type="number" class="form-input-style med-pct-input" style="width:90px;" min="${pctAnterior}" max="100" step="0.1" value="${pctAnterior}" data-item-id="${escapeHTML(item.id)}" data-valor-previsto="${item.valor_previsto}" data-pct-anterior="${pctAnterior}" oninput="atualizarTotalNovaMedicao()"></td>
+          <td class="med-valor-linha">R$ 0,00</td>
+        </tr>`;
+      }).join('');
+      atualizarTotalNovaMedicao();
+    }
+
+    function atualizarTotalNovaMedicao() {
+      let total = 0;
+      document.querySelectorAll('.med-pct-input').forEach(input => {
+        const pctAtual = Number(input.value) || 0;
+        const pctAnterior = Number(input.dataset.pctAnterior) || 0;
+        const valorPrevisto = Number(input.dataset.valorPrevisto) || 0;
+        const valorLinha = ((pctAtual - pctAnterior) / 100) * valorPrevisto;
+        total += valorLinha;
+        const celulaValor = input.closest('tr').querySelector('.med-valor-linha');
+        celulaValor.textContent = 'R$ ' + valorLinha.toFixed(2).replace('.', ',');
+        celulaValor.style.color = valorLinha < 0 ? '#dc2626' : '';
+      });
+      document.getElementById('med-total-nova').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+    }
+
+    async function salvarMedicao() {
+      const linhas = [];
+      let temAlgumaAlteracao = false;
+      document.querySelectorAll('.med-pct-input').forEach(input => {
+        const pctAtual = Number(input.value) || 0;
+        const pctAnterior = Number(input.dataset.pctAnterior) || 0;
+        const valorPrevisto = Number(input.dataset.valorPrevisto) || 0;
+        if (pctAtual !== pctAnterior) temAlgumaAlteracao = true;
+        linhas.push({
+          orcamento_item_id: input.dataset.itemId,
+          percentual_acumulado: pctAtual,
+          valor_acumulado: (pctAtual / 100) * valorPrevisto,
+          valor_desta_medicao: ((pctAtual - pctAnterior) / 100) * valorPrevisto,
+        });
+      });
+
+      if (!temAlgumaAlteracao) { msgForm('msg-medicao', 'Nenhum percentual foi alterado em relação à medição anterior.', 'red'); return; }
+
+      const valorTotal = linhas.reduce((acc, l) => acc + l.valor_desta_medicao, 0);
+      const numeroMedicao = (_medicoesCache[0]?.numero_medicao || 0) + 1;
+
+      const { data: novaMedicao, error } = await db.from('medicoes_obra').insert([{
+        obra_id: _obraMedicaoSelecionadaId, numero_medicao: numeroMedicao,
+        periodo_inicio: document.getElementById('med-periodo-inicio').value || null,
+        periodo_fim: document.getElementById('med-periodo-fim').value || null,
+        status: 'rascunho', valor_total_medicao: valorTotal,
+        observacoes: document.getElementById('med-observacoes').value.trim() || null,
+      }]).select('id').single();
+
+      if (error) { msgForm('msg-medicao', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      const { error: errItens } = await db.from('medicao_itens').insert(linhas.map(l => ({ ...l, medicao_id: novaMedicao.id })));
+      if (errItens) { msgForm('msg-medicao', 'Medição criada, mas erro nos itens: ' + errItens.message, 'red'); return; }
+
+      msgForm('msg-medicao', `✓ Medição Nº ${numeroMedicao} registrada como rascunho! Valor: R$ ${valorTotal.toFixed(2).replace('.', ',')}`, 'green');
+      document.getElementById('med-observacoes').value = '';
+      await carregarMedicoesDaObra();
+    }
+
+    function renderizarHistoricoMedicoes() {
+      const tbody = document.getElementById('tbody-medicoes');
+      if (!_medicoesCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma medição registrada ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _medicoesCache.map(m => `<tr>
+        <td>${m.numero_medicao}</td>
+        <td style="font-size:12px;">${fmtDate(m.periodo_inicio)} → ${fmtDate(m.periodo_fim)}</td>
+        <td>${fmtDate(m.data_medicao)}</td>
+        <td>R$ ${Number(m.valor_total_medicao || 0).toFixed(2).replace('.', ',')}</td>
+        <td><span class="tag-badge ${STATUS_MEDICAO_COR[m.status] || ''}">${STATUS_MEDICAO_LABEL[m.status] || escapeHTML(m.status)}</span>${m.aprovado_em ? seloAprovacao(m.aprovado_por_nome, m.aprovado_em) : ''}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${m.status === 'rascunho' && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarMedicao('${escapeHTML(m.id)}')">✓ Aprovar</button>` : ''}
+          ${m.status === 'rascunho' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMedicao('${escapeHTML(m.id)}', ${m.numero_medicao})">✕</button>` : ''}
+          ${m.status === 'aprovada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#0e7490;" onclick="gerarContaReceberMedicao('${escapeHTML(m.id)}')">📤 Gerar Conta a Receber</button>` : ''}
+          ${m.status === 'faturada' ? '<span style="font-size:11px;color:#059669;">✓ Faturada</span>' : ''}
+        </td>
+      </tr>`).join('');
+    }
+
+    async function aprovarMedicao(id) {
+      if (!podeAprovar()) { toast('Só master/admin podem aprovar.', 'erro'); return; }
+      const { error } = await db.from('medicoes_obra').update({
+        status: 'aprovada', aprovado_por_nome: window._usuarioAtual?.nome || null, aprovado_em: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) { toast('Erro ao aprovar: ' + error.message, 'erro'); return; }
+      toast('Medição aprovada!', 'sucesso');
+      await carregarMedicoesDaObra();
+    }
+
+    async function excluirMedicao(id, numero) {
+      if (!confirm(`Excluir a medição Nº ${numero} (rascunho)?`)) return;
+      const { error } = await db.from('medicoes_obra').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarMedicoesDaObra();
+    }
+
+    async function gerarContaReceberMedicao(medicaoId) {
+      if (!confirm('Gerar Conta a Receber para esta medição?')) return;
+      const medicao = _medicoesCache.find(m => m.id === medicaoId); if (!medicao) return;
+
+      const obra = (window._obrasParaMedicaoCache || []).find(o => o.id === _obraMedicaoSelecionadaId);
+      if (!obra?.cliente_id) { toast('Esta obra não tem cliente vinculado — não é possível gerar a Conta a Receber.', 'erro'); return; }
+
+      const { data: centroCusto } = await db.from('centros_custo').select('id').eq('obra_id', _obraMedicaoSelecionadaId).maybeSingle();
+      const { data: planoConta } = await db.from('plano_contas').select('id').ilike('nome', '%Receita de Obras%').maybeSingle();
+
+      const { data: novaConta, error } = await db.from('contas_receber').insert([{
+        descricao: `Medição Nº ${medicao.numero_medicao} — Obra`, cliente_id: obra.cliente_id,
+        centro_custo_id: centroCusto?.id || null, plano_conta_id: planoConta?.id || null,
+        origem: 'obra', origem_obra_id: _obraMedicaoSelecionadaId,
+        valor_total: medicao.valor_total_medicao, data_emissao: new Date().toISOString().slice(0,10),
+        status: 'pendente', observacoes: 'Gerado automaticamente pela Medição de Obra.',
+      }]).select('id').single();
+
+      if (error) { toast('Erro ao gerar Conta a Receber: ' + error.message, 'erro'); return; }
+
+      const vencimento = new Date(); vencimento.setDate(vencimento.getDate() + 30);
+      await db.from('contas_receber_parcelas').insert([{
+        conta_receber_id: novaConta.id, numero_parcela: 1, valor: medicao.valor_total_medicao,
+        data_vencimento: vencimento.toISOString().slice(0,10), status: 'aberta',
+      }]);
+
+      await db.from('medicoes_obra').update({ status: 'faturada', origem_conta_receber_id: novaConta.id }).eq('id', medicaoId);
+
+      toast('Conta a Receber gerada! Confira em Contas a Receber.', 'sucesso');
+      await carregarMedicoesDaObra();
+    }
+
+    document.getElementById('btn-salvar-medicao').addEventListener('click', salvarMedicao);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectObraMedicao();
+    });
+  </script>
 </body>
 </html>

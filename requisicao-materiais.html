@@ -46,6 +46,7 @@
             <div class="form-group"><label for="rm-numero">Número</label><input type="text" id="rm-numero" readonly placeholder="Gerado automaticamente ao salvar" style="background:#f1f5f9;color:#4a5568;font-weight:600;"></div>
             <div class="form-group"><label for="rm-solicitante">Solicitante *</label><input type="text" id="rm-solicitante" placeholder="Nome de quem solicita"></div>
             <div class="form-group"><label for="rm-os">O.S. Vinculada (opcional)</label><select id="rm-os" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+            <div class="form-group"><label for="rm-obra">Obra Vinculada (opcional)</label><select id="rm-obra" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
             <div class="form-group"><label for="rm-modo-faturamento">Faturamento</label>
               <select id="rm-modo-faturamento" class="form-input-style" onchange="aoTrocarModoFaturamentoRM()">
                 <option value="Direto">Direto (Fabasi)</option>
@@ -115,6 +116,36 @@ async function atualizarSelectOSParaReqMaterial() {
   if (error) { console.warn('Não foi possível carregar O.S. para a requisição de material:', error.message); return; }
   sel.innerHTML = '<option value="">-- Nenhuma --</option>' +
     (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(rotuloOS(o))}</option>`).join('');
+}
+
+async function atualizarSelectObraParaReqMaterial() {
+  const sel = document.getElementById('rm-obra'); if (!sel) return;
+  const { data, error } = await db.from('obras').select('id,nome').order('nome');
+  if (error) { console.warn('Não foi possível carregar obras para a requisição de material:', error.message); return; }
+  sel.innerHTML = '<option value="">-- Nenhuma --</option>' +
+    (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+}
+
+// Recebe itens/observação vindos do botão "Disparar Compra" (Orçamento de
+// Obra) via sessionStorage — evita depender de query string longa demais
+// pra uma lista de itens.
+async function aplicarOrigemOrcamentoSeExistir() {
+  const bruto = sessionStorage.getItem('fabasi_rm_origem_orcamento');
+  if (!bruto) return;
+  sessionStorage.removeItem('fabasi_rm_origem_orcamento'); // só usa uma vez
+  let dados;
+  try { dados = JSON.parse(bruto); } catch (_e) { return; }
+
+  if (dados.obra_id) document.getElementById('rm-obra').value = dados.obra_id;
+  if (dados.observacao_extra) document.getElementById('rm-observacoes').value = dados.observacao_extra;
+
+  limparLinhasItensReqMaterial();
+  if (dados.itens && dados.itens.length) {
+    dados.itens.forEach(item => adicionarLinhaItemReqMaterial(item));
+  } else {
+    adicionarLinhaItemReqMaterial(); // linha em branco pra preencher manualmente
+  }
+  toast('Itens pré-preenchidos a partir do Orçamento de Obra — confira antes de salvar.', 'info');
 }
 
 function adicionarLinhaItemReqMaterial(itemExistente = null) {
@@ -242,6 +273,7 @@ async function editarReqMaterial(id) {
 
   await atualizarSelectOSParaReqMaterial();
   document.getElementById('rm-os').value = r.os_id || '';
+  document.getElementById('rm-obra').value = r.obra_id || '';
 
   await atualizarSelectClienteRM();
   document.getElementById('rm-cliente').value = r.cliente_id || '';
@@ -275,6 +307,7 @@ function resetarFormReqMaterial() {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('rm-os').value = '';
+  document.getElementById('rm-obra').value = '';
   document.getElementById('rm-modo-faturamento').value = 'Direto';
   document.getElementById('rm-cliente').value = '';
   document.getElementById('rm-cliente-wrap').style.display = 'none';
@@ -314,6 +347,7 @@ document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', asy
     const payload = {
       solicitante,
       os_id:        document.getElementById('rm-os').value || null,
+      obra_id:      document.getElementById('rm-obra').value || null,
       observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
       modo_faturamento: modoFaturamento,
       cliente_id:   clienteId,
@@ -331,6 +365,7 @@ document.getElementById('btn-salvar-reqmaterial')?.addEventListener('click', asy
       numero,
       solicitante,
       os_id:        document.getElementById('rm-os').value || null,
+      obra_id:      document.getElementById('rm-obra').value || null,
       observacoes:  document.getElementById('rm-observacoes').value.trim() || null,
       modo_faturamento: modoFaturamento,
       cliente_id:   clienteId,
@@ -375,9 +410,11 @@ async function aplicarVerDaURL() {
 window.addEventListener('DOMContentLoaded', async () => {
   await window.sessaoPronta;
   await atualizarSelectOSParaReqMaterial();
+  await atualizarSelectObraParaReqMaterial();
   await atualizarSelectClienteRM();
   await carregarReqMateriais();
   await aplicarVerDaURL();
+  await aplicarOrigemOrcamentoSeExistir();
 });
 </script>
 </body>

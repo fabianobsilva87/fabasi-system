@@ -13,6 +13,7 @@
     <script src="config.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
     /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
        O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
@@ -54,6 +55,20 @@
               <div class="form-group"><label>Valor do Contrato</label><div id="orc-valor-contrato" style="padding:8px 0;font-weight:700;">—</div></div>
               <div class="form-group"><label for="orc-bdi">BDI da Obra (%)</label><input type="number" id="orc-bdi" step="0.01" onchange="salvarBdiObra()"></div>
             </div>
+          </div>
+
+          <div id="orc-card-importacao" class="card" style="display:none;">
+            <h3 class="card-title">📤 Importar Orçamento de Planilha</h3>
+            <p style="font-size:12px;color:#718096;margin-bottom:14px;">
+              Já fez a proposta com os custos previstos numa planilha? Baixa o modelo, preenche em cima dele, e sobe
+              aqui — o sistema já incorpora direto no orçamento desta obra, sem digitar de novo.
+            </p>
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+              <a href="modelo-orcamento-obra.xlsx" download class="btn-secondary" style="text-decoration:none;display:inline-block;">📥 Baixar Modelo (.xlsx)</a>
+              <input type="file" id="orc-arquivo-importacao" accept=".xlsx,.xls,.csv">
+              <button type="button" id="btn-importar-orcamento" class="btn-primary">⚙️ Processar Planilha</button>
+            </div>
+            <div id="orc-importacao-resultado" style="margin-top:14px;font-size:13px;"></div>
           </div>
 
           <div id="orc-painel-obra" style="display:none;">
@@ -193,6 +208,7 @@
       document.getElementById('orc-valor-contrato').textContent = obra?.valor_contrato ? 'R$ ' + Number(obra.valor_contrato).toFixed(2).replace('.', ',') : '—';
       document.getElementById('orc-bdi').value = obra?.bdi_percentual || 0;
       document.getElementById('orc-painel-obra').style.display = 'block';
+      document.getElementById('orc-card-importacao').style.display = 'block';
 
       await carregarTabelaOrcamento();
     }
@@ -318,6 +334,7 @@
             <td style="display:flex;gap:4px;flex-wrap:wrap;">
               <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarItemOrcamento('${escapeHTML(item.id)}')">✏️</button>
               <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirItemOrcamento('${escapeHTML(item.id)}','${escapeHTML(item.plano_contas?.nome || '')}')">✕</button>
+              <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#1a56db;" onclick="dispararCompraItem('${escapeHTML(item.id)}')">🛒 Comprar</button>
             </td>
           </tr>`;
         }).join('');
@@ -345,7 +362,119 @@
       });
     }
 
+    // ===================== IMPORTAÇÃO DE PLANILHA =====================
+    async function processarPlanilhaOrcamento() {
+      const arquivo = document.getElementById('orc-arquivo-importacao').files[0];
+      const resultadoEl = document.getElementById('orc-importacao-resultado');
+      if (!_obraSelecionadaId) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Selecione a obra primeiro.</span>'; return; }
+      if (!arquivo) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Selecione um arquivo.</span>'; return; }
+
+      resultadoEl.innerHTML = 'Processando...';
+      const buffer = await arquivo.arrayBuffer();
+      let linhas;
+      try {
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        linhas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+      } catch (e) {
+        resultadoEl.innerHTML = '<span style="color:#dc2626;">Não consegui ler o arquivo — confira se é um .xlsx/.xls/.csv válido. (' + escapeHTML(e.message) + ')</span>';
+        return;
+      }
+
+      const idxCabecalho = linhas.findIndex(l => l[0] && String(l[0]).toLowerCase().includes('categoria'));
+      if (idxCabecalho === -1) {
+        resultadoEl.innerHTML = '<span style="color:#dc2626;">Não encontrei a coluna "Categoria" — confira se está usando o modelo (baixe de novo se precisar).</span>';
+        return;
+      }
+      const dados = linhas.slice(idxCabecalho + 1).filter(l => l && l[0]);
+      if (!dados.length) { resultadoEl.innerHTML = '<span style="color:#dc2626;">Nenhuma linha de dados encontrada abaixo do cabeçalho.</span>'; return; }
+
+      const { data: planoContas } = await db.from('plano_contas').select('id,codigo').eq('ativo', true);
+      const mapaPlanoConta = {};
+      (planoContas || []).forEach(p => { if (p.codigo) mapaPlanoConta[String(p.codigo).trim()] = p.id; });
+
+      const composicoesCache = window._composicoesParaOrcamentoCache || [];
+      const mapaComposicao = {};
+      composicoesCache.forEach(c => { if (c.codigo) mapaComposicao[String(c.codigo).trim()] = c.id; });
+
+      const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
+      const bdi = Number(obra?.bdi_percentual || 0);
+
+      let importadas = 0, ignoradas = 0;
+      const erros = [];
+
+      for (const linha of dados) {
+        const [codigoCategoria, descricao, codigoComposicao, quantidade, valorDireto] = linha;
+        const codCatLimpo = String(codigoCategoria).trim();
+        const planoContaId = mapaPlanoConta[codCatLimpo];
+        if (!planoContaId) { ignoradas++; erros.push(`Categoria "${codCatLimpo}" não encontrada no Plano de Contas`); continue; }
+
+        const payload = { obra_id: _obraSelecionadaId, plano_conta_id: planoContaId, descricao: descricao || null };
+
+        if (codigoComposicao) {
+          const codCompLimpo = String(codigoComposicao).trim();
+          const composicaoId = mapaComposicao[codCompLimpo];
+          if (!composicaoId) { ignoradas++; erros.push(`Linha "${codCatLimpo}": composição "${codCompLimpo}" não encontrada`); continue; }
+          const qtd = Number(quantidade) || 0;
+          if (!qtd) { ignoradas++; erros.push(`Linha "${codCatLimpo}": quantidade inválida para composição`); continue; }
+          payload.composicao_id = composicaoId;
+          payload.quantidade = qtd;
+          payload.valor_previsto = custoUnitarioComposicao(composicaoId) * qtd * (1 + bdi / 100);
+        } else {
+          const valor = Number(valorDireto) || 0;
+          if (!valor) { ignoradas++; erros.push(`Linha "${codCatLimpo}": valor previsto inválido`); continue; }
+          payload.valor_previsto = valor;
+        }
+
+        const { error } = await db.from('orcamento_obra_itens').insert([payload]);
+        if (error) { ignoradas++; erros.push(`Linha "${codCatLimpo}": ${error.message}`); continue; }
+        importadas++;
+      }
+
+      resultadoEl.innerHTML = `<span style="color:#059669;">✓ ${importadas} linha(s) importada(s)${ignoradas ? `, ${ignoradas} ignorada(s)` : ''}.</span>` +
+        (erros.length ? '<br><span style="color:#d97706;font-size:11px;">' + erros.slice(0, 10).map(e => escapeHTML(e)).join('<br>') + (erros.length > 10 ? '<br>...' : '') + '</span>' : '');
+
+      document.getElementById('orc-arquivo-importacao').value = '';
+      await carregarTabelaOrcamento();
+    }
+
+    async function dispararCompraItem(itemId) {
+      const item = _orcamentoItensCache.find(x => x.id === itemId); if (!item) return;
+      const categoria = item.plano_contas ? `${item.plano_contas.codigo} — ${item.plano_contas.nome}` : 'Orçamento de Obra';
+      const obra = (window._orcObrasCache || []).find(o => o.id === _obraSelecionadaId);
+
+      let itensParaRM = [];
+      if (item.composicao_id) {
+        const { data: linhasComposicao, error } = await db.from('composicao_insumos')
+          .select('coeficiente, insumos_orcamento(tipo, material_id, descricao, unidade)')
+          .eq('composicao_id', item.composicao_id);
+        if (error) { toast('Erro ao buscar insumos da composição: ' + error.message, 'erro'); return; }
+
+        itensParaRM = (linhasComposicao || [])
+          .filter(l => l.insumos_orcamento?.tipo === 'material') // só material vira item de compra — mão de obra/equipamento não
+          .map(l => ({
+            material_id: l.insumos_orcamento.material_id || null,
+            descricao: l.insumos_orcamento.descricao,
+            quantidade: Number(l.coeficiente || 0) * Number(item.quantidade || 0),
+            unidade: l.insumos_orcamento.unidade || null,
+          }));
+
+        if (!itensParaRM.length) {
+          toast('Essa composição não tem insumos do tipo "material" (só mão de obra/equipamento) — abrindo a Requisição em branco pra você preencher manualmente.', 'info');
+        }
+      }
+
+      sessionStorage.setItem('fabasi_rm_origem_orcamento', JSON.stringify({
+        obra_id: _obraSelecionadaId,
+        itens: itensParaRM,
+        observacao_extra: `Origem: Orçamento da obra "${obra?.nome || ''}" — categoria ${categoria}${item.descricao ? ' — ' + item.descricao : ''} (valor previsto: R$ ${Number(item.valor_previsto || 0).toFixed(2).replace('.', ',')}).`,
+      }));
+
+      location.href = 'requisicao-materiais.html';
+    }
+
     document.getElementById('btn-salvar-orc-item').addEventListener('click', salvarItemOrcamento);
+    document.getElementById('btn-importar-orcamento').addEventListener('click', processarPlanilhaOrcamento);
 
     window.addEventListener('DOMContentLoaded', async () => {
       await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas

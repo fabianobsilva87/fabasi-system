@@ -770,7 +770,6 @@ const MENU_SECTIONS = [
   { id: 'rh', label: 'RH', items: [
     { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
     { icon: '💰', label: 'Custo de Colaboradores', href: 'rh-custo-colaboradores.html' },
-    { icon: '🏢', label: 'Orçamento Administrativo', href: 'orcamento-administrativo.html' },
   ]},
   { id: 'financeiro', label: 'Financeiro', items: [
     { icon: '💵', label: 'Contas a Pagar', href: 'financeiro-contas-pagar.html' },
@@ -783,6 +782,7 @@ const MENU_SECTIONS = [
     { icon: '🏛️', label: 'Empresa Master', href: 'empresa-master.html' },
     { icon: '👥', label: 'Gestão de Usuários', href: 'usuarios.html' },
     { icon: '🔔', label: 'Central de Pendências', href: 'central-pendencias.html' },
+    { icon: '🏢', label: 'Orçamento Administrativo', href: 'orcamento-administrativo.html' },
     { icon: '📜', label: 'Auditoria', href: 'auditoria.html' },
   ]},
 ];
