@@ -39,7 +39,7 @@ const ENDPOINTS = {
 };
 const CUF_MT = '51';
 const SOAP_ACTION = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse';
-const MAX_DOCS_POR_CHAMADA = 30; // proteção contra timeout da function (execução serverless tem limite de tempo)
+const MAX_DOCS_POR_CHAMADA = 50; // igual ao tamanho máximo de um lote da própria SEFAZ (nunca truncar abaixo disso — ver nota abaixo)
 
 function montarEnvelopeSoap(ambiente, cnpj, ultNsu) {
   const tpAmb = ambiente === 'producao' ? '1' : '2';
@@ -201,7 +201,15 @@ module.exports = async function handler(req, res) {
     }
 
     // ── 6. Processa os documentos retornados (cStat 137 = nenhum, 138 = tem) ──
-    const docZips = extrairDocZips(resposta.body).slice(0, MAX_DOCS_POR_CHAMADA);
+    // BUG CORRIGIDO (30/08/2026): a SEFAZ manda até 50 docs por lote, e o
+    // ultNSU/maxNSU do passo 7 se referem ao LOTE INTEIRO. Truncar o
+    // processamento abaixo de 50 e ainda assim avançar o ultimo_nsu pro
+    // valor do lote inteiro faria a sincronização PULAR documentos nunca
+    // processados — crítico justamente ao importar muito histórico
+    // acumulado de uma vez. MAX_DOCS_POR_CHAMADA agora é igual ao teto
+    // real de um lote (50), então nunca trunca de verdade.
+    const todosDocZips = extrairDocZips(resposta.body);
+    const docZips = todosDocZips.slice(0, MAX_DOCS_POR_CHAMADA);
     const resumo = { processados: 0, ignorados_duplicados: 0, eventos: 0, erros: 0, fornecedores_criados: 0, itens_vinculados: 0, itens_pendentes: 0 };
 
     for (const docZip of docZips) {
@@ -263,13 +271,21 @@ module.exports = async function handler(req, res) {
     }
 
     // ── 7. Atualiza o estado — só avança o NSU depois de processar tudo ──
-    const consumoIndevidoEmBreve = ultNSU === maxNSU; // não há mais nada novo
+    // Defesa extra: se por algum motivo viesse mais que MAX_DOCS_POR_CHAMADA
+    // (não deveria, a SEFAZ já limita a 50 por lote — ver nota no passo 6),
+    // NUNCA avança pro ultNSU do lote inteiro sem ter processado tudo —
+    // usa o NSU do último item realmente processado como teto seguro.
+    const houveTruncamentoReal = todosDocZips.length > docZips.length;
+    const ultNsuSeguro = houveTruncamentoReal
+      ? (docZips[docZips.length - 1]?.nsu || syncState.ultimo_nsu)
+      : (ultNSU || syncState.ultimo_nsu);
+    const consumoIndevidoEmBreve = !houveTruncamentoReal && ultNSU === maxNSU; // não há mais nada novo
     await supabaseAdmin.from('fiscal_sync_state').update({
-      ultimo_nsu: ultNSU || syncState.ultimo_nsu,
+      ultimo_nsu: ultNsuSeguro,
       maior_nsu: maxNSU,
       ultima_sincronizacao: new Date().toISOString(),
       status: 'ok', mensagem_erro: null,
-      // Se não há nada novo, já deixamos a janela de 1h marcada de
+      // Se não há mais nada novo, já deixamos a janela de 1h marcada de
       // propósito — evita qualquer tentativa de reconsulta imediata que
       // acionaria a rejeição 656 de verdade.
       proxima_tentativa_permitida: consumoIndevidoEmBreve ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null,
