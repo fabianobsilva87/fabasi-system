@@ -94,6 +94,14 @@
 
   <script src="app.js"></script>
   <script>
+    async function confirmarFornecedorPendente(id) {
+      if (!confirm('Confirmar este fornecedor? Ele deixa de aparecer como pendência (você ainda pode editar os dados depois em Fornecedores, se precisar).')) return;
+      const { error } = await db.from('fornecedores').update({ status_pre_cadastro: null }).eq('id', id);
+      if (error) { toast('Erro ao confirmar: ' + error.message, 'erro'); return; }
+      toast('Fornecedor confirmado!', 'sucesso');
+      await carregarConferenciaFiscal();
+    }
+
     async function carregarConferenciaFiscal() {
       const [itens, fornecedoresPendentes, erros] = await Promise.all([
         db.from('fiscal_documento_itens').select('*').eq('status_classificacao', 'pendente').order('created_at', { ascending: false }).limit(100),
@@ -123,7 +131,10 @@
             <td>${escapeHTML(f.razao_social)}</td>
             <td>${escapeHTML(f.cnpj || '—')}</td>
             <td>${escapeHTML(f.cidade || '—')}${f.uf ? '/' + escapeHTML(f.uf) : ''}</td>
-            <td><button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="location.href='fornecedores.html'">Abrir em Fornecedores</button></td>
+            <td>
+              <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="confirmarFornecedorPendente('${escapeHTML(f.id)}')">✓ Confirmar</button>
+              <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="location.href='fornecedores.html'">Abrir Ficha</button>
+            </td>
           </tr>`).join('');
 
       const tbodyErros = document.getElementById('tbody-fconf-erros');

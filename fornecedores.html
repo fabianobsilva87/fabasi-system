@@ -455,6 +455,11 @@ document.getElementById('btn-salvar-fornecedor')?.addEventListener('click', asyn
     uf:            document.getElementById('forn-uf').value.trim().toUpperCase() || null,
     observacoes:   document.getElementById('forn-observacoes').value.trim() || null,
     tipos_cadastro: tipos,
+    // Editar/salvar aqui conta como confirmação de um fornecedor
+    // pré-cadastrado automaticamente pelo Fiscal — sem isso, o alerta
+    // "aguardando confirmação" nunca sumia da Central de Pendências
+    // mesmo depois de revisado e salvo.
+    status_pre_cadastro: null,
     ...analise,
   };
 
