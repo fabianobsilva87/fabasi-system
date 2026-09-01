@@ -728,6 +728,12 @@ const MENU_SECTIONS = [
     { icon: '📊', label: 'Medição de Obra', href: 'obras-medicao.html' },
     { icon: '📄', label: 'Contratos', href: 'contratos.html' },
   ]},
+  { id: 'equipamentos-proprios', label: 'Equipamentos e Ferramentas', items: [
+    { icon: '🚜', label: 'Frota Própria', href: 'equipamentos-proprios.html' },
+  ]},
+  { id: 'tarefas', label: 'Gestão de Tarefas', items: [
+    { icon: '📋', label: 'Quadro Kanban', href: 'kanban-tarefas.html' },
+  ]},
   { id: 'compras', label: 'Compras', items: [
     { icon: '📝', label: 'Requisição de Materiais', href: 'requisicao-materiais.html' },
     { icon: '🛒', label: 'Solicitações de Compra', href: 'solicitacoes-compra.html' },

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestão de tarefas — quadro Kanban com arrastar e soltar — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Gestão de Tarefas</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+  <style>
+    .kanban-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+    .kanban-coluna { flex: 1; min-width: 250px; background: #f8fafc; border-radius: 10px; padding: 10px; }
+    .kanban-coluna-titulo { font-size: 12px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; display: flex; justify-content: space-between; }
+    .kanban-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 8px; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .kanban-card:active { cursor: grabbing; }
+    .kanban-card.arrastando { opacity: .4; }
+    .kanban-coluna.arraste-sobre { background: #e0e7ff; }
+    .kanban-card-titulo { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .kanban-card-meta { display: flex; gap: 4px; flex-wrap: wrap; font-size: 10px; }
+    .prioridade-baixa { background: #e2e8f0; color: #475569; }
+    .prioridade-media { background: #dbeafe; color: #1e40af; }
+    .prioridade-alta { background: #fed7aa; color: #9a3412; }
+    .prioridade-urgente { background: #fecaca; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>📋 Gestão de Tarefas</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="card">
+            <h3 class="card-title">➕ Nova Tarefa</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="trf-titulo">Título *</label><input type="text" id="trf-titulo" placeholder="Ex: Revisar orçamento da Obra X"></div>
+              <div class="form-group"><label for="trf-prioridade">Prioridade</label>
+                <select id="trf-prioridade" class="form-input-style">
+                  <option value="baixa">Baixa</option>
+                  <option value="media" selected>Média</option>
+                  <option value="alta">Alta</option>
+                  <option value="urgente">Urgente</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="trf-responsavel">Responsável</label><select id="trf-responsavel" class="form-input-style"><option value="">-- Ninguém --</option></select></div>
+              <div class="form-group"><label for="trf-centro-custo">Centro de Custo (opcional)</label><select id="trf-centro-custo" class="form-input-style"><option value="">-- Nenhum --</option></select></div>
+              <div class="form-group"><label for="trf-vencimento">Vencimento</label><input type="date" id="trf-vencimento"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="trf-descricao">Descrição</label><input type="text" id="trf-descricao"></div>
+            </div>
+            <div class="btn-row" style="margin-top:14px;">
+              <button type="button" id="btn-salvar-tarefa" class="btn-primary">💾 Criar Tarefa</button>
+            </div>
+            <p id="msg-tarefa" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;">
+                <label for="kb-filtro-responsavel">Responsável</label>
+                <select id="kb-filtro-responsavel" class="form-input-style" style="width:auto;" onchange="carregarTarefas()"><option value="">Todos</option></select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="kb-filtro-centro-custo">Centro de Custo</label>
+                <select id="kb-filtro-centro-custo" class="form-input-style" style="width:auto;" onchange="carregarTarefas()"><option value="">Todos</option></select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label for="kb-filtro-prioridade">Prioridade</label>
+                <select id="kb-filtro-prioridade" class="form-input-style" style="width:auto;" onchange="carregarTarefas()">
+                  <option value="">Todas</option>
+                  <option value="baixa">Baixa</option>
+                  <option value="media">Média</option>
+                  <option value="alta">Alta</option>
+                  <option value="urgente">Urgente</option>
+                </select>
+              </div>
+              <button type="button" class="btn-refresh" onclick="carregarTarefas()">↺ Atualizar</button>
+            </div>
+
+            <div class="kanban-board">
+              <div class="kanban-coluna" data-status="a_fazer" ondragover="aoArrastarSobre(event)" ondragleave="aoSairArraste(event)" ondrop="aoSoltar(event)">
+                <div class="kanban-coluna-titulo"><span>📥 A Fazer</span><span id="contagem-a_fazer">0</span></div>
+                <div id="coluna-a_fazer"></div>
+              </div>
+              <div class="kanban-coluna" data-status="em_andamento" ondragover="aoArrastarSobre(event)" ondragleave="aoSairArraste(event)" ondrop="aoSoltar(event)">
+                <div class="kanban-coluna-titulo"><span>🔨 Em Andamento</span><span id="contagem-em_andamento">0</span></div>
+                <div id="coluna-em_andamento"></div>
+              </div>
+              <div class="kanban-coluna" data-status="em_revisao" ondragover="aoArrastarSobre(event)" ondragleave="aoSairArraste(event)" ondrop="aoSoltar(event)">
+                <div class="kanban-coluna-titulo"><span>🔍 Em Revisão</span><span id="contagem-em_revisao">0</span></div>
+                <div id="coluna-em_revisao"></div>
+              </div>
+              <div class="kanban-coluna" data-status="concluida" ondragover="aoArrastarSobre(event)" ondragleave="aoSairArraste(event)" ondrop="aoSoltar(event)">
+                <div class="kanban-coluna-titulo"><span>✅ Concluída</span><span id="contagem-concluida">0</span></div>
+                <div id="coluna-concluida"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _tarefasCache = [];
+    const COLUNAS_STATUS = ['a_fazer', 'em_andamento', 'em_revisao', 'concluida'];
+    const PRIORIDADE_LABEL = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' };
+
+    async function carregarSelectsTarefas() {
+      const { data: colaboradores } = await db.from('colaboradores').select('id,nome').order('nome');
+      const opcoesColab = (colaboradores || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.nome)}</option>`).join('');
+      document.getElementById('trf-responsavel').innerHTML = '<option value="">-- Ninguém --</option>' + opcoesColab;
+      document.getElementById('kb-filtro-responsavel').innerHTML = '<option value="">Todos</option>' + opcoesColab;
+
+      const { data: ccs } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+      const opcoesCC = (ccs || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+      document.getElementById('trf-centro-custo').innerHTML = '<option value="">-- Nenhum --</option>' + opcoesCC;
+      document.getElementById('kb-filtro-centro-custo').innerHTML = '<option value="">Todos</option>' + opcoesCC;
+    }
+
+    async function salvarTarefa() {
+      const titulo = document.getElementById('trf-titulo').value.trim();
+      if (!titulo) { msgForm('msg-tarefa', 'Informe o título.', 'red'); return; }
+
+      const { error } = await db.from('tarefas').insert([{
+        titulo, descricao: document.getElementById('trf-descricao').value.trim() || null,
+        prioridade: document.getElementById('trf-prioridade').value,
+        responsavel_id: document.getElementById('trf-responsavel').value || null,
+        centro_custo_id: document.getElementById('trf-centro-custo').value || null,
+        data_vencimento: document.getElementById('trf-vencimento').value || null,
+        status: 'a_fazer', criado_por_nome: window._usuarioAtual?.nome || null,
+      }]);
+      if (error) { msgForm('msg-tarefa', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      msgForm('msg-tarefa', '✓ Tarefa criada!', 'green');
+      document.getElementById('trf-titulo').value = '';
+      document.getElementById('trf-descricao').value = '';
+      document.getElementById('trf-vencimento').value = '';
+      await carregarTarefas();
+    }
+
+    async function excluirTarefa(id) {
+      if (!confirm('Excluir esta tarefa?')) return;
+      const { error } = await db.from('tarefas').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarTarefas();
+    }
+
+    function tarefaVencida(t) {
+      if (t.status === 'concluida' || !t.data_vencimento) return false;
+      return new Date(t.data_vencimento + 'T00:00:00') < new Date();
+    }
+
+    async function carregarTarefas() {
+      const filtroResponsavel = document.getElementById('kb-filtro-responsavel').value;
+      const filtroCentroCusto = document.getElementById('kb-filtro-centro-custo').value;
+      const filtroPrioridade = document.getElementById('kb-filtro-prioridade').value;
+
+      let query = db.from('tarefas').select('*, colaboradores(nome), centros_custo(codigo,nome,tipo)').order('ordem').order('created_at');
+      if (filtroResponsavel) query = query.eq('responsavel_id', filtroResponsavel);
+      if (filtroCentroCusto) query = query.eq('centro_custo_id', filtroCentroCusto);
+      if (filtroPrioridade) query = query.eq('prioridade', filtroPrioridade);
+
+      const { data, error } = await query;
+      if (error) { toast('Erro ao carregar tarefas: ' + error.message, 'erro'); return; }
+      _tarefasCache = data || [];
+      renderizarKanban();
+    }
+
+    function renderizarKanban() {
+      COLUNAS_STATUS.forEach(status => {
+        const container = document.getElementById('coluna-' + status);
+        const itens = _tarefasCache.filter(t => t.status === status);
+        document.getElementById('contagem-' + status).textContent = itens.length;
+
+        container.innerHTML = itens.map(t => {
+          const vencida = tarefaVencida(t);
+          return `<div class="kanban-card" draggable="true" data-id="${escapeHTML(t.id)}" ondragstart="aoIniciarArraste(event)" ondragend="aoFinalizarArraste(event)">
+            <div class="kanban-card-titulo">${escapeHTML(t.titulo)}</div>
+            ${t.descricao ? `<div style="font-size:11px;color:#718096;margin-bottom:6px;">${escapeHTML(t.descricao)}</div>` : ''}
+            <div class="kanban-card-meta">
+              <span class="tag-badge prioridade-${t.prioridade}">${PRIORIDADE_LABEL[t.prioridade] || t.prioridade}</span>
+              ${t.colaboradores ? `<span class="tag-badge">👤 ${escapeHTML(t.colaboradores.nome)}</span>` : ''}
+              ${t.centros_custo ? `<span class="tag-badge">${t.centros_custo.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(t.centros_custo.nome)}</span>` : ''}
+              ${t.data_vencimento ? `<span class="tag-badge ${vencida ? 'danger' : ''}">${vencida ? '⚠️ ' : '📅 '}${fmtDate(t.data_vencimento)}</span>` : ''}
+            </div>
+            <button type="button" class="btn-excluir" style="padding:2px 6px;font-size:10px;margin-top:6px;" onclick="excluirTarefa('${escapeHTML(t.id)}')">✕ Excluir</button>
+          </div>`;
+        }).join('');
+      });
+    }
+
+    // ===================== DRAG AND DROP (HTML5 nativo) =====================
+    let _idArrastando = null;
+
+    function aoIniciarArraste(ev) {
+      _idArrastando = ev.target.dataset.id;
+      ev.target.classList.add('arrastando');
+    }
+    function aoFinalizarArraste(ev) {
+      ev.target.classList.remove('arrastando');
+    }
+    function aoArrastarSobre(ev) {
+      ev.preventDefault();
+      ev.currentTarget.classList.add('arraste-sobre');
+    }
+    function aoSairArraste(ev) {
+      ev.currentTarget.classList.remove('arraste-sobre');
+    }
+    async function aoSoltar(ev) {
+      ev.preventDefault();
+      ev.currentTarget.classList.remove('arraste-sobre');
+      const novoStatus = ev.currentTarget.dataset.status;
+      if (!_idArrastando || !novoStatus) return;
+
+      const tarefa = _tarefasCache.find(t => t.id === _idArrastando);
+      if (!tarefa || tarefa.status === novoStatus) return;
+
+      const payload = { status: novoStatus, updated_at: new Date().toISOString() };
+      if (novoStatus === 'concluida') payload.data_conclusao = new Date().toISOString().slice(0,10);
+
+      const { error } = await db.from('tarefas').update(payload).eq('id', _idArrastando);
+      if (error) { toast('Erro ao mover tarefa: ' + error.message, 'erro'); return; }
+
+      tarefa.status = novoStatus;
+      renderizarKanban();
+    }
+
+    document.getElementById('btn-salvar-tarefa').addEventListener('click', salvarTarefa);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsTarefas();
+      await carregarTarefas();
+    });
+  </script>
+</body>
+</html>

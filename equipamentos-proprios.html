@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Equipamentos e ferramentas próprios da Fabasi — cadastro, alocação por obra e manutenção — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Equipamentos e Ferramentas</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print">
+        <h2>🚜 Equipamentos e Ferramentas</h2>
+        <p style="font-size:11px;color:#a0aec0;margin:0;">Frota própria da Fabasi — diferente dos ativos de cliente em Refrigeração/Manutenção.</p>
+      </div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card">
+              <div class="dash-card-icon">🚜</div>
+              <p class="dash-card-title">Total de Equipamentos</p>
+              <h3 id="eqp-txt-total" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-success">
+              <div class="dash-card-icon">✅</div>
+              <p class="dash-card-title">Disponíveis</p>
+              <h3 id="eqp-txt-disponiveis" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-warning">
+              <div class="dash-card-icon">🏗️</div>
+              <p class="dash-card-title">Em Uso</p>
+              <h3 id="eqp-txt-em-uso" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">🔧</div>
+              <p class="dash-card-title">Em Manutenção</p>
+              <h3 id="eqp-txt-manutencao" class="dash-card-value">—</h3>
+            </div>
+          </div>
+
+          <div class="topbar no-print" style="padding:0;margin-bottom:16px;">
+            <button type="button" class="btn-refresh" onclick="alternarAbaEqp('cadastro')">📋 Cadastro</button>
+            <button type="button" class="btn-refresh" style="background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="alternarAbaEqp('alocacao')">🏗️ Alocação</button>
+            <button type="button" class="btn-refresh" style="background:#0e7490;border-color:#0e7490;color:#fff;" onclick="alternarAbaEqp('manutencao')">🔧 Manutenção</button>
+          </div>
+
+<div id="aba-eqp-cadastro">
+          <div class="card">
+            <h3 class="card-title">➕ Novo Equipamento / Ferramenta</h3>
+            <input type="hidden" id="eqp-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="eqp-nome">Nome *</label><input type="text" id="eqp-nome" placeholder="Ex: Compressor de Ar 20L, Furadeira de Impacto"></div>
+              <div class="form-group"><label for="eqp-categoria">Categoria *</label>
+                <select id="eqp-categoria" class="form-input-style">
+                  <option value="maquina_pesada">🚧 Máquina Pesada</option>
+                  <option value="ferramenta_eletrica">🔌 Ferramenta Elétrica</option>
+                  <option value="ferramenta_manual">🔧 Ferramenta Manual</option>
+                  <option value="veiculo">🚚 Veículo</option>
+                  <option value="equipamento_seguranca">🦺 Equipamento de Segurança</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="eqp-patrimonio">Patrimônio</label><input type="text" id="eqp-patrimonio"></div>
+              <div class="form-group"><label for="eqp-marca">Marca</label><input type="text" id="eqp-marca"></div>
+              <div class="form-group"><label for="eqp-modelo">Modelo</label><input type="text" id="eqp-modelo"></div>
+              <div class="form-group"><label for="eqp-numero-serie">Nº de Série</label><input type="text" id="eqp-numero-serie"></div>
+              <div class="form-group"><label for="eqp-data-aquisicao">Data de Aquisição</label><input type="date" id="eqp-data-aquisicao"></div>
+              <div class="form-group"><label for="eqp-valor-aquisicao">Valor de Aquisição (R$)</label><input type="number" id="eqp-valor-aquisicao" step="0.01"></div>
+              <div class="form-group"><label for="eqp-status">Status</label>
+                <select id="eqp-status" class="form-input-style">
+                  <option value="disponivel">Disponível</option>
+                  <option value="em_uso">Em Uso</option>
+                  <option value="em_manutencao">Em Manutenção</option>
+                  <option value="baixado">Baixado</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column:span 3;"><label for="eqp-observacoes">Observações</label><input type="text" id="eqp-observacoes"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-equipamento" class="btn-primary">💾 Registrar Equipamento</button>
+              <button type="button" id="btn-cancelar-equipamento" class="btn-secondary" style="display:none;" onclick="resetarFormEquipamento()">✕ Cancelar</button>
+            </div>
+            <p id="msg-equipamento" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Equipamentos Cadastrados</h3>
+              <button type="button" class="btn-refresh" onclick="carregarEquipamentosProprios()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nome</th><th>Categoria</th><th>Patrimônio</th><th>Status</th><th>Alocado em</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-equipamentos"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+</div>
+
+<div id="aba-eqp-alocacao" style="display:none;">
+          <div class="card">
+            <h3 class="card-title">🏗️ Alocar Equipamento</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="aloc-equipamento">Equipamento *</label><select id="aloc-equipamento" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="aloc-centro-custo">Alocar em (Centro de Custo) *</label><select id="aloc-centro-custo" class="form-input-style"><option value="">-- Selecione (ou deixe vazio para devolver ao almoxarifado) --</option></select></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="aloc-observacoes">Observações</label><input type="text" id="aloc-observacoes"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-alocacao" class="btn-primary" style="background:#7c3aed;">💾 Registrar Alocação</button>
+            </div>
+            <p id="msg-alocacao" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Histórico de Alocações</h3>
+              <button type="button" class="btn-refresh" onclick="carregarHistoricoAlocacoes()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Equipamento</th><th>Centro de Custo</th><th>Início</th><th>Fim</th></tr></thead>
+                <tbody id="tbody-alocacoes"><tr><td colspan="4" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+</div>
+
+<div id="aba-eqp-manutencao" style="display:none;">
+          <div class="card">
+            <h3 class="card-title">🔧 Registrar Manutenção</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="manu-equipamento">Equipamento *</label><select id="manu-equipamento" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="manu-tipo">Tipo *</label>
+                <select id="manu-tipo" class="form-input-style">
+                  <option value="preventiva">Preventiva</option>
+                  <option value="corretiva">Corretiva</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="manu-data">Data</label><input type="date" id="manu-data"></div>
+              <div class="form-group"><label for="manu-custo">Custo (R$)</label><input type="number" id="manu-custo" step="0.01"></div>
+              <div class="form-group"><label for="manu-fornecedor">Fornecedor (se terceirizado)</label><select id="manu-fornecedor" class="form-input-style"><option value="">-- Nenhum --</option></select></div>
+              <div class="form-group"><label for="manu-proxima-revisao">Próxima Revisão</label><input type="date" id="manu-proxima-revisao"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="manu-descricao">Descrição</label><input type="text" id="manu-descricao"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-manutencao" class="btn-primary" style="background:#0e7490;">💾 Registrar Manutenção</button>
+            </div>
+            <p id="msg-manutencao" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Histórico de Manutenções</h3>
+              <button type="button" class="btn-refresh" onclick="carregarHistoricoManutencoes()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Equipamento</th><th>Tipo</th><th>Data</th><th>Custo</th><th>Próx. Revisão</th></tr></thead>
+                <tbody id="tbody-manutencoes"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+</div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _equipamentosPropriosCache = [];
+    const CATEGORIA_EQP_LABEL = { maquina_pesada: '🚧 Máquina Pesada', ferramenta_eletrica: '🔌 Ferramenta Elétrica', ferramenta_manual: '🔧 Ferramenta Manual', veiculo: '🚚 Veículo', equipamento_seguranca: '🦺 EPI/Segurança', outro: 'Outro' };
+    const STATUS_EQP_LABEL = { disponivel: 'Disponível', em_uso: 'Em Uso', em_manutencao: 'Em Manutenção', baixado: 'Baixado' };
+    const STATUS_EQP_COR = { disponivel: 'success', em_uso: 'warning', em_manutencao: 'danger', baixado: '' };
+
+    function alternarAbaEqp(aba) {
+      ['cadastro','alocacao','manutencao'].forEach(a => {
+        const el = document.getElementById('aba-eqp-' + a);
+        if (el) el.style.display = a === aba ? 'block' : 'none';
+      });
+    }
+
+    // ===================== CADASTRO =====================
+    async function carregarKpisEquipamentosProprios() {
+      document.getElementById('eqp-txt-total').textContent = _equipamentosPropriosCache.length;
+      document.getElementById('eqp-txt-disponiveis').textContent = _equipamentosPropriosCache.filter(e => e.status === 'disponivel').length;
+      document.getElementById('eqp-txt-em-uso').textContent = _equipamentosPropriosCache.filter(e => e.status === 'em_uso').length;
+      document.getElementById('eqp-txt-manutencao').textContent = _equipamentosPropriosCache.filter(e => e.status === 'em_manutencao').length;
+    }
+
+    async function salvarEquipamentoProprio() {
+      const nome = document.getElementById('eqp-nome').value.trim();
+      if (!nome) { msgForm('msg-equipamento', 'Informe o nome.', 'red'); return; }
+
+      const payload = {
+        nome, categoria: document.getElementById('eqp-categoria').value,
+        patrimonio: document.getElementById('eqp-patrimonio').value.trim() || null,
+        marca: document.getElementById('eqp-marca').value.trim() || null,
+        modelo: document.getElementById('eqp-modelo').value.trim() || null,
+        numero_serie: document.getElementById('eqp-numero-serie').value.trim() || null,
+        data_aquisicao: document.getElementById('eqp-data-aquisicao').value || null,
+        valor_aquisicao: document.getElementById('eqp-valor-aquisicao').value || null,
+        status: document.getElementById('eqp-status').value,
+        observacoes: document.getElementById('eqp-observacoes').value.trim() || null,
+      };
+
+      const idEd = document.getElementById('eqp-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('equipamentos_proprios').update(payload).eq('id', idEd)
+        : await db.from('equipamentos_proprios').insert([payload]);
+
+      if (error) { msgForm('msg-equipamento', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-equipamento', '✓ Equipamento salvo!', 'green');
+      resetarFormEquipamento();
+      await carregarEquipamentosProprios();
+    }
+
+    function resetarFormEquipamento() {
+      document.getElementById('eqp-id-edicao').value = '';
+      ['eqp-nome','eqp-patrimonio','eqp-marca','eqp-modelo','eqp-numero-serie','eqp-data-aquisicao','eqp-valor-aquisicao','eqp-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('eqp-categoria').value = 'ferramenta_manual';
+      document.getElementById('eqp-status').value = 'disponivel';
+      document.getElementById('btn-salvar-equipamento').textContent = '💾 Registrar Equipamento';
+      document.getElementById('btn-cancelar-equipamento').style.display = 'none';
+    }
+
+    function editarEquipamentoProprio(id) {
+      const e = _equipamentosPropriosCache.find(x => x.id === id); if (!e) return;
+      document.getElementById('eqp-id-edicao').value = id;
+      document.getElementById('eqp-nome').value = e.nome || '';
+      document.getElementById('eqp-categoria').value = e.categoria || 'ferramenta_manual';
+      document.getElementById('eqp-patrimonio').value = e.patrimonio || '';
+      document.getElementById('eqp-marca').value = e.marca || '';
+      document.getElementById('eqp-modelo').value = e.modelo || '';
+      document.getElementById('eqp-numero-serie').value = e.numero_serie || '';
+      document.getElementById('eqp-data-aquisicao').value = e.data_aquisicao || '';
+      document.getElementById('eqp-valor-aquisicao').value = e.valor_aquisicao || '';
+      document.getElementById('eqp-status').value = e.status || 'disponivel';
+      document.getElementById('eqp-observacoes').value = e.observacoes || '';
+      document.getElementById('btn-salvar-equipamento').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-equipamento').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirEquipamentoProprio(id, nome) {
+      if (!confirm(`Excluir "${nome}"? O histórico de alocações e manutenções também será removido.`)) return;
+      const { error } = await db.from('equipamentos_proprios').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarEquipamentosProprios();
+    }
+
+    async function gerarQrCodeEquipamentoProprio(id) {
+      const e = _equipamentosPropriosCache.find(x => x.id === id); if (!e) return;
+      let token = e.qrcode_token;
+      if (!token) {
+        token = crypto.randomUUID();
+        const { error } = await db.from('equipamentos_proprios').update({ qrcode_token: token }).eq('id', id);
+        if (error) { toast('Erro ao gerar QR Code: ' + error.message, 'erro'); return; }
+        e.qrcode_token = token;
+      }
+      const url = gerarUrlValidacao(token, 'equipamento_proprio');
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}&format=png&margin=2`;
+      const janela = window.open('', '_blank', 'width=380,height=480');
+      janela.document.write(`<html><head><title>QR Code — ${escapeHTML(e.nome)}</title></head>
+        <body style="text-align:center;font-family:Arial;padding:20px;">
+          <h3>${escapeHTML(e.nome)}</h3>
+          <p style="font-size:12px;color:#718096;">${escapeHTML(e.patrimonio || '')}</p>
+          <img src="${qrSrc}" width="220" height="220">
+          <p style="font-size:11px;color:#718096;word-break:break-all;">${escapeHTML(token)}</p>
+          <button onclick="window.print()" style="margin-top:12px;padding:8px 16px;">🖨️ Imprimir</button>
+        </body></html>`);
+    }
+
+    async function carregarEquipamentosProprios() {
+      const tbody = document.getElementById('tbody-equipamentos');
+      const { data, error } = await db.from('equipamentos_proprios').select('*, centros_custo(codigo,nome,tipo)').eq('ativo', true).order('nome');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _equipamentosPropriosCache = data || [];
+      await carregarKpisEquipamentosProprios();
+
+      if (!_equipamentosPropriosCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum equipamento cadastrado ainda.</td></tr>'; return; }
+      tbody.innerHTML = _equipamentosPropriosCache.map(e => `<tr>
+        <td>${escapeHTML(e.nome)}</td>
+        <td><span class="tag-badge">${CATEGORIA_EQP_LABEL[e.categoria] || escapeHTML(e.categoria)}</span></td>
+        <td>${escapeHTML(e.patrimonio || '—')}</td>
+        <td><span class="tag-badge ${STATUS_EQP_COR[e.status] || ''}">${STATUS_EQP_LABEL[e.status] || escapeHTML(e.status)}</span></td>
+        <td>${e.centros_custo ? (e.centros_custo.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(e.centros_custo.nome) : '<span style="color:#a0aec0;">Almoxarifado</span>'}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarEquipamentoProprio('${escapeHTML(e.id)}')">✏️</button>
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="gerarQrCodeEquipamentoProprio('${escapeHTML(e.id)}')">🏷️</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirEquipamentoProprio('${escapeHTML(e.id)}','${escapeHTML(e.nome)}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== ALOCAÇÃO =====================
+    async function carregarSelectsAlocacao() {
+      document.getElementById('aloc-equipamento').innerHTML = '<option value="">-- Selecione --</option>' +
+        _equipamentosPropriosCache.map(e => `<option value="${escapeHTML(e.id)}">${escapeHTML(e.nome)}${e.patrimonio ? ' (' + escapeHTML(e.patrimonio) + ')' : ''}</option>`).join('');
+
+      const { data } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+      document.getElementById('aloc-centro-custo').innerHTML = '<option value="">-- Selecione (ou deixe vazio para devolver ao almoxarifado) --</option>' +
+        (data || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+    }
+
+    async function salvarAlocacao() {
+      const equipamentoId = document.getElementById('aloc-equipamento').value;
+      if (!equipamentoId) { msgForm('msg-alocacao', 'Selecione o equipamento.', 'red'); return; }
+      const centroCustoId = document.getElementById('aloc-centro-custo').value || null;
+
+      // Fecha a alocação vigente (se houver) antes de abrir uma nova.
+      await db.from('equipamento_alocacoes').update({ data_fim: new Date().toISOString().slice(0,10) })
+        .eq('equipamento_id', equipamentoId).is('data_fim', null);
+
+      if (centroCustoId) {
+        const { error } = await db.from('equipamento_alocacoes').insert([{
+          equipamento_id: equipamentoId, centro_custo_id: centroCustoId,
+          observacoes: document.getElementById('aloc-observacoes').value.trim() || null,
+        }]);
+        if (error) { msgForm('msg-alocacao', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      }
+
+      await db.from('equipamentos_proprios').update({
+        centro_custo_id: centroCustoId, status: centroCustoId ? 'em_uso' : 'disponivel',
+      }).eq('id', equipamentoId);
+
+      msgForm('msg-alocacao', centroCustoId ? '✓ Equipamento alocado!' : '✓ Equipamento devolvido ao almoxarifado!', 'green');
+      document.getElementById('aloc-observacoes').value = '';
+      await carregarEquipamentosProprios();
+      await carregarSelectsAlocacao();
+      await carregarHistoricoAlocacoes();
+    }
+
+    async function carregarHistoricoAlocacoes() {
+      const tbody = document.getElementById('tbody-alocacoes');
+      const { data, error } = await db.from('equipamento_alocacoes').select('*, equipamentos_proprios(nome), centros_custo(codigo,nome,tipo)').order('data_inicio', { ascending: false }).limit(100);
+      if (error) { tbody.innerHTML = '<tr><td colspan="4" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="4" class="td-loading">Nenhuma alocação registrada ainda.</td></tr>'; return; }
+      tbody.innerHTML = data.map(a => `<tr>
+        <td>${escapeHTML(a.equipamentos_proprios?.nome || '—')}</td>
+        <td>${a.centros_custo ? (a.centros_custo.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(a.centros_custo.nome) : '—'}</td>
+        <td>${fmtDate(a.data_inicio)}</td>
+        <td>${a.data_fim ? fmtDate(a.data_fim) : '<span style="color:#059669;font-weight:600;">Vigente</span>'}</td>
+      </tr>`).join('');
+    }
+
+    // ===================== MANUTENÇÃO =====================
+    async function carregarSelectsManutencao() {
+      document.getElementById('manu-equipamento').innerHTML = '<option value="">-- Selecione --</option>' +
+        _equipamentosPropriosCache.map(e => `<option value="${escapeHTML(e.id)}">${escapeHTML(e.nome)}${e.patrimonio ? ' (' + escapeHTML(e.patrimonio) + ')' : ''}</option>`).join('');
+
+      const { data } = await db.from('fornecedores').select('id,razao_social').eq('ativo', true).order('razao_social');
+      document.getElementById('manu-fornecedor').innerHTML = '<option value="">-- Nenhum --</option>' +
+        (data || []).map(f => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.razao_social)}</option>`).join('');
+    }
+
+    async function salvarManutencao() {
+      const equipamentoId = document.getElementById('manu-equipamento').value;
+      if (!equipamentoId) { msgForm('msg-manutencao', 'Selecione o equipamento.', 'red'); return; }
+
+      const { error } = await db.from('equipamento_manutencoes').insert([{
+        equipamento_id: equipamentoId, tipo: document.getElementById('manu-tipo').value,
+        data: document.getElementById('manu-data').value || new Date().toISOString().slice(0,10),
+        custo: Number(document.getElementById('manu-custo').value) || 0,
+        fornecedor_id: document.getElementById('manu-fornecedor').value || null,
+        proxima_revisao: document.getElementById('manu-proxima-revisao').value || null,
+        descricao: document.getElementById('manu-descricao').value.trim() || null,
+      }]);
+      if (error) { msgForm('msg-manutencao', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      msgForm('msg-manutencao', '✓ Manutenção registrada!', 'green');
+      ['manu-custo','manu-proxima-revisao','manu-descricao'].forEach(id => document.getElementById(id).value = '');
+      await carregarHistoricoManutencoes();
+    }
+
+    async function carregarHistoricoManutencoes() {
+      const tbody = document.getElementById('tbody-manutencoes');
+      const { data, error } = await db.from('equipamento_manutencoes').select('*, equipamentos_proprios(nome)').order('data', { ascending: false }).limit(100);
+      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma manutenção registrada ainda.</td></tr>'; return; }
+      tbody.innerHTML = data.map(m => `<tr>
+        <td>${escapeHTML(m.equipamentos_proprios?.nome || '—')}</td>
+        <td><span class="tag-badge ${m.tipo === 'corretiva' ? 'danger' : ''}">${m.tipo === 'corretiva' ? 'Corretiva' : 'Preventiva'}</span></td>
+        <td>${fmtDate(m.data)}</td>
+        <td>R$ ${Number(m.custo || 0).toFixed(2).replace('.', ',')}</td>
+        <td>${m.proxima_revisao ? fmtDate(m.proxima_revisao) : '—'}</td>
+      </tr>`).join('');
+    }
+
+    document.getElementById('btn-salvar-equipamento').addEventListener('click', salvarEquipamentoProprio);
+    document.getElementById('btn-salvar-alocacao').addEventListener('click', salvarAlocacao);
+    document.getElementById('btn-salvar-manutencao').addEventListener('click', salvarManutencao);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('manu-data').value = new Date().toISOString().slice(0,10);
+      await carregarEquipamentosProprios();
+      await carregarSelectsAlocacao();
+      await carregarSelectsManutencao();
+      await carregarHistoricoAlocacoes();
+      await carregarHistoricoManutencoes();
+    });
+  </script>
+</body>
+</html>

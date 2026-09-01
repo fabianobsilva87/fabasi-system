@@ -410,6 +410,35 @@
           </div>
           ${saldos && saldos.length ? `<hr class="divider"><div style="font-size:10px;color:#718096;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Saldo por Almoxarifado</div><div class="field-group">${saldos.map(s => `<div class="field"><label>${escapeHTML(s.almoxarifados?.nome || '—')}</label><span>${Number(s.saldo || 0)} ${escapeHTML(mat.unidade || '')}</span></div>`).join('')}</div>` : ''}`;
 
+      // ════════════════════════ EQUIPAMENTO PRÓPRIO (FROTA) ════════════════════════
+      } else if (tipo === 'equipamento_proprio') {
+        const { data: eqp, error } = await db
+          .from('equipamentos_proprios')
+          .select('*, centros_custo(nome, tipo)')
+          .eq('qrcode_token', id)
+          .single();
+        if (error || !eqp) { mostrarErro('Equipamento não encontrado na base de dados.'); return; }
+
+        const statusLabel = { disponivel: 'Disponível', em_uso: 'Em Uso', em_manutencao: 'Em Manutenção', baixado: 'Baixado' };
+        const statusCorMap = { disponivel: { bg:'#d1fae5', txt:'#065f46' }, em_uso: { bg:'#fef3c7', txt:'#92400e' }, em_manutencao: { bg:'#fee2e2', txt:'#991b1b' }, baixado: { bg:'#f1f5f9', txt:'#374151' } };
+        const cs2 = statusCorMap[eqp.status] || statusCorMap['disponivel'];
+
+        document.getElementById('status-banner').className = 'status-banner valido';
+        document.getElementById('status-texto').textContent = `✅ Equipamento — ${escapeHTML(eqp.nome)}`;
+        document.getElementById('spinner').remove();
+        document.getElementById('corpo').innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <span class="tag-tipo tag-os">🚜 Equipamento</span>
+            <strong style="font-size:15px;">${escapeHTML(eqp.nome)}</strong>
+            <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;margin-left:auto;background:${cs2.bg};color:${cs2.txt};">${escapeHTML(statusLabel[eqp.status] || eqp.status)}</span>
+          </div>
+          <div class="field-group">
+            <div class="field"><label>Patrimônio</label><span>${escapeHTML(eqp.patrimonio || '—')}</span></div>
+            <div class="field"><label>Marca / Modelo</label><span>${escapeHTML([eqp.marca, eqp.modelo].filter(Boolean).join(' / ') || '—')}</span></div>
+            <div class="field"><label>Nº de Série</label><span>${escapeHTML(eqp.numero_serie || '—')}</span></div>
+            <div class="field full"><label>Alocado em</label><span>${eqp.centros_custo ? escapeHTML(eqp.centros_custo.nome) : 'Almoxarifado (disponível)'}</span></div>
+          </div>`;
+
       } else {
         mostrarErro('Tipo de documento desconhecido.');
       }
