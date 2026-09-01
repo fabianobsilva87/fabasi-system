@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Cronograma físico-financeiro da obra — Gantt, Kanban e Curva S.">
+    <meta name="description" content="Cronograma de obra por etapas, com visão de linha do tempo e Curva S física/financeira — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="config.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
        O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
@@ -36,23 +37,300 @@
       <div class="topbar no-print"><h2>📅 Cronograma de Obra</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>📅 Cronograma de Obra</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Obras — prazos e dependências entre etapas, linha de base e replanejamento.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> diagrama de Gantt com dependências, visão Kanban por etapa, linha de base (baseline) x realizado, Curva S física e financeira, identificação de gargalos.
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Cronograma por etapas sequenciais (previsto x real) e Curva S física/financeira, calculada em cima do
+            orçamento e das medições já lançadas — não é Gantt com dependências entre tarefas nem Kanban ainda.
+          </p>
+
+          <div class="card">
+            <h3 class="card-title">📅 Selecionar Obra</h3>
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 2;"><label for="cro-obra">Obra *</label><select id="cro-obra" class="form-input-style" onchange="carregarCronogramaDaObra()"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label>Total Orçado</label><div id="cro-total-orcado" style="padding:8px 0;font-weight:700;">—</div></div>
             </div>
           </div>
+
+          <div id="cro-painel-obra" style="display:none;">
+
+            <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+              <div class="dash-card">
+                <div class="dash-card-icon">📊</div>
+                <p class="dash-card-title">Peso Total Cadastrado</p>
+                <h3 id="cro-txt-peso-total" class="dash-card-value">—</h3>
+              </div>
+              <div class="dash-card">
+                <div class="dash-card-icon">✅</div>
+                <p class="dash-card-title">Etapas Concluídas</p>
+                <h3 id="cro-txt-concluidas" class="dash-card-value">—</h3>
+              </div>
+              <div class="dash-card dash-card-danger">
+                <div class="dash-card-icon">⚠️</div>
+                <p class="dash-card-title">Etapas Atrasadas</p>
+                <h3 id="cro-txt-atrasadas" class="dash-card-value">—</h3>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">➕ Nova Etapa</h3>
+              <input type="hidden" id="cro-etapa-id-edicao" value="">
+              <div class="form-grid">
+                <div class="form-group"><label for="cro-etapa-ordem">Ordem</label><input type="number" id="cro-etapa-ordem"></div>
+                <div class="form-group" style="grid-column:span 2;"><label for="cro-etapa-nome">Nome da Etapa *</label><input type="text" id="cro-etapa-nome" placeholder="Ex: Fundação"></div>
+                <div class="form-group"><label for="cro-etapa-peso">Peso no Cronograma (%) *</label><input type="number" id="cro-etapa-peso" step="0.01"></div>
+                <div class="form-group"><label for="cro-etapa-inicio-prev">Início Previsto</label><input type="date" id="cro-etapa-inicio-prev"></div>
+                <div class="form-group"><label for="cro-etapa-fim-prev">Fim Previsto</label><input type="date" id="cro-etapa-fim-prev"></div>
+                <div class="form-group"><label for="cro-etapa-inicio-real">Início Real</label><input type="date" id="cro-etapa-inicio-real"></div>
+                <div class="form-group"><label for="cro-etapa-fim-real">Fim Real</label><input type="date" id="cro-etapa-fim-real"></div>
+                <div class="form-group"><label for="cro-etapa-status">Status</label>
+                  <select id="cro-etapa-status" class="form-input-style">
+                    <option value="nao_iniciada">Não Iniciada</option>
+                    <option value="em_andamento">Em Andamento</option>
+                    <option value="concluida">Concluída</option>
+                  </select>
+                </div>
+                <div class="form-group" style="grid-column:span 3;"><label for="cro-etapa-observacoes">Observações</label><input type="text" id="cro-etapa-observacoes"></div>
+              </div>
+              <div class="btn-row" style="margin-top:16px;">
+                <button type="button" id="btn-salvar-etapa" class="btn-primary">💾 Registrar Etapa</button>
+                <button type="button" id="btn-cancelar-etapa" class="btn-secondary" style="display:none;" onclick="resetarFormEtapa()">✕ Cancelar</button>
+              </div>
+              <p id="msg-etapa" class="msg-form"></p>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">📊 Linha do Tempo (previsto)</h3>
+              <div id="cro-gantt" style="overflow-x:auto;"></div>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">📈 Curva S — Previsto x Realizado Acumulado</h3>
+              <canvas id="cro-curva-s" height="90"></canvas>
+            </div>
+
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <h3 class="card-title" style="margin:0;">Etapas Cadastradas</h3>
+                <button type="button" class="btn-refresh" onclick="carregarCronogramaDaObra()">↺ Atualizar</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Ordem</th><th>Etapa</th><th>Peso</th><th>Previsto</th><th>Real</th><th>Status</th><th>Ações</th></tr></thead>
+                  <tbody id="tbody-etapas"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _obraCronoSelecionadaId = null;
+    let _etapasCache = [];
+    let _totalOrcadoObra = 0;
+    let _graficoCurvaS = null;
+
+    const STATUS_ETAPA_LABEL = { nao_iniciada: 'Não Iniciada', em_andamento: 'Em Andamento', concluida: 'Concluída' };
+    const STATUS_ETAPA_COR = { nao_iniciada: '', em_andamento: 'warning', concluida: 'success' };
+
+    async function carregarSelectObraCrono() {
+      const { data } = await db.from('obras').select('id,nome').order('nome');
+      window._obrasParaCronoCache = data || [];
+      document.getElementById('cro-obra').innerHTML = '<option value="">-- Selecione --</option>' +
+        (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+    }
+
+    function etapaEstaAtrasada(etapa) {
+      if (etapa.status === 'concluida' || !etapa.data_fim_prevista) return false;
+      return new Date(etapa.data_fim_prevista + 'T00:00:00') < new Date();
+    }
+
+    async function carregarCronogramaDaObra() {
+      _obraCronoSelecionadaId = document.getElementById('cro-obra').value;
+      if (!_obraCronoSelecionadaId) { document.getElementById('cro-painel-obra').style.display = 'none'; return; }
+      document.getElementById('cro-painel-obra').style.display = 'block';
+
+      const [{ data: orcItens }, { data: etapas }, { data: medicoes }] = await Promise.all([
+        db.from('orcamento_obra_itens').select('valor_previsto').eq('obra_id', _obraCronoSelecionadaId),
+        db.from('cronograma_obra_etapas').select('*').eq('obra_id', _obraCronoSelecionadaId).order('ordem'),
+        db.from('medicoes_obra').select('valor_total_medicao, data_medicao, status').eq('obra_id', _obraCronoSelecionadaId).in('status', ['aprovada', 'faturada']).order('data_medicao'),
+      ]);
+
+      _totalOrcadoObra = (orcItens || []).reduce((acc, i) => acc + Number(i.valor_previsto || 0), 0);
+      document.getElementById('cro-total-orcado').textContent = 'R$ ' + _totalOrcadoObra.toFixed(2).replace('.', ',');
+      _etapasCache = etapas || [];
+
+      const pesoTotal = _etapasCache.reduce((acc, e) => acc + Number(e.percentual_peso || 0), 0);
+      document.getElementById('cro-txt-peso-total').textContent = pesoTotal.toFixed(1) + '%';
+      document.getElementById('cro-txt-concluidas').textContent = _etapasCache.filter(e => e.status === 'concluida').length + ' / ' + _etapasCache.length;
+      document.getElementById('cro-txt-atrasadas').textContent = _etapasCache.filter(etapaEstaAtrasada).length;
+
+      renderizarTabelaEtapas();
+      renderizarGantt();
+      renderizarCurvaS(medicoes || []);
+    }
+
+    function renderizarTabelaEtapas() {
+      const tbody = document.getElementById('tbody-etapas');
+      if (!_etapasCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma etapa cadastrada ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _etapasCache.map(e => {
+        const atrasada = etapaEstaAtrasada(e);
+        return `<tr${atrasada ? ' style="background:#fef2f2;"' : ''}>
+          <td>${e.ordem}</td>
+          <td>${escapeHTML(e.nome)}</td>
+          <td>${Number(e.percentual_peso || 0).toFixed(1)}%</td>
+          <td style="font-size:12px;">${fmtDate(e.data_inicio_prevista)} → ${fmtDate(e.data_fim_prevista)}</td>
+          <td style="font-size:12px;">${e.data_inicio_real ? fmtDate(e.data_inicio_real) + ' → ' + fmtDate(e.data_fim_real) : '—'}</td>
+          <td><span class="tag-badge ${atrasada ? 'danger' : STATUS_ETAPA_COR[e.status] || ''}">${atrasada ? '⚠️ Atrasada' : (STATUS_ETAPA_LABEL[e.status] || escapeHTML(e.status))}</span></td>
+          <td style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarEtapa('${escapeHTML(e.id)}')">✏️</button>
+            <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirEtapa('${escapeHTML(e.id)}','${escapeHTML(e.nome)}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderizarGantt() {
+      const wrap = document.getElementById('cro-gantt');
+      const comDatas = _etapasCache.filter(e => e.data_inicio_prevista && e.data_fim_prevista);
+      if (!comDatas.length) { wrap.innerHTML = '<p style="font-size:12px;color:#a0aec0;">Cadastre datas previstas nas etapas para ver a linha do tempo.</p>'; return; }
+
+      const datas = comDatas.flatMap(e => [new Date(e.data_inicio_prevista), new Date(e.data_fim_prevista)]);
+      const dataMin = new Date(Math.min(...datas));
+      const dataMax = new Date(Math.max(...datas));
+      const spanMs = Math.max(1, dataMax - dataMin);
+
+      const corBarra = { nao_iniciada: '#a0aec0', em_andamento: '#f59e0b', concluida: '#059669' };
+
+      wrap.innerHTML = `<div style="min-width:600px;">` + comDatas.map(e => {
+        const inicio = new Date(e.data_inicio_prevista);
+        const fim = new Date(e.data_fim_prevista);
+        const leftPct = ((inicio - dataMin) / spanMs) * 100;
+        const widthPct = Math.max(1, ((fim - inicio) / spanMs) * 100);
+        const atrasada = etapaEstaAtrasada(e);
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <div style="width:140px;font-size:11px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(e.nome)}</div>
+          <div style="flex:1;position:relative;height:22px;background:#f1f5f9;border-radius:4px;">
+            <div style="position:absolute;left:${leftPct}%;width:${widthPct}%;height:100%;background:${atrasada ? '#dc2626' : corBarra[e.status] || '#a0aec0'};border-radius:4px;" title="${escapeHTML(e.nome)}: ${fmtDate(e.data_inicio_prevista)} → ${fmtDate(e.data_fim_prevista)}"></div>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+    }
+
+    function renderizarCurvaS(medicoes) {
+      if (!_etapasCache.length && !medicoes.length) { document.getElementById('cro-curva-s').closest('.card').style.display = 'none'; return; }
+      document.getElementById('cro-curva-s').closest('.card').style.display = 'block';
+
+      // Previsto acumulado: cada etapa soma seu peso × total orçado no dia
+      // do fim previsto (função "degrau").
+      const pontosPrevisto = _etapasCache
+        .filter(e => e.data_fim_prevista)
+        .map(e => ({ data: e.data_fim_prevista, valor: (Number(e.percentual_peso || 0) / 100) * _totalOrcadoObra }))
+        .sort((a, b) => new Date(a.data) - new Date(b.data));
+
+      // Realizado acumulado: cada medição aprovada/faturada soma seu valor
+      // no dia da medição.
+      const pontosRealizado = medicoes.map(m => ({ data: m.data_medicao, valor: Number(m.valor_total_medicao || 0) })).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+      const todasDatas = [...new Set([...pontosPrevisto.map(p => p.data), ...pontosRealizado.map(p => p.data)])].sort();
+      if (!todasDatas.length) { document.getElementById('cro-curva-s').closest('.card').style.display = 'none'; return; }
+
+      let acPrevisto = 0, acRealizado = 0;
+      const seriePrevisto = [], serieRealizado = [];
+      todasDatas.forEach(data => {
+        acPrevisto += pontosPrevisto.filter(p => p.data === data).reduce((s, p) => s + p.valor, 0);
+        acRealizado += pontosRealizado.filter(p => p.data === data).reduce((s, p) => s + p.valor, 0);
+        seriePrevisto.push(acPrevisto);
+        serieRealizado.push(acRealizado);
+      });
+
+      if (_graficoCurvaS) _graficoCurvaS.destroy();
+      _graficoCurvaS = new Chart(document.getElementById('cro-curva-s'), {
+        type: 'line',
+        data: {
+          labels: todasDatas.map(d => fmtDate(d)),
+          datasets: [
+            { label: 'Previsto Acumulado', data: seriePrevisto, borderColor: '#1a56db', backgroundColor: 'rgba(26,86,219,0.08)', fill: true, tension: 0.1 },
+            { label: 'Realizado Acumulado', data: serieRealizado, borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.08)', fill: true, tension: 0.1 },
+          ],
+        },
+        options: { responsive: true, scales: { y: { ticks: { callback: v => 'R$ ' + v } } } },
+      });
+    }
+
+    async function salvarEtapa() {
+      const nome = document.getElementById('cro-etapa-nome').value.trim();
+      const peso = Number(document.getElementById('cro-etapa-peso').value);
+      if (!nome) { msgForm('msg-etapa', 'Informe o nome da etapa.', 'red'); return; }
+      if (!peso || peso <= 0) { msgForm('msg-etapa', 'Informe um peso válido.', 'red'); return; }
+
+      const payload = {
+        obra_id: _obraCronoSelecionadaId,
+        ordem: Number(document.getElementById('cro-etapa-ordem').value) || (_etapasCache.length + 1),
+        nome, percentual_peso: peso,
+        data_inicio_prevista: document.getElementById('cro-etapa-inicio-prev').value || null,
+        data_fim_prevista: document.getElementById('cro-etapa-fim-prev').value || null,
+        data_inicio_real: document.getElementById('cro-etapa-inicio-real').value || null,
+        data_fim_real: document.getElementById('cro-etapa-fim-real').value || null,
+        status: document.getElementById('cro-etapa-status').value,
+        observacoes: document.getElementById('cro-etapa-observacoes').value.trim() || null,
+      };
+
+      const idEd = document.getElementById('cro-etapa-id-edicao').value;
+      const { error } = idEd
+        ? await db.from('cronograma_obra_etapas').update(payload).eq('id', idEd)
+        : await db.from('cronograma_obra_etapas').insert([payload]);
+
+      if (error) { msgForm('msg-etapa', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-etapa', '✓ Etapa salva!', 'green');
+      resetarFormEtapa();
+      await carregarCronogramaDaObra();
+    }
+
+    function resetarFormEtapa() {
+      document.getElementById('cro-etapa-id-edicao').value = '';
+      ['cro-etapa-ordem','cro-etapa-nome','cro-etapa-peso','cro-etapa-inicio-prev','cro-etapa-fim-prev','cro-etapa-inicio-real','cro-etapa-fim-real','cro-etapa-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cro-etapa-status').value = 'nao_iniciada';
+      document.getElementById('btn-salvar-etapa').textContent = '💾 Registrar Etapa';
+      document.getElementById('btn-cancelar-etapa').style.display = 'none';
+    }
+
+    function editarEtapa(id) {
+      const e = _etapasCache.find(x => x.id === id); if (!e) return;
+      document.getElementById('cro-etapa-id-edicao').value = id;
+      document.getElementById('cro-etapa-ordem').value = e.ordem || '';
+      document.getElementById('cro-etapa-nome').value = e.nome || '';
+      document.getElementById('cro-etapa-peso').value = e.percentual_peso || '';
+      document.getElementById('cro-etapa-inicio-prev').value = e.data_inicio_prevista || '';
+      document.getElementById('cro-etapa-fim-prev').value = e.data_fim_prevista || '';
+      document.getElementById('cro-etapa-inicio-real').value = e.data_inicio_real || '';
+      document.getElementById('cro-etapa-fim-real').value = e.data_fim_real || '';
+      document.getElementById('cro-etapa-status').value = e.status || 'nao_iniciada';
+      document.getElementById('cro-etapa-observacoes').value = e.observacoes || '';
+      document.getElementById('btn-salvar-etapa').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-etapa').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirEtapa(id, nome) {
+      if (!confirm(`Excluir a etapa "${nome}"?`)) return;
+      const { error } = await db.from('cronograma_obra_etapas').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarCronogramaDaObra();
+    }
+
+    document.getElementById('btn-salvar-etapa').addEventListener('click', salvarEtapa);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectObraCrono();
+    });
+  </script>
 </body>
 </html>
