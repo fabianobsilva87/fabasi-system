@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Contratos de clientes, fornecedores e prestadores — vigência, valores, aditivos e retenções.">
+    <meta name="description" content="Contratos de obra — vigência, valor, aditivos e documento assinado — Fabasi Engenharia & Construção.">
     <meta name="theme-color" content="var(--brand-navy)">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" href="logo-fabasi.png" type="image/png">
@@ -36,23 +36,301 @@
       <div class="topbar no-print"><h2>📄 Contratos</h2></div>
       <div class="section-content">
         <div class="app-sub-panel">
-          <div class="card">
-            <div class="card-header-admin" style="background:linear-gradient(135deg,#1e3a8a,#1a56db);">
-              <h2>📄 Contratos</h2>
-              <p style="font-size:12px;opacity:.8;margin-top:4px;">Núcleo Obras — contratos vinculados a obra, com escopo, cronograma físico-financeiro e alertas de vencimento.</p>
-            </div>
 
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 18px;font-size:13px;color:#92400e;line-height:1.6;">
-              🚧 <strong>Módulo em desenvolvimento.</strong><br>
-              Este item já está no menu e no roteamento do sistema, mas a lógica interna (formulários, tabelas, integrações) ainda será construída nas próximas fases do roadmap.
-              <br><br><strong>Previsto:</strong> contratos de cliente/fornecedor/prestação de serviço, aditivos de escopo, vigência, reajustes, retenção/garantia, alertas de vencimento e renovação.
+          <div class="card">
+            <h3 class="card-title">➕ Novo Contrato</h3>
+            <input type="hidden" id="ctr-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group"><label for="ctr-numero">Número do Contrato</label><input type="text" id="ctr-numero" placeholder="Ex: 12/2026"></div>
+              <div class="form-group"><label for="ctr-obra">Obra Vinculada</label><select id="ctr-obra" class="form-input-style"><option value="">-- Nenhuma --</option></select></div>
+              <div class="form-group"><label for="ctr-cliente">Cliente *</label><select id="ctr-cliente" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="ctr-objeto">Objeto do Contrato</label><input type="text" id="ctr-objeto" placeholder="Ex: Serviços de Construção Civil / Mão de Obra H/H"></div>
+              <div class="form-group"><label for="ctr-data-assinatura">Data de Assinatura</label><input type="date" id="ctr-data-assinatura"></div>
+              <div class="form-group"><label for="ctr-inicio-vigencia">Início da Vigência</label><input type="date" id="ctr-inicio-vigencia"></div>
+              <div class="form-group"><label for="ctr-fim-vigencia">Fim da Vigência</label><input type="date" id="ctr-fim-vigencia"></div>
+              <div class="form-group"><label for="ctr-condicao-pagamento">Condição de Pagamento</label><input type="text" id="ctr-condicao-pagamento" placeholder="Ex: 60 DFM"></div>
+              <div class="form-group"><label for="ctr-valor-total">Valor Total (R$)</label><input type="number" id="ctr-valor-total" step="0.01"></div>
+              <div class="form-group"><label for="ctr-status">Status</label>
+                <select id="ctr-status" class="form-input-style">
+                  <option value="vigente">Vigente</option>
+                  <option value="suspenso">Suspenso</option>
+                  <option value="encerrado">Encerrado</option>
+                  <option value="rescindido">Rescindido</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column:span 3;"><label for="ctr-arquivo">Documento Assinado (PDF)</label><input type="file" id="ctr-arquivo" accept=".pdf,.doc,.docx"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="ctr-observacoes">Observações</label><input type="text" id="ctr-observacoes"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-contrato" class="btn-primary">💾 Registrar Contrato</button>
+              <button type="button" id="btn-cancelar-contrato" class="btn-secondary" style="display:none;" onclick="resetarFormContrato()">✕ Cancelar</button>
+            </div>
+            <p id="msg-contrato" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Contratos Cadastrados</h3>
+              <button type="button" class="btn-refresh" onclick="carregarContratos()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Número</th><th>Cliente</th><th>Obra</th><th>Vigência</th><th>Valor Atual</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-contratos"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
             </div>
           </div>
+
+          <div class="card" id="painel-aditivos" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+              <h3 class="card-title" id="painel-aditivos-titulo" style="margin:0;">Aditivos</h3>
+              <button type="button" class="btn-secondary" onclick="fecharPainelAditivos()">✕ Fechar</button>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group"><label for="adt-tipo">Tipo *</label>
+                <select id="adt-tipo" class="form-input-style">
+                  <option value="reajuste">Reajuste</option>
+                  <option value="valor">Alteração de Valor</option>
+                  <option value="prazo">Prorrogação de Prazo</option>
+                  <option value="escopo">Alteração de Escopo</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="adt-data">Data *</label><input type="date" id="adt-data"></div>
+              <div class="form-group"><label for="adt-valor">Valor da Alteração (R$, + ou -)</label><input type="number" id="adt-valor" step="0.01" placeholder="Ex: 15000 ou -5000"></div>
+              <div class="form-group"><label for="adt-nova-data-fim">Nova Data Fim de Vigência (se prorrogação)</label><input type="date" id="adt-nova-data-fim"></div>
+              <div class="form-group" style="grid-column:span 2;"><label for="adt-descricao">Descrição</label><input type="text" id="adt-descricao"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="adt-arquivo">Documento (PDF)</label><input type="file" id="adt-arquivo" accept=".pdf,.doc,.docx"></div>
+            </div>
+            <div class="btn-row" style="margin-top:14px;">
+              <button type="button" id="btn-salvar-aditivo" class="btn-primary">💾 Registrar Aditivo</button>
+            </div>
+            <p id="msg-aditivo" class="msg-form"></p>
+
+            <div class="table-wrap" style="margin-top:16px;">
+              <table>
+                <thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Valor</th><th>Descrição</th><th>Doc</th></tr></thead>
+                <tbody id="tbody-aditivos"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
   </div>
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
+  <script>
+    let _contratosCache = [];
+    let _contratoAditivosAtualId = null;
+
+    const STATUS_CTR_LABEL = { vigente: 'Vigente', suspenso: 'Suspenso', encerrado: 'Encerrado', rescindido: 'Rescindido' };
+    const STATUS_CTR_COR = { vigente: 'success', suspenso: 'warning', encerrado: '', rescindido: 'danger' };
+    const TIPO_ADITIVO_LABEL = { reajuste: 'Reajuste', valor: 'Alt. de Valor', prazo: 'Prorrogação', escopo: 'Alt. de Escopo', outro: 'Outro' };
+
+    // Upload genérico de documento (PDF/Word) — diferente de uploadFoto()
+    // (essa é só pra imagem, força .jpg). Preserva o tipo/extensão real.
+    async function uploadDocumento(file, pasta) {
+      if (!file) return null;
+      const extensao = (file.name.split('.').pop() || 'pdf').toLowerCase();
+      const sufixo = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const nomeArq = `${pasta}/doc_${sufixo}.${extensao}`;
+      const { error } = await db.storage.from('documentos-contratos').upload(nomeArq, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+      if (error) { console.warn('Falha ao subir documento:', error.message); return null; }
+      const { data: { publicUrl } } = db.storage.from('documentos-contratos').getPublicUrl(nomeArq);
+      return publicUrl;
+    }
+
+    async function carregarSelectsContrato() {
+      const { data: obras } = await db.from('obras').select('id,nome').order('nome');
+      document.getElementById('ctr-obra').innerHTML = '<option value="">-- Nenhuma --</option>' +
+        (obras || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+
+      const { data: clientes } = await db.from('empresas').select('id,razao_social').eq('tipo', 'contratante').eq('ativa', true).order('razao_social');
+      document.getElementById('ctr-cliente').innerHTML = '<option value="">-- Selecione --</option>' +
+        (clientes || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.razao_social)}</option>`).join('');
+    }
+
+    async function salvarContrato() {
+      const clienteId = document.getElementById('ctr-cliente').value;
+      if (!clienteId) { msgForm('msg-contrato', 'Selecione o cliente.', 'red'); return; }
+
+      const valorTotal = Number(document.getElementById('ctr-valor-total').value) || 0;
+      const idEd = document.getElementById('ctr-id-edicao').value;
+
+      const payload = {
+        numero_contrato: document.getElementById('ctr-numero').value.trim() || null,
+        obra_id: document.getElementById('ctr-obra').value || null,
+        cliente_id: clienteId,
+        objeto: document.getElementById('ctr-objeto').value.trim() || null,
+        data_assinatura: document.getElementById('ctr-data-assinatura').value || null,
+        data_inicio_vigencia: document.getElementById('ctr-inicio-vigencia').value || null,
+        data_fim_vigencia: document.getElementById('ctr-fim-vigencia').value || null,
+        condicao_pagamento: document.getElementById('ctr-condicao-pagamento').value.trim() || null,
+        status: document.getElementById('ctr-status').value,
+        observacoes: document.getElementById('ctr-observacoes').value.trim() || null,
+      };
+
+      if (!idEd) { payload.valor_total_original = valorTotal; payload.valor_total_atual = valorTotal; }
+
+      const arquivo = document.getElementById('ctr-arquivo').files[0];
+      if (arquivo) {
+        msgForm('msg-contrato', 'Enviando documento...', 'green');
+        const url = await uploadDocumento(arquivo, 'contratos');
+        if (url) payload.arquivo_url = url;
+      }
+
+      const { error } = idEd
+        ? await db.from('contratos').update(payload).eq('id', idEd)
+        : await db.from('contratos').insert([payload]);
+
+      if (error) { msgForm('msg-contrato', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-contrato', '✓ Contrato salvo!', 'green');
+      resetarFormContrato();
+      await carregarContratos();
+    }
+
+    function resetarFormContrato() {
+      document.getElementById('ctr-id-edicao').value = '';
+      ['ctr-numero','ctr-data-assinatura','ctr-inicio-vigencia','ctr-fim-vigencia','ctr-condicao-pagamento','ctr-valor-total','ctr-observacoes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('ctr-obra').value = '';
+      document.getElementById('ctr-cliente').value = '';
+      document.getElementById('ctr-objeto').value = '';
+      document.getElementById('ctr-status').value = 'vigente';
+      document.getElementById('ctr-arquivo').value = '';
+      document.getElementById('btn-salvar-contrato').textContent = '💾 Registrar Contrato';
+      document.getElementById('btn-cancelar-contrato').style.display = 'none';
+    }
+
+    function editarContrato(id) {
+      const c = _contratosCache.find(x => x.id === id); if (!c) return;
+      document.getElementById('ctr-id-edicao').value = id;
+      document.getElementById('ctr-numero').value = c.numero_contrato || '';
+      document.getElementById('ctr-obra').value = c.obra_id || '';
+      document.getElementById('ctr-cliente').value = c.cliente_id || '';
+      document.getElementById('ctr-objeto').value = c.objeto || '';
+      document.getElementById('ctr-data-assinatura').value = c.data_assinatura || '';
+      document.getElementById('ctr-inicio-vigencia').value = c.data_inicio_vigencia || '';
+      document.getElementById('ctr-fim-vigencia').value = c.data_fim_vigencia || '';
+      document.getElementById('ctr-condicao-pagamento').value = c.condicao_pagamento || '';
+      document.getElementById('ctr-valor-total').value = c.valor_total_original || '';
+      document.getElementById('ctr-status').value = c.status || 'vigente';
+      document.getElementById('ctr-observacoes').value = c.observacoes || '';
+      document.getElementById('btn-salvar-contrato').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-contrato').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirContrato(id, numero) {
+      if (!confirm(`Excluir o contrato "${numero || id}"? Os aditivos vinculados também serão removidos.`)) return;
+      const { error } = await db.from('contratos').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarContratos();
+    }
+
+    async function carregarContratos() {
+      const tbody = document.getElementById('tbody-contratos'); if (!tbody) return;
+      const { data, error } = await db.from('contratos').select('*, empresas(razao_social), obras(nome)').order('created_at', { ascending: false });
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _contratosCache = data || [];
+      if (!_contratosCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhum contrato cadastrado ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = _contratosCache.map(c => `<tr>
+        <td>${escapeHTML(c.numero_contrato || '—')}</td>
+        <td>${escapeHTML(c.empresas?.razao_social || '—')}</td>
+        <td>${escapeHTML(c.obras?.nome || '—')}</td>
+        <td style="font-size:12px;">${fmtDate(c.data_inicio_vigencia)} → ${fmtDate(c.data_fim_vigencia)}</td>
+        <td>R$ ${Number(c.valor_total_atual || 0).toFixed(2).replace('.', ',')}${Number(c.valor_total_atual) !== Number(c.valor_total_original) ? ' <span style="font-size:10px;color:#718096;">(orig. R$ ' + Number(c.valor_total_original || 0).toFixed(2).replace('.', ',') + ')</span>' : ''}</td>
+        <td><span class="tag-badge ${STATUS_CTR_COR[c.status] || ''}">${STATUS_CTR_LABEL[c.status] || escapeHTML(c.status)}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${c.arquivo_url ? `<a href="${escapeHTML(c.arquivo_url)}" target="_blank" rel="noopener" class="btn-secondary" style="padding:3px 8px;font-size:11px;text-decoration:none;">📄 Ver</a>` : ''}
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarContrato('${escapeHTML(c.id)}')">✏️</button>
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;background:#7c3aed;color:#fff;" onclick="abrirPainelAditivos('${escapeHTML(c.id)}','${escapeHTML(c.numero_contrato || '')}')">📝 Aditivos</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirContrato('${escapeHTML(c.id)}','${escapeHTML(c.numero_contrato || '')}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== ADITIVOS =====================
+    function fecharPainelAditivos() {
+      document.getElementById('painel-aditivos').style.display = 'none';
+      _contratoAditivosAtualId = null;
+    }
+
+    async function abrirPainelAditivos(contratoId, numero) {
+      _contratoAditivosAtualId = contratoId;
+      document.getElementById('painel-aditivos-titulo').textContent = 'Aditivos — Contrato ' + (numero || '');
+      document.getElementById('painel-aditivos').style.display = 'block';
+      await carregarAditivos();
+      document.getElementById('painel-aditivos').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function salvarAditivo() {
+      const data = document.getElementById('adt-data').value;
+      if (!data) { msgForm('msg-aditivo', 'Informe a data do aditivo.', 'red'); return; }
+
+      const { data: existentes } = await db.from('contrato_aditivos').select('numero_aditivo').eq('contrato_id', _contratoAditivosAtualId).order('numero_aditivo', { ascending: false }).limit(1);
+      const proximoNumero = (existentes?.[0]?.numero_aditivo || 0) + 1;
+
+      const tipo = document.getElementById('adt-tipo').value;
+      const valorAlteracao = Number(document.getElementById('adt-valor').value) || 0;
+      const novaDataFim = document.getElementById('adt-nova-data-fim').value || null;
+
+      let arquivoUrl = null;
+      const arquivo = document.getElementById('adt-arquivo').files[0];
+      if (arquivo) {
+        msgForm('msg-aditivo', 'Enviando documento...', 'green');
+        arquivoUrl = await uploadDocumento(arquivo, `contratos/${_contratoAditivosAtualId}/aditivos`);
+      }
+
+      const { error } = await db.from('contrato_aditivos').insert([{
+        contrato_id: _contratoAditivosAtualId, numero_aditivo: proximoNumero, tipo, data,
+        valor_alteracao: valorAlteracao, nova_data_fim_vigencia: novaDataFim,
+        descricao: document.getElementById('adt-descricao').value.trim() || null,
+        arquivo_url: arquivoUrl,
+      }]);
+      if (error) { msgForm('msg-aditivo', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      // Atualiza o contrato: soma o valor da alteração no valor atual, e/ou
+      // atualiza a data fim de vigência se for prorrogação.
+      const contrato = _contratosCache.find(c => c.id === _contratoAditivosAtualId);
+      const atualizacaoContrato = { valor_total_atual: Number(contrato?.valor_total_atual || 0) + valorAlteracao, updated_at: new Date().toISOString() };
+      if (tipo === 'prazo' && novaDataFim) atualizacaoContrato.data_fim_vigencia = novaDataFim;
+      await db.from('contratos').update(atualizacaoContrato).eq('id', _contratoAditivosAtualId);
+
+      msgForm('msg-aditivo', `✓ Aditivo Nº ${proximoNumero} registrado!`, 'green');
+      ['adt-valor','adt-nova-data-fim','adt-descricao'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('adt-arquivo').value = '';
+      await carregarAditivos();
+      await carregarContratos();
+    }
+
+    async function carregarAditivos() {
+      const tbody = document.getElementById('tbody-aditivos'); if (!tbody || !_contratoAditivosAtualId) return;
+      const { data, error } = await db.from('contrato_aditivos').select('*').eq('contrato_id', _contratoAditivosAtualId).order('numero_aditivo');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum aditivo registrado ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = data.map(a => `<tr>
+        <td>${a.numero_aditivo}</td>
+        <td><span class="tag-badge">${TIPO_ADITIVO_LABEL[a.tipo] || escapeHTML(a.tipo)}</span></td>
+        <td>${fmtDate(a.data)}</td>
+        <td style="${Number(a.valor_alteracao) < 0 ? 'color:#dc2626;' : Number(a.valor_alteracao) > 0 ? 'color:#059669;' : ''}">${Number(a.valor_alteracao) !== 0 ? 'R$ ' + Number(a.valor_alteracao).toFixed(2).replace('.', ',') : '—'}</td>
+        <td>${escapeHTML(a.descricao || '—')}</td>
+        <td>${a.arquivo_url ? `<a href="${escapeHTML(a.arquivo_url)}" target="_blank" rel="noopener">📄 Ver</a>` : '—'}</td>
+      </tr>`).join('');
+    }
+
+    document.getElementById('btn-salvar-contrato').addEventListener('click', salvarContrato);
+    document.getElementById('btn-salvar-aditivo').addEventListener('click', salvarAditivo);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      await carregarSelectsContrato();
+      await carregarContratos();
+    });
+  </script>
 </body>
 </html>
