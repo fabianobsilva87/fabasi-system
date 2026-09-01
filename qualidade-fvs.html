@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Fichas de Verificação de Serviço — checklist de qualidade por obra, com central de não conformidades — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Qualidade / FVS</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>✅ Qualidade — Fichas de Verificação de Serviço</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div class="topbar no-print" style="padding:0;margin-bottom:16px;">
+            <button type="button" class="btn-refresh" onclick="alternarAbaFvs('modelos')">📋 Modelos</button>
+            <button type="button" class="btn-refresh" style="background:#7c3aed;border-color:#7c3aed;color:#fff;" onclick="alternarAbaFvs('preencher')">✅ Preencher FVS</button>
+            <button type="button" class="btn-refresh" style="background:#dc2626;border-color:#dc2626;color:#fff;" onclick="alternarAbaFvs('naoconformidades')">⚠️ Não Conformidades</button>
+          </div>
+
+<div id="aba-fvs-modelos">
+          <div class="card">
+            <h3 class="card-title">➕ Novo Modelo de FVS</h3>
+            <input type="hidden" id="mdl-id-edicao" value="">
+            <div class="form-grid">
+              <div class="form-group" style="grid-column:span 3;"><label for="mdl-nome">Nome do Modelo *</label><input type="text" id="mdl-nome" placeholder="Ex: Verificação de Concretagem"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="mdl-descricao">Descrição</label><input type="text" id="mdl-descricao"></div>
+            </div>
+
+            <h4 style="font-size:13px;margin:16px 0 8px;">Itens de Verificação</h4>
+            <div id="mdl-linhas-itens"></div>
+            <button type="button" class="btn-secondary" style="font-size:12px;margin-top:8px;" onclick="adicionarLinhaItemModelo()">+ Adicionar Item</button>
+
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-modelo" class="btn-primary">💾 Registrar Modelo</button>
+              <button type="button" id="btn-cancelar-modelo" class="btn-secondary" style="display:none;" onclick="resetarFormModelo()">✕ Cancelar</button>
+            </div>
+            <p id="msg-modelo" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Modelos Cadastrados</h3>
+              <button type="button" class="btn-refresh" onclick="carregarModelos()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nome</th><th>Itens</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-modelos"><tr><td colspan="3" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+</div>
+
+<div id="aba-fvs-preencher" style="display:none;">
+          <div class="card">
+            <h3 class="card-title">✅ Nova FVS</h3>
+            <div class="form-grid">
+              <div class="form-group"><label for="fvs-obra">Obra *</label><select id="fvs-obra" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="fvs-modelo">Modelo *</label><select id="fvs-modelo" class="form-input-style" onchange="aoSelecionarModeloFvs()"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="fvs-data">Data da Inspeção</label><input type="date" id="fvs-data"></div>
+              <div class="form-group"><label for="fvs-inspetor">Inspetor</label><input type="text" id="fvs-inspetor"></div>
+              <div class="form-group" style="grid-column:span 2;"><label for="fvs-fotos">📷 Fotos (evidências gerais)</label><input type="file" id="fvs-fotos" accept="image/*" multiple capture="environment"></div>
+            </div>
+
+            <h4 style="font-size:13px;margin:16px 0 8px;">Itens de Verificação</h4>
+            <div id="fvs-itens-preenchimento"><p style="font-size:12px;color:#a0aec0;">Selecione um modelo para ver os itens.</p></div>
+
+            <div class="form-grid" style="margin-top:14px;">
+              <div class="form-group" style="grid-column:span 3;"><label for="fvs-observacoes-gerais">Observações Gerais</label><input type="text" id="fvs-observacoes-gerais"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-fvs" class="btn-primary" style="background:#7c3aed;">💾 Registrar FVS</button>
+            </div>
+            <p id="msg-fvs" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Histórico de FVS</h3>
+              <button type="button" class="btn-refresh" onclick="carregarHistoricoFvs()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nº</th><th>Obra</th><th>Modelo</th><th>Data</th><th>Status</th><th>Fotos</th></tr></thead>
+                <tbody id="tbody-historico-fvs"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+</div>
+
+<div id="aba-fvs-naoconformidades" style="display:none;">
+          <div class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+            <div class="dash-card dash-card-danger">
+              <div class="dash-card-icon">⚠️</div>
+              <p class="dash-card-title">Não Conformidades (total)</p>
+              <h3 id="nc-txt-total" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">📋</div>
+              <p class="dash-card-title">FVS Reprovadas</p>
+              <h3 id="nc-txt-fvs-reprovadas" class="dash-card-value">—</h3>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-icon">🏗️</div>
+              <p class="dash-card-title">Obras com Não Conformidade</p>
+              <h3 id="nc-txt-obras" class="dash-card-value">—</h3>
+            </div>
+          </div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Central de Não Conformidades</h3>
+              <button type="button" class="btn-refresh" onclick="carregarNaoConformidades()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Obra</th><th>FVS</th><th>Item</th><th>Observação</th><th>Data</th></tr></thead>
+                <tbody id="tbody-naoconformidades"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+</div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _modelosFvsCache = [];
+    let _linhasItensModelo = [];
+    let _itensFvsAtual = [];
+    let _historicoFvsCache = [];
+
+    const RESULTADO_LABEL = { conforme: '✅ Conforme', nao_conforme: '❌ Não Conforme', nao_aplicavel: '➖ N/A' };
+    const STATUS_FVS_LABEL = { pendente: 'Pendente', aprovada: 'Aprovada', reprovada: 'Reprovada' };
+    const STATUS_FVS_COR = { pendente: '', aprovada: 'success', reprovada: 'danger' };
+
+    function alternarAbaFvs(aba) {
+      ['modelos','preencher','naoconformidades'].forEach(a => {
+        const el = document.getElementById('aba-fvs-' + a);
+        if (el) el.style.display = a === aba ? 'block' : 'none';
+      });
+      if (aba === 'naoconformidades') carregarNaoConformidades();
+    }
+
+    // ===================== MODELOS =====================
+    function renderizarLinhasItensModelo() {
+      const wrap = document.getElementById('mdl-linhas-itens');
+      wrap.innerHTML = _linhasItensModelo.map((item, idx) => `
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <input type="text" class="form-input-style" style="flex:1;" placeholder="Ex: Verificar traço do concreto conforme especificação" value="${escapeHTML(item)}" oninput="_linhasItensModelo[${idx}] = this.value">
+          <button type="button" class="btn-excluir" onclick="removerLinhaItemModelo(${idx})">✕</button>
+        </div>`).join('');
+    }
+
+    function adicionarLinhaItemModelo() {
+      _linhasItensModelo.push('');
+      renderizarLinhasItensModelo();
+    }
+
+    function removerLinhaItemModelo(idx) {
+      _linhasItensModelo.splice(idx, 1);
+      renderizarLinhasItensModelo();
+    }
+
+    async function salvarModelo() {
+      const nome = document.getElementById('mdl-nome').value.trim();
+      if (!nome) { msgForm('msg-modelo', 'Informe o nome do modelo.', 'red'); return; }
+      const itensValidos = _linhasItensModelo.map(i => i.trim()).filter(Boolean);
+      if (!itensValidos.length) { msgForm('msg-modelo', 'Adicione ao menos um item de verificação.', 'red'); return; }
+
+      const payload = { nome, descricao: document.getElementById('mdl-descricao').value.trim() || null };
+      const idEd = document.getElementById('mdl-id-edicao').value;
+
+      let modeloId = idEd;
+      if (idEd) {
+        const { error } = await db.from('fvs_modelos').update(payload).eq('id', idEd);
+        if (error) { msgForm('msg-modelo', 'Erro ao salvar: ' + error.message, 'red'); return; }
+        await db.from('fvs_modelo_itens').delete().eq('modelo_id', idEd);
+      } else {
+        const { data, error } = await db.from('fvs_modelos').insert([payload]).select('id').single();
+        if (error) { msgForm('msg-modelo', 'Erro ao salvar: ' + error.message, 'red'); return; }
+        modeloId = data.id;
+      }
+
+      const { error: errItens } = await db.from('fvs_modelo_itens').insert(itensValidos.map((descricao, i) => ({ modelo_id: modeloId, ordem: i + 1, descricao })));
+      if (errItens) { msgForm('msg-modelo', 'Modelo salvo, mas erro nos itens: ' + errItens.message, 'red'); return; }
+
+      msgForm('msg-modelo', '✓ Modelo salvo!', 'green');
+      resetarFormModelo();
+      await carregarModelos();
+    }
+
+    function resetarFormModelo() {
+      document.getElementById('mdl-id-edicao').value = '';
+      document.getElementById('mdl-nome').value = '';
+      document.getElementById('mdl-descricao').value = '';
+      _linhasItensModelo = [];
+      renderizarLinhasItensModelo();
+      document.getElementById('btn-salvar-modelo').textContent = '💾 Registrar Modelo';
+      document.getElementById('btn-cancelar-modelo').style.display = 'none';
+    }
+
+    async function editarModelo(id) {
+      const m = _modelosFvsCache.find(x => x.id === id); if (!m) return;
+      document.getElementById('mdl-id-edicao').value = id;
+      document.getElementById('mdl-nome').value = m.nome || '';
+      document.getElementById('mdl-descricao').value = m.descricao || '';
+
+      const { data: itens } = await db.from('fvs_modelo_itens').select('*').eq('modelo_id', id).order('ordem');
+      _linhasItensModelo = (itens || []).map(i => i.descricao);
+      renderizarLinhasItensModelo();
+
+      document.getElementById('btn-salvar-modelo').textContent = '💾 Salvar Alterações';
+      document.getElementById('btn-cancelar-modelo').style.display = 'inline-block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function excluirModelo(id, nome) {
+      if (!confirm(`Excluir o modelo "${nome}"?`)) return;
+      const { error } = await db.from('fvs_modelos').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarModelos();
+    }
+
+    async function carregarModelos() {
+      const tbody = document.getElementById('tbody-modelos'); if (!tbody) return;
+      const { data, error } = await db.from('fvs_modelos').select('*, fvs_modelo_itens(id)').eq('ativo', true).order('nome');
+      if (error) { tbody.innerHTML = '<tr><td colspan="3" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _modelosFvsCache = data || [];
+
+      document.getElementById('fvs-modelo').innerHTML = '<option value="">-- Selecione --</option>' +
+        _modelosFvsCache.map(m => `<option value="${escapeHTML(m.id)}">${escapeHTML(m.nome)}</option>`).join('');
+
+      if (!_modelosFvsCache.length) { tbody.innerHTML = '<tr><td colspan="3" class="td-loading">Nenhum modelo cadastrado ainda.</td></tr>'; return; }
+      tbody.innerHTML = _modelosFvsCache.map(m => `<tr>
+        <td>${escapeHTML(m.nome)}</td>
+        <td>${(m.fvs_modelo_itens || []).length} item(ns)</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="editarModelo('${escapeHTML(m.id)}')">✏️</button>
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirModelo('${escapeHTML(m.id)}','${escapeHTML(m.nome)}')">✕</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    // ===================== PREENCHER FVS =====================
+    async function carregarSelectObraFvs() {
+      const { data } = await db.from('obras').select('id,nome').order('nome');
+      document.getElementById('fvs-obra').innerHTML = '<option value="">-- Selecione --</option>' +
+        (data || []).map(o => `<option value="${escapeHTML(o.id)}">${escapeHTML(o.nome)}</option>`).join('');
+    }
+
+    async function aoSelecionarModeloFvs() {
+      const modeloId = document.getElementById('fvs-modelo').value;
+      const wrap = document.getElementById('fvs-itens-preenchimento');
+      if (!modeloId) { wrap.innerHTML = '<p style="font-size:12px;color:#a0aec0;">Selecione um modelo para ver os itens.</p>'; _itensFvsAtual = []; return; }
+
+      const { data: itens } = await db.from('fvs_modelo_itens').select('*').eq('modelo_id', modeloId).order('ordem');
+      _itensFvsAtual = (itens || []).map(i => ({ descricao: i.descricao, resultado: 'conforme', observacao: '' }));
+      renderizarItensFvsPreenchimento();
+    }
+
+    function renderizarItensFvsPreenchimento() {
+      const wrap = document.getElementById('fvs-itens-preenchimento');
+      wrap.innerHTML = _itensFvsAtual.map((item, idx) => `
+        <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px;">${escapeHTML(item.descricao)}</div>
+          <div style="display:flex;gap:14px;font-size:12px;margin-bottom:6px;">
+            <label><input type="radio" name="fvs-resultado-${idx}" value="conforme" ${item.resultado === 'conforme' ? 'checked' : ''} onchange="_itensFvsAtual[${idx}].resultado = 'conforme'"> ✅ Conforme</label>
+            <label><input type="radio" name="fvs-resultado-${idx}" value="nao_conforme" ${item.resultado === 'nao_conforme' ? 'checked' : ''} onchange="_itensFvsAtual[${idx}].resultado = 'nao_conforme'"> ❌ Não Conforme</label>
+            <label><input type="radio" name="fvs-resultado-${idx}" value="nao_aplicavel" ${item.resultado === 'nao_aplicavel' ? 'checked' : ''} onchange="_itensFvsAtual[${idx}].resultado = 'nao_aplicavel'"> ➖ N/A</label>
+          </div>
+          <input type="text" class="form-input-style" style="font-size:12px;" placeholder="Observação (opcional, obrigatório se não conforme)" value="${escapeHTML(item.observacao || '')}" oninput="_itensFvsAtual[${idx}].observacao = this.value">
+        </div>`).join('');
+    }
+
+    async function salvarFvs() {
+      const obraId = document.getElementById('fvs-obra').value;
+      const modeloId = document.getElementById('fvs-modelo').value;
+      if (!obraId) { msgForm('msg-fvs', 'Selecione a obra.', 'red'); return; }
+      if (!modeloId || !_itensFvsAtual.length) { msgForm('msg-fvs', 'Selecione um modelo com itens.', 'red'); return; }
+
+      const temNaoConforme = _itensFvsAtual.some(i => i.resultado === 'nao_conforme');
+      const statusCalculado = temNaoConforme ? 'reprovada' : 'aprovada';
+
+      const { data: existentes } = await db.from('fvs_preenchidas').select('numero').eq('obra_id', obraId).order('numero', { ascending: false }).limit(1);
+      const proximoNumero = (existentes?.[0]?.numero || 0) + 1;
+
+      msgForm('msg-fvs', 'Salvando...', 'green');
+      const { data: novaFvs, error } = await db.from('fvs_preenchidas').insert([{
+        modelo_id: modeloId, obra_id: obraId, numero: proximoNumero,
+        data_inspecao: document.getElementById('fvs-data').value || new Date().toISOString().slice(0,10),
+        inspetor_nome: document.getElementById('fvs-inspetor').value.trim() || null,
+        status: statusCalculado,
+        observacoes_gerais: document.getElementById('fvs-observacoes-gerais').value.trim() || null,
+      }]).select('id').single();
+
+      if (error) { msgForm('msg-fvs', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      const { error: errItens } = await db.from('fvs_itens_preenchidos').insert(_itensFvsAtual.map(i => ({
+        fvs_id: novaFvs.id, descricao: i.descricao, resultado: i.resultado, observacao: i.observacao || null,
+      })));
+      if (errItens) { msgForm('msg-fvs', 'FVS criada, mas erro nos itens: ' + errItens.message, 'red'); return; }
+
+      const arquivosFoto = document.getElementById('fvs-fotos').files;
+      if (arquivosFoto.length) {
+        const urls = await uploadFotos(arquivosFoto, `fvs/${novaFvs.id}`, 'msg-fvs');
+        if (urls.length) await db.from('fvs_preenchidas').update({ fotos_urls: urls }).eq('id', novaFvs.id);
+      }
+
+      msgForm('msg-fvs', `✓ FVS Nº ${proximoNumero} registrada — ${statusCalculado === 'aprovada' ? '✅ Aprovada' : '❌ Reprovada (tem item não conforme)'}.`, statusCalculado === 'aprovada' ? 'green' : 'red');
+      document.getElementById('fvs-inspetor').value = '';
+      document.getElementById('fvs-observacoes-gerais').value = '';
+      document.getElementById('fvs-fotos').value = '';
+      document.getElementById('fvs-modelo').value = '';
+      document.getElementById('fvs-itens-preenchimento').innerHTML = '<p style="font-size:12px;color:#a0aec0;">Selecione um modelo para ver os itens.</p>';
+      _itensFvsAtual = [];
+      await carregarHistoricoFvs();
+    }
+
+    function alternarFotosFvs(id) {
+      const el = document.getElementById('fotos-fvs-' + id);
+      if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    async function carregarHistoricoFvs() {
+      const tbody = document.getElementById('tbody-historico-fvs'); if (!tbody) return;
+      const { data, error } = await db.from('fvs_preenchidas').select('*, obras(nome), fvs_modelos(nome)').order('created_at', { ascending: false }).limit(100);
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _historicoFvsCache = data || [];
+
+      if (!_historicoFvsCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma FVS registrada ainda.</td></tr>'; return; }
+      tbody.innerHTML = _historicoFvsCache.map(f => {
+        const fotos = lerFotos(f);
+        return `<tr>
+        <td>${f.numero}</td>
+        <td>${escapeHTML(f.obras?.nome || '—')}</td>
+        <td>${escapeHTML(f.fvs_modelos?.nome || '—')}</td>
+        <td>${fmtDate(f.data_inspecao)}</td>
+        <td><span class="tag-badge ${STATUS_FVS_COR[f.status] || ''}">${STATUS_FVS_LABEL[f.status] || escapeHTML(f.status)}</span></td>
+        <td><button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarFotosFvs('${escapeHTML(f.id)}')">📷 (${fotos.length})</button></td>
+      </tr>
+      <tr id="fotos-fvs-${f.id}" style="display:none;">
+        <td colspan="6" style="background:#f8fafc;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${fotos.length ? fotos.map(ft => `<a href="${escapeHTML(ft.url)}" target="_blank" rel="noopener"><img src="${escapeHTML(ft.url)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;"></a>`).join('') : '<span style="font-size:12px;color:#a0aec0;">Nenhuma foto.</span>'}
+          </div>
+        </td>
+      </tr>`;
+      }).join('');
+    }
+
+    // ===================== NÃO CONFORMIDADES =====================
+    async function carregarNaoConformidades() {
+      const tbody = document.getElementById('tbody-naoconformidades');
+      tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Carregando...</td></tr>';
+
+      const { data, error } = await db.from('fvs_itens_preenchidos')
+        .select('*, fvs_preenchidas(numero, data_inspecao, obras(nome))')
+        .eq('resultado', 'nao_conforme')
+        .order('id', { ascending: false })
+        .limit(200);
+      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+
+      document.getElementById('nc-txt-total').textContent = (data || []).length;
+      const fvsReprovadasIds = new Set((data || []).map(nc => nc.fvs_id));
+      document.getElementById('nc-txt-fvs-reprovadas').textContent = fvsReprovadasIds.size;
+      const obrasComNc = new Set((data || []).map(nc => nc.fvs_preenchidas?.obras?.nome).filter(Boolean));
+      document.getElementById('nc-txt-obras').textContent = obrasComNc.size;
+
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma não conformidade registrada. ✓</td></tr>'; return; }
+      tbody.innerHTML = data.map(nc => `<tr>
+        <td>${escapeHTML(nc.fvs_preenchidas?.obras?.nome || '—')}</td>
+        <td>Nº ${nc.fvs_preenchidas?.numero || '—'}</td>
+        <td>${escapeHTML(nc.descricao)}</td>
+        <td style="font-size:12px;">${escapeHTML(nc.observacao || '—')}</td>
+        <td style="font-size:12px;">${fmtDate(nc.fvs_preenchidas?.data_inspecao)}</td>
+      </tr>`).join('');
+    }
+
+    document.getElementById('btn-salvar-modelo').addEventListener('click', salvarModelo);
+    document.getElementById('btn-salvar-fvs').addEventListener('click', salvarFvs);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('fvs-data').value = new Date().toISOString().slice(0,10);
+      await carregarModelos();
+      await carregarSelectObraFvs();
+      await carregarHistoricoFvs();
+      renderizarLinhasItensModelo();
+    });
+  </script>
+</body>
+</html>

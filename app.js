@@ -734,6 +734,9 @@ const MENU_SECTIONS = [
   { id: 'tarefas', label: 'Gestão de Tarefas', items: [
     { icon: '📋', label: 'Quadro Kanban', href: 'kanban-tarefas.html' },
   ]},
+  { id: 'qualidade', label: 'Qualidade', items: [
+    { icon: '✅', label: 'Fichas de Verificação (FVS)', href: 'qualidade-fvs.html' },
+  ]},
   { id: 'compras', label: 'Compras', items: [
     { icon: '📝', label: 'Requisição de Materiais', href: 'requisicao-materiais.html' },
     { icon: '🛒', label: 'Solicitações de Compra', href: 'solicitacoes-compra.html' },
