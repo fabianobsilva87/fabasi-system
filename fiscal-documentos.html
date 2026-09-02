@@ -454,9 +454,46 @@
                   ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="gerarContaPagarFiscal('${escapeHTML(d.id)}')">💰 Gerar Conta a Pagar</button>`
                   : '')
           }
+          ${
+            d.tipo_documento === 'NFE' && d.status === 'pendente' && d.chave_acesso
+              ? (d.manifestacao_status === 'ciencia_confirmada'
+                  ? '<span style="font-size:11px;color:#059669;">✓ Manifestada</span>'
+                  : `<button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;background:#7c3aed;color:#fff;" onclick="manifestarDocumentoFiscal('${escapeHTML(d.id)}')">✍️ Manifestar (Ciência)</button>`)
+              : ''
+          }
           <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirDocumentoFiscal('${escapeHTML(d.id)}','${escapeHTML(d.tipo_documento)} ${escapeHTML(d.numero || d.chave_acesso || '')}')">✕ Excluir</button>
         </td>
       </tr>`).join('');
+    }
+
+    async function manifestarDocumentoFiscal(documentoId) {
+      if (!confirm('Enviar Manifestação do Destinatário (Ciência da Operação) para este documento? É um evento fiscal formal — declara que você está ciente de que essa nota existe. Depois disso, o XML completo (com itens) fica disponível na próxima sincronização.')) return;
+
+      toast('Assinando e enviando manifestação...', 'info');
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const resp = await fetch('/api/fiscal-manifestar-nfe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+          body: JSON.stringify({ documento_id: documentoId, tipo_evento: '210210' }),
+        });
+        const textoResposta = await resp.text();
+        let data;
+        try { data = JSON.parse(textoResposta); }
+        catch (_e) {
+          toast('A resposta não veio em JSON (HTTP ' + resp.status + ') — provável sinal de que a function /api/fiscal-manifestar-nfe ainda não foi publicada no Vercel.', 'erro');
+          return;
+        }
+        if (!resp.ok) {
+          alert((data.error || 'Falha na manifestação.') + (data.corpo_bruto ? '\n\nResposta bruta da SEFAZ:\n' + data.corpo_bruto : ''));
+          await carregarDocumentosFiscais();
+          return;
+        }
+        toast('✓ Manifestação registrada! ' + (data.aviso || ''), 'sucesso');
+        await carregarDocumentosFiscais();
+      } catch (e) {
+        toast('Erro inesperado: ' + e.message, 'erro');
+      }
     }
 
     async function excluirDocumentoFiscal(documentoId, identificacao) {
