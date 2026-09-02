@@ -79,9 +79,16 @@ function montarInfEvento({ ambiente, cnpj, chaveAcesso, tpEvento, nSeqEvento }) 
   return { infEvento, id };
 }
 
-function assinarInfEvento(infEventoXml, certPem, keyPem) {
+function assinarEvento(infEventoXml, certPem, keyPem) {
   const certForge = forge.pki.certificateFromPem(certPem);
   const certDerB64 = forge.util.encode64(forge.asn1.toDer(forge.pki.certificateToAsn1(certForge)).getBytes());
+
+  // IMPORTANTE: assina o <evento> INTEIRO (com infEvento dentro), não só o
+  // infEvento isolado — senão a <Signature> fica aninhada DENTRO de
+  // infEvento em vez de como irmã dele dentro de <evento>, e a SEFAZ
+  // rejeita com cStat=225 (Falha no Esquema XML). Confirmado testando a
+  // estrutura de saída antes de usar isso em produção.
+  const eventoXml = `<evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">${infEventoXml}</evento>`;
 
   const sig = new SignedXml({ privateKey: keyPem });
   sig.addReference({
@@ -93,8 +100,8 @@ function assinarInfEvento(infEventoXml, certPem, keyPem) {
   sig.canonicalizationAlgorithm = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
   sig.getKeyInfoContent = () => `<X509Data><X509Certificate>${certDerB64}</X509Certificate></X509Data>`;
 
-  sig.computeSignature(infEventoXml);
-  return sig.getSignedXml();
+  sig.computeSignature(eventoXml);
+  return sig.getSignedXml(); // já é o <evento>...</evento> completo, com infEvento + Signature como irmãos
 }
 
 module.exports = async function handler(req, res) {
@@ -134,9 +141,9 @@ module.exports = async function handler(req, res) {
       ambiente, cnpj: cnpjCertificado, chaveAcesso: doc.chave_acesso, tpEvento, nSeqEvento: 1,
     });
 
-    let infEventoAssinado;
+    let eventoAssinado;
     try {
-      infEventoAssinado = assinarInfEvento(infEvento, certPem, keyPem);
+      eventoAssinado = assinarEvento(infEvento, certPem, keyPem);
     } catch (e) {
       res.status(500).json({ error: 'Falha ao assinar o evento: ' + e.message });
       return;
@@ -146,7 +153,7 @@ module.exports = async function handler(req, res) {
     const envEvento =
       `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">` +
       `<idLote>${idLote}</idLote>` +
-      `<evento versao="1.00">${infEventoAssinado}</evento>` +
+      `${eventoAssinado}` +
       `</envEvento>`;
 
     const envelope =
