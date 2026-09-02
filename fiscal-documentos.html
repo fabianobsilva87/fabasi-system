@@ -132,13 +132,17 @@
               <button type="button" class="btn-secondary" onclick="limparFiltrosDocumentosFiscais()">✕ Limpar</button>
             </div>
 
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <button type="button" id="btn-manifestar-selecionadas" class="btn-primary" style="background:#7c3aed;display:none;" onclick="manifestarSelecionadas()">✍️ Manifestar Selecionadas (<span id="contagem-selecionadas">0</span>)</button>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead><tr>
+                  <th><input type="checkbox" id="check-selecionar-todos" onchange="alternarSelecionarTodos()"></th>
                   <th>Tipo</th><th>Emitente (CNPJ)</th><th>Número/Série</th><th>Emissão</th>
                   <th>Valor</th><th>Fornecedor Vinculado</th><th>Status</th><th>Ações</th>
                 </tr></thead>
-                <tbody id="tbody-fiscal-documentos"><tr><td colspan="8" class="td-loading">Carregando...</td></tr></tbody>
+                <tbody id="tbody-fiscal-documentos"><tr><td colspan="9" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -411,7 +415,7 @@
 
     async function carregarDocumentosFiscais() {
       const tbody = document.getElementById('tbody-fiscal-documentos');
-      tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Carregando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Carregando...</td></tr>';
 
       const de = document.getElementById('fdoc-filtro-de').value;
       const ate = document.getElementById('fdoc-filtro-ate').value;
@@ -427,9 +431,10 @@
       if (busca) query = query.or(`cnpj_emitente.ilike.%${busca}%,chave_acesso.ilike.%${busca}%`);
 
       const { data, error } = await query;
-      if (error) { tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (error) { tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
       if (!data || !data.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="td-loading">Nenhum documento encontrado — a importação (manual de teste ou automática via SEFAZ/ADN) entra nas próximas etapas do Módulo Fiscal.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="td-loading">Nenhum documento encontrado ainda — importe manualmente ou aguarde a sincronização automática (SEFAZ/ADN).</td></tr>';
+        atualizarContagemSelecionadas();
         return;
       }
 
@@ -439,6 +444,7 @@
         inutilizada: 'danger', ignorada: '',
       };
       tbody.innerHTML = data.map(d => `<tr>
+        <td>${d.tipo_documento === 'NFE' && d.status === 'pendente' && d.chave_acesso && d.manifestacao_status !== 'ciencia_confirmada' ? `<input type="checkbox" class="check-manifestar" value="${escapeHTML(d.id)}" onchange="atualizarContagemSelecionadas()">` : ''}</td>
         <td>${d.tipo_documento === 'NFE' ? '🧾 NF-e' : d.tipo_documento === 'NFSE' ? '🧾 NFS-e' : escapeHTML(d.tipo_documento)}</td>
         <td>${escapeHTML(d.cnpj_emitente || '—')}</td>
         <td>${escapeHTML(d.numero || '—')}${d.serie ? '/' + escapeHTML(d.serie) : ''}</td>
@@ -494,6 +500,48 @@
       } catch (e) {
         toast('Erro inesperado: ' + e.message, 'erro');
       }
+    }
+
+    function alternarSelecionarTodos() {
+      const marcarTudo = document.getElementById('check-selecionar-todos').checked;
+      document.querySelectorAll('.check-manifestar').forEach(chk => { chk.checked = marcarTudo; });
+      atualizarContagemSelecionadas();
+    }
+
+    function atualizarContagemSelecionadas() {
+      const marcados = document.querySelectorAll('.check-manifestar:checked').length;
+      document.getElementById('contagem-selecionadas').textContent = marcados;
+      document.getElementById('btn-manifestar-selecionadas').style.display = marcados > 0 ? 'inline-block' : 'none';
+    }
+
+    async function manifestarSelecionadas() {
+      const ids = Array.from(document.querySelectorAll('.check-manifestar:checked')).map(chk => chk.value);
+      if (!ids.length) return;
+      if (!confirm(`Enviar Manifestação (Ciência) para ${ids.length} documento(s)? Isso envia um evento fiscal formal por documento, um de cada vez (não em lote na SEFAZ, mas em sequência automática aqui).`)) return;
+
+      const { data: { session } } = await db.auth.getSession();
+      let sucesso = 0, falha = 0;
+      const erros = [];
+
+      for (const id of ids) {
+        toast(`Manifestando ${sucesso + falha + 1} de ${ids.length}...`, 'info');
+        try {
+          const resp = await fetch('/api/fiscal-manifestar-nfe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+            body: JSON.stringify({ documento_id: id, tipo_evento: '210210' }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (resp.ok) sucesso++;
+          else { falha++; erros.push(`Doc ${id.slice(0,8)}: ${data.error || 'erro desconhecido'}`); }
+        } catch (e) {
+          falha++; erros.push(`Doc ${id.slice(0,8)}: ${e.message}`);
+        }
+      }
+
+      alert(`Manifestação em lote concluída: ${sucesso} sucesso, ${falha} falha(s).` + (erros.length ? '\n\n' + erros.slice(0, 10).join('\n') : ''));
+      document.getElementById('check-selecionar-todos').checked = false;
+      await carregarDocumentosFiscais();
     }
 
     async function excluirDocumentoFiscal(documentoId, identificacao) {
