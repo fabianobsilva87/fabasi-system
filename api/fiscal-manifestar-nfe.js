@@ -173,17 +173,27 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const cStat = extrairTag(resposta.body, 'cStat');
-    const xMotivo = extrairTag(resposta.body, 'xMotivo');
-    const nProt = extrairTag(resposta.body, 'nProt');
+    // ⚠️ extrairTag pega a PRIMEIRA ocorrência — mas a resposta tem DOIS
+    // cStat/xMotivo: um do LOTE (nível externo, ex.: 128="Lote processado",
+    // que não é o que importa) e outro do EVENTO em si (dentro de
+    // <retEvento>, esse sim é o status real: 135=sucesso, 573=duplicidade
+    // etc.). Por isso extrai especificamente de dentro de <retEvento>.
+    const blocoRetEvento = (resposta.body.match(/<retEvento[^>]*>([\s\S]*?)<\/retEvento>/) || [])[1] || resposta.body;
+    const cStat = extrairTag(blocoRetEvento, 'cStat');
+    const xMotivo = extrairTag(blocoRetEvento, 'xMotivo');
+    const nProt = extrairTag(blocoRetEvento, 'nProt');
+    const chNFeRetorno = extrairTag(blocoRetEvento, 'chNFe');
 
     await supabaseAdmin.from('fiscal_logs').insert([{
-      empresa_id: cert.empresa_id, nivel: cStat === '135' ? 'info' : 'erro',
+      empresa_id: cert.empresa_id, nivel: (cStat === '135' || cStat === '573') ? 'info' : 'erro',
       mensagem: `Manifestação (${tpEvento}) doc ${documento_id}: HTTP ${resposta.statusCode}, cStat=${cStat} ${xMotivo}`,
       metadados: { url, corpo_bruto: resposta.body.slice(0, 4000) },
     }]);
 
-    const sucesso = cStat === '135';
+    // 135 = evento registrado agora. 573 = duplicidade — na prática
+    // confirma que o evento JÁ estava registrado (de uma tentativa
+    // anterior, por exemplo) — tratamos como sucesso também, não como erro.
+    const sucesso = cStat === '135' || cStat === '573';
     await supabaseAdmin.from('fiscal_documentos').update({
       manifestacao_status: sucesso ? 'ciencia_confirmada' : 'erro',
       manifestacao_em: new Date().toISOString(),
@@ -197,7 +207,9 @@ module.exports = async function handler(req, res) {
 
     res.status(200).json({
       ok: true, cStat, xMotivo, protocolo: nProt,
-      aviso: 'Manifestação registrada. O XML completo (com itens) só aparece numa sincronização seguinte do distNSU — pode levar alguns minutos.',
+      aviso: cStat === '573'
+        ? 'Esse evento já estava registrado na SEFAZ (provável tentativa anterior) — marcado como manifestado. Se o XML completo ainda não apareceu, aguarde a próxima sincronização.'
+        : 'Manifestação registrada. O XML completo (com itens) só aparece numa sincronização seguinte do distNSU — pode levar alguns minutos.',
     });
   } catch (e) {
     res.status(500).json({ error: 'Erro interno: ' + e.message });
