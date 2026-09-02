@@ -451,6 +451,44 @@ function calcularCustoColaborador(colab, parametros) {
   return { S, beneficios, encargosDiretos, fgtsSalario, provisao13, provisaoFerias, fgtsProvisoes, provisaoMultaRescisoria, encargosEProvisoes, custoTotal };
 }
 
+// ===================== RH — INSS e IRRF progressivos (Folha de Pagamento) =====================
+// Tabelas vigentes em 2026 (editáveis via rh_parametros_folha) — ver aviso
+// completo na migration. Ambas usam o método aditivo/de parcela a deduzir
+// (equivalentes matematicamente; aqui uso o mais transparente pra cada caso).
+function calcularINSS(salarioBase, p) {
+  const faixas = [
+    { limite: Number(p.inss_faixa1_limite), aliquota: Number(p.inss_faixa1_aliquota) },
+    { limite: Number(p.inss_faixa2_limite), aliquota: Number(p.inss_faixa2_aliquota) },
+    { limite: Number(p.inss_faixa3_limite), aliquota: Number(p.inss_faixa3_aliquota) },
+    { limite: Number(p.inss_faixa4_limite), aliquota: Number(p.inss_faixa4_aliquota) }, // teto
+  ];
+  const baseComTeto = Math.min(salarioBase, faixas[3].limite);
+  let anterior = 0, total = 0;
+  for (const faixa of faixas) {
+    const tetoFaixa = Math.min(faixa.limite, baseComTeto);
+    const valorFaixa = Math.max(0, tetoFaixa - anterior);
+    total += valorFaixa * faixa.aliquota / 100;
+    anterior = faixa.limite;
+    if (baseComTeto <= faixa.limite) break;
+  }
+  return total;
+}
+
+function calcularIRRF(baseCalculo, p) {
+  const faixas = [
+    { limite: Number(p.irrf_faixa1_limite), aliquota: 0, deducao: 0 },
+    { limite: Number(p.irrf_faixa2_limite), aliquota: Number(p.irrf_faixa2_aliquota), deducao: Number(p.irrf_faixa2_deducao) },
+    { limite: Number(p.irrf_faixa3_limite), aliquota: Number(p.irrf_faixa3_aliquota), deducao: Number(p.irrf_faixa3_deducao) },
+    { limite: Number(p.irrf_faixa4_limite), aliquota: Number(p.irrf_faixa4_aliquota), deducao: Number(p.irrf_faixa4_deducao) },
+    { limite: Infinity, aliquota: Number(p.irrf_faixa5_aliquota), deducao: Number(p.irrf_faixa5_deducao) },
+  ];
+  const faixaAplicavel = faixas.find(f => baseCalculo <= f.limite) || faixas[faixas.length - 1];
+  const irBruto = Math.max(0, baseCalculo * faixaAplicavel.aliquota / 100 - faixaAplicavel.deducao);
+  const irFinal = Math.max(0, irBruto - Number(p.irrf_desconto_simplificado_max));
+  return { irBruto, irFinal };
+}
+
+
 // ===================== COMPRESSÃO E UPLOAD DE FOTO =====================
 const FOTO_CONFIG = { maxWidth: 1280, maxHeight: 1280, qualidade: 0.78, maxBytes: 800_000 };
 
@@ -804,6 +842,7 @@ const MENU_SECTIONS = [
     { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
     { icon: '💰', label: 'Custo de Colaboradores', href: 'rh-custo-colaboradores.html' },
     { icon: '⏱️', label: 'Controle de Horas', href: 'rh-controle-horas.html' },
+    { icon: '💵', label: 'Folha de Pagamento', href: 'folha-pagamento.html' },
   ]},
   { id: 'financeiro', label: 'Financeiro', items: [
     { icon: '💵', label: 'Contas a Pagar', href: 'financeiro-contas-pagar.html' },

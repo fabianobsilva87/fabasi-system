@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Folha de pagamento — proventos, descontos e líquido por colaborador — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Folha de Pagamento</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>💵 Folha de Pagamento</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;font-size:12px;color:#92400e;margin-bottom:20px;line-height:1.5;">
+            ⚠️ <strong>Tabelas de INSS/IRRF vigentes em 2026, editáveis</strong> — ponto de partida, não cálculo definitivo. Valide com o contador da Fabasi, e reajuste todo início de ano (essas tabelas mudam anualmente). Diferente do "Gerar Lançamentos do Mês" em RH → Custo de Colaboradores (que é o custo total da empresa), esta tela é o holerite: quanto o colaborador recebe líquido.
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 class="card-title" style="margin:0;">⚙️ Tabelas de INSS e IRRF</h3>
+              <button type="button" class="btn-secondary" style="font-size:12px;" onclick="alternarParametrosFolha()">Editar Tabelas</button>
+            </div>
+            <div id="parametros-folha-form" style="display:none;margin-top:14px;">
+              <h4 style="font-size:12px;margin-bottom:6px;">INSS — 4 faixas progressivas</h4>
+              <div class="form-grid">
+                <div class="form-group"><label>Faixa 1 — até (R$)</label><input type="number" id="pf-inss-f1-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-inss-f1-aliq" step="0.01"></div>
+                <div class="form-group"></div>
+                <div class="form-group"><label>Faixa 2 — até (R$)</label><input type="number" id="pf-inss-f2-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-inss-f2-aliq" step="0.01"></div>
+                <div class="form-group"></div>
+                <div class="form-group"><label>Faixa 3 — até (R$)</label><input type="number" id="pf-inss-f3-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-inss-f3-aliq" step="0.01"></div>
+                <div class="form-group"></div>
+                <div class="form-group"><label>Faixa 4 (teto) — até (R$)</label><input type="number" id="pf-inss-f4-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-inss-f4-aliq" step="0.01"></div>
+                <div class="form-group"></div>
+              </div>
+              <h4 style="font-size:12px;margin:14px 0 6px;">IRRF — tabela progressiva com parcela a deduzir</h4>
+              <div class="form-grid">
+                <div class="form-group"><label>Isento até (R$)</label><input type="number" id="pf-irrf-f1-limite" step="0.01"></div>
+                <div class="form-group"></div>
+                <div class="form-group"></div>
+                <div class="form-group"><label>Faixa 2 — até (R$)</label><input type="number" id="pf-irrf-f2-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-irrf-f2-aliq" step="0.01"></div>
+                <div class="form-group"><label>Parcela a deduzir</label><input type="number" id="pf-irrf-f2-deducao" step="0.01"></div>
+                <div class="form-group"><label>Faixa 3 — até (R$)</label><input type="number" id="pf-irrf-f3-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-irrf-f3-aliq" step="0.01"></div>
+                <div class="form-group"><label>Parcela a deduzir</label><input type="number" id="pf-irrf-f3-deducao" step="0.01"></div>
+                <div class="form-group"><label>Faixa 4 — até (R$)</label><input type="number" id="pf-irrf-f4-limite" step="0.01"></div>
+                <div class="form-group"><label>Alíquota (%)</label><input type="number" id="pf-irrf-f4-aliq" step="0.01"></div>
+                <div class="form-group"><label>Parcela a deduzir</label><input type="number" id="pf-irrf-f4-deducao" step="0.01"></div>
+                <div class="form-group"><label>Faixa 5 (acima) — Alíquota (%)</label><input type="number" id="pf-irrf-f5-aliq" step="0.01"></div>
+                <div class="form-group"><label>Parcela a deduzir</label><input type="number" id="pf-irrf-f5-deducao" step="0.01"></div>
+                <div class="form-group"></div>
+                <div class="form-group"><label>Desconto Simplificado Máx. (R$)</label><input type="number" id="pf-irrf-desconto-simpl" step="0.01"></div>
+                <div class="form-group"><label>Valor por Dependente (R$)</label><input type="number" id="pf-irrf-dependente" step="0.01"></div>
+                <div class="form-group"><label>VT — Desconto Padrão (%)</label><input type="number" id="pf-vt-pct" step="0.01"></div>
+              </div>
+              <div class="btn-row" style="margin-top:14px;">
+                <button type="button" id="btn-salvar-parametros-folha" class="btn-primary">💾 Salvar Tabelas</button>
+              </div>
+              <p id="msg-parametros-folha" class="msg-form"></p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">📅 Folha do Mês</h3>
+            <div class="form-grid">
+              <div class="form-group"><label for="fp-mes-referencia">Mês de Referência</label><input type="month" id="fp-mes-referencia" onchange="carregarOuCriarFolha()"></div>
+              <div class="form-group"><label>Status</label><div id="fp-status-folha" style="padding:8px 0;font-weight:700;">—</div></div>
+              <div class="form-group"><label>Total Líquido</label><div id="fp-total-liquido" style="padding:8px 0;font-weight:700;">—</div></div>
+            </div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button type="button" id="btn-gerar-folha" class="btn-primary">⚙️ Gerar/Recalcular Folha deste Mês</button>
+            </div>
+            <p id="msg-folha" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Holerites do Mês</h3>
+              <button type="button" class="btn-refresh" onclick="recarregarFolhaAtual()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Colaborador</th><th>Proventos</th><th>Descontos</th><th>Líquido</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-folha"><tr><td colspan="6" class="td-loading">Selecione o mês de referência.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _parametrosFolha = null;
+    let _folhaAtual = null;
+    let _folhaColaboradoresCache = [];
+
+    function alternarParametrosFolha() {
+      const el = document.getElementById('parametros-folha-form');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function carregarParametrosFolha() {
+      const { data } = await db.from('rh_parametros_folha').select('*').order('data_vigencia', { ascending: false }).limit(1).maybeSingle();
+      _parametrosFolha = data;
+      if (!data) return;
+      document.getElementById('pf-inss-f1-limite').value = data.inss_faixa1_limite;
+      document.getElementById('pf-inss-f1-aliq').value = data.inss_faixa1_aliquota;
+      document.getElementById('pf-inss-f2-limite').value = data.inss_faixa2_limite;
+      document.getElementById('pf-inss-f2-aliq').value = data.inss_faixa2_aliquota;
+      document.getElementById('pf-inss-f3-limite').value = data.inss_faixa3_limite;
+      document.getElementById('pf-inss-f3-aliq').value = data.inss_faixa3_aliquota;
+      document.getElementById('pf-inss-f4-limite').value = data.inss_faixa4_limite;
+      document.getElementById('pf-inss-f4-aliq').value = data.inss_faixa4_aliquota;
+      document.getElementById('pf-irrf-f1-limite').value = data.irrf_faixa1_limite;
+      document.getElementById('pf-irrf-f2-limite').value = data.irrf_faixa2_limite;
+      document.getElementById('pf-irrf-f2-aliq').value = data.irrf_faixa2_aliquota;
+      document.getElementById('pf-irrf-f2-deducao').value = data.irrf_faixa2_deducao;
+      document.getElementById('pf-irrf-f3-limite').value = data.irrf_faixa3_limite;
+      document.getElementById('pf-irrf-f3-aliq').value = data.irrf_faixa3_aliquota;
+      document.getElementById('pf-irrf-f3-deducao').value = data.irrf_faixa3_deducao;
+      document.getElementById('pf-irrf-f4-limite').value = data.irrf_faixa4_limite;
+      document.getElementById('pf-irrf-f4-aliq').value = data.irrf_faixa4_aliquota;
+      document.getElementById('pf-irrf-f4-deducao').value = data.irrf_faixa4_deducao;
+      document.getElementById('pf-irrf-f5-aliq').value = data.irrf_faixa5_aliquota;
+      document.getElementById('pf-irrf-f5-deducao').value = data.irrf_faixa5_deducao;
+      document.getElementById('pf-irrf-desconto-simpl').value = data.irrf_desconto_simplificado_max;
+      document.getElementById('pf-irrf-dependente').value = data.irrf_valor_por_dependente;
+      document.getElementById('pf-vt-pct').value = data.vt_percentual_desconto;
+    }
+
+    async function salvarParametrosFolha() {
+      const payload = {
+        inss_faixa1_limite: Number(document.getElementById('pf-inss-f1-limite').value), inss_faixa1_aliquota: Number(document.getElementById('pf-inss-f1-aliq').value),
+        inss_faixa2_limite: Number(document.getElementById('pf-inss-f2-limite').value), inss_faixa2_aliquota: Number(document.getElementById('pf-inss-f2-aliq').value),
+        inss_faixa3_limite: Number(document.getElementById('pf-inss-f3-limite').value), inss_faixa3_aliquota: Number(document.getElementById('pf-inss-f3-aliq').value),
+        inss_faixa4_limite: Number(document.getElementById('pf-inss-f4-limite').value), inss_faixa4_aliquota: Number(document.getElementById('pf-inss-f4-aliq').value),
+        irrf_faixa1_limite: Number(document.getElementById('pf-irrf-f1-limite').value),
+        irrf_faixa2_limite: Number(document.getElementById('pf-irrf-f2-limite').value), irrf_faixa2_aliquota: Number(document.getElementById('pf-irrf-f2-aliq').value), irrf_faixa2_deducao: Number(document.getElementById('pf-irrf-f2-deducao').value),
+        irrf_faixa3_limite: Number(document.getElementById('pf-irrf-f3-limite').value), irrf_faixa3_aliquota: Number(document.getElementById('pf-irrf-f3-aliq').value), irrf_faixa3_deducao: Number(document.getElementById('pf-irrf-f3-deducao').value),
+        irrf_faixa4_limite: Number(document.getElementById('pf-irrf-f4-limite').value), irrf_faixa4_aliquota: Number(document.getElementById('pf-irrf-f4-aliq').value), irrf_faixa4_deducao: Number(document.getElementById('pf-irrf-f4-deducao').value),
+        irrf_faixa5_aliquota: Number(document.getElementById('pf-irrf-f5-aliq').value), irrf_faixa5_deducao: Number(document.getElementById('pf-irrf-f5-deducao').value),
+        irrf_desconto_simplificado_max: Number(document.getElementById('pf-irrf-desconto-simpl').value),
+        irrf_valor_por_dependente: Number(document.getElementById('pf-irrf-dependente').value),
+        vt_percentual_desconto: Number(document.getElementById('pf-vt-pct').value),
+      };
+      const { error } = _parametrosFolha
+        ? await db.from('rh_parametros_folha').update(payload).eq('id', _parametrosFolha.id)
+        : await db.from('rh_parametros_folha').insert([payload]);
+      if (error) { msgForm('msg-parametros-folha', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-parametros-folha', '✓ Tabelas salvas!', 'green');
+      await carregarParametrosFolha();
+    }
+
+    // ===================== FOLHA DO MÊS =====================
+    async function carregarOuCriarFolha() {
+      const mesInput = document.getElementById('fp-mes-referencia').value; // AAAA-MM
+      if (!mesInput) return;
+      const mesReferencia = mesInput + '-01';
+
+      let { data: folha } = await db.from('folhas_pagamento').select('*').eq('mes_referencia', mesReferencia).maybeSingle();
+      if (!folha) {
+        const { data: novaFolha, error } = await db.from('folhas_pagamento').insert([{ mes_referencia: mesReferencia, status: 'aberta' }]).select('*').single();
+        if (error) { msgForm('msg-folha', 'Erro ao criar folha: ' + error.message, 'red'); return; }
+        folha = novaFolha;
+      }
+      _folhaAtual = folha;
+      document.getElementById('fp-status-folha').textContent = folha.status === 'fechada' ? 'Fechada' : 'Aberta';
+      await carregarLinhasFolha();
+    }
+
+    async function recarregarFolhaAtual() {
+      if (_folhaAtual) await carregarLinhasFolha();
+    }
+
+    async function gerarOuRecalcularFolha() {
+      if (!_folhaAtual) { msgForm('msg-folha', 'Selecione o mês de referência primeiro.', 'red'); return; }
+      if (!_parametrosFolha) await carregarParametrosFolha();
+
+      const inicioMes = _folhaAtual.mes_referencia;
+      const fimMes = new Date(new Date(inicioMes).getFullYear(), new Date(inicioMes).getMonth() + 1, 0).toISOString().slice(0,10);
+
+      const { data: colaboradores } = await db.from('colaboradores').select('*').gt('salario', 0);
+      if (!colaboradores || !colaboradores.length) { msgForm('msg-folha', 'Nenhum colaborador com salário cadastrado.', 'red'); return; }
+
+      // Horas extras do período, por colaborador, valorizadas a salário/220h × 1,5 (adicional de 50% padrão CLT).
+      const { data: horasExtras } = await db.from('registro_horas').select('colaborador_id, horas_trabalhadas').eq('tipo_hora', 'extra').gte('data', inicioMes).lte('data', fimMes);
+      const horasExtrasPorColab = {};
+      (horasExtras || []).forEach(h => { horasExtrasPorColab[h.colaborador_id] = (horasExtrasPorColab[h.colaborador_id] || 0) + Number(h.horas_trabalhadas || 0); });
+
+      msgForm('msg-folha', 'Calculando...', 'green');
+      let processados = 0;
+
+      for (const colab of colaboradores) {
+        const salarioBase = Number(colab.salario || 0);
+        const valorHora = salarioBase / 220; // referência padrão de 220h/mês
+        const horasExtrasValor = (horasExtrasPorColab[colab.id] || 0) * valorHora * 1.5;
+        const totalProventos = salarioBase + horasExtrasValor;
+
+        const inss = calcularINSS(salarioBase, _parametrosFolha);
+        const baseIrrf = Math.max(0, totalProventos - inss);
+        const irrf = calcularIRRF(baseIrrf, _parametrosFolha).irFinal;
+        const vtDesconto = Number(colab.vale_transporte || 0) > 0 ? salarioBase * Number(_parametrosFolha.vt_percentual_desconto) / 100 : 0;
+        const totalDescontos = inss + irrf + vtDesconto;
+        const valorLiquido = totalProventos - totalDescontos;
+
+        const payload = {
+          folha_id: _folhaAtual.id, colaborador_id: colab.id, salario_base: salarioBase,
+          horas_extras_valor: horasExtrasValor, total_proventos: totalProventos,
+          inss_desconto: inss, irrf_desconto: irrf, vt_desconto: vtDesconto,
+          total_descontos: totalDescontos, valor_liquido: valorLiquido,
+        };
+
+        await db.from('folha_colaboradores').upsert([payload], { onConflict: 'folha_id,colaborador_id' });
+        processados++;
+      }
+
+      msgForm('msg-folha', `✓ Folha gerada/recalculada para ${processados} colaborador(es)!`, 'green');
+      await carregarLinhasFolha();
+    }
+
+    async function carregarLinhasFolha() {
+      const tbody = document.getElementById('tbody-folha');
+      tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Carregando...</td></tr>';
+      const { data, error } = await db.from('folha_colaboradores').select('*, colaboradores(nome)').eq('folha_id', _folhaAtual.id).order('created_at');
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _folhaColaboradoresCache = data || [];
+
+      const totalLiquido = _folhaColaboradoresCache.reduce((acc, f) => acc + Number(f.valor_liquido || 0), 0);
+      document.getElementById('fp-total-liquido').textContent = 'R$ ' + totalLiquido.toFixed(2).replace('.', ',');
+
+      if (!_folhaColaboradoresCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum holerite ainda — clique em "Gerar/Recalcular Folha deste Mês".</td></tr>'; return; }
+
+      tbody.innerHTML = _folhaColaboradoresCache.map(f => `<tr>
+        <td>${escapeHTML(f.colaboradores?.nome || '—')}</td>
+        <td>R$ ${Number(f.total_proventos).toFixed(2).replace('.', ',')}</td>
+        <td style="color:#dc2626;">-R$ ${Number(f.total_descontos).toFixed(2).replace('.', ',')}</td>
+        <td style="font-weight:700;color:#059669;">R$ ${Number(f.valor_liquido).toFixed(2).replace('.', ',')}</td>
+        <td><span class="tag-badge ${f.status_pagamento === 'pago' ? 'success' : 'warning'}">${f.status_pagamento === 'pago' ? 'Pago' : 'Pendente'}</span></td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarDetalheHolerite('${escapeHTML(f.id)}')">Ver</button>
+          ${f.status_pagamento !== 'pago' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="registrarPagamentoHolerite('${escapeHTML(f.id)}')">💰 Pagar</button>` : ''}
+        </td>
+      </tr>
+      <tr id="detalhe-holerite-${f.id}" style="display:none;">
+        <td colspan="6" style="background:#f8fafc;font-size:12px;">
+          <div>Salário Base: R$ ${Number(f.salario_base).toFixed(2).replace('.', ',')}</div>
+          ${Number(f.horas_extras_valor) > 0 ? `<div>Horas Extras: R$ ${Number(f.horas_extras_valor).toFixed(2).replace('.', ',')}</div>` : ''}
+          <div style="margin-top:4px;">INSS: -R$ ${Number(f.inss_desconto).toFixed(2).replace('.', ',')}</div>
+          <div>IRRF: -R$ ${Number(f.irrf_desconto).toFixed(2).replace('.', ',')}</div>
+          ${Number(f.vt_desconto) > 0 ? `<div>VT: -R$ ${Number(f.vt_desconto).toFixed(2).replace('.', ',')}</div>` : ''}
+        </td>
+      </tr>`).join('');
+    }
+
+    function alternarDetalheHolerite(id) {
+      const el = document.getElementById('detalhe-holerite-' + id);
+      if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    async function registrarPagamentoHolerite(id) {
+      const f = _folhaColaboradoresCache.find(x => x.id === id); if (!f) return;
+      if (!confirm(`Registrar pagamento de R$ ${Number(f.valor_liquido).toFixed(2).replace('.', ',')} para ${f.colaboradores?.nome}? Isso cria uma Conta a Pagar já com status pago.`)) return;
+
+      const { data: novaConta, error } = await db.from('contas_pagar').insert([{
+        descricao: `Salário líquido — ${f.colaboradores?.nome} — ${_folhaAtual.mes_referencia.slice(0,7)}`,
+        origem: 'manual', valor_total: f.valor_liquido, data_emissao: new Date().toISOString().slice(0,10),
+        status: 'pendente_aprovacao', observacoes: 'Gerado pela Folha de Pagamento (líquido a pagar).',
+      }]).select('id').single();
+      if (error) { toast('Erro ao gerar Conta a Pagar: ' + error.message, 'erro'); return; }
+
+      await db.from('contas_pagar_parcelas').insert([{
+        conta_pagar_id: novaConta.id, numero_parcela: 1, valor: f.valor_liquido,
+        data_vencimento: new Date().toISOString().slice(0,10), status: 'aberta',
+      }]);
+
+      await db.from('folha_colaboradores').update({
+        status_pagamento: 'pago', data_pagamento: new Date().toISOString().slice(0,10), origem_conta_pagar_id: novaConta.id,
+      }).eq('id', id);
+
+      toast('Pagamento registrado e Conta a Pagar gerada!', 'sucesso');
+      await carregarLinhasFolha();
+    }
+
+    document.getElementById('btn-salvar-parametros-folha').addEventListener('click', salvarParametrosFolha);
+    document.getElementById('btn-gerar-folha').addEventListener('click', gerarOuRecalcularFolha);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('fp-mes-referencia').value = new Date().toISOString().slice(0,7);
+      await carregarParametrosFolha();
+      await carregarOuCriarFolha();
+    });
+  </script>
+</body>
+</html>
