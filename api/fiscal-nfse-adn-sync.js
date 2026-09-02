@@ -185,13 +185,16 @@ module.exports = async function handler(req, res) {
     const resumo = { processados: 0, erros: 0, fornecedores_criados: 0 };
 
     if (loteDFe.length) {
-      // Ainda não confirmado em produção — loga o lote bruto sempre que
-      // não vier vazio, pra nunca perder o dado mesmo se o parsing abaixo
-      // errar o campo.
+      // Formato já confirmado (ver comentário no topo do arquivo) — não
+      // precisa mais gravar o lote inteiro (o XML em base64 de cada item
+      // é grande, e um `.slice()` curto o suficiente pra caber no log
+      // acaba cortando o JSON no meio, virando irrecuperável — foi
+      // exatamente isso que aconteceu antes da correção). Loga só um
+      // resumo com as chaves recebidas, útil pra auditoria sem o peso.
       await supabaseAdmin.from('fiscal_logs').insert([{
         empresa_id: cert.empresa_id, execucao_id: execucaoId, nivel: 'info',
-        mensagem: `NFS-e ADN: LoteDFe com ${loteDFe.length} item(ns) — formato ainda não confirmado, gravando bruto.`,
-        metadados: { lote_bruto: JSON.stringify(loteDFe).slice(0, 8000) },
+        mensagem: `NFS-e ADN: LoteDFe com ${loteDFe.length} item(ns).`,
+        metadados: { chaves_recebidas: loteDFe.map(i => i.ChaveAcesso || i.Chave).slice(0, 100) },
       }]);
 
       for (const item of loteDFe) {

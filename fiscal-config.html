@@ -229,17 +229,18 @@
     }
 
     async function reprocessarNfseAntigas() {
-      if (!confirm('Reprocessar documentos NFS-e antigos que ficaram com campos vazios (CNPJ/valor/data)? Usa o dado bruto já salvo em fiscal_logs — não faz nenhuma chamada nova à SEFAZ/ADN. Correção de uso único.')) return;
-      msgForm('msg-fiscal-certificado', 'Reprocessando...', 'green');
+      if (!confirm('Apagar os documentos NFS-e que ficaram com campos vazios (sem CNPJ) e preparar o sistema pra buscar essas mesmas notas de novo na próxima sincronização, já com o parser corrigido? Depois disso, clique em "Sincronizar NFS-e (ADN)" pra trazer elas de volta certas.')) return;
+      msgForm('msg-fiscal-certificado', 'Apagando e preparando nova busca...', 'green');
       try {
         const { data: { session } } = await db.auth.getSession();
         const resp = await fetch('/api/fiscal-nfse-reprocessar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+          body: JSON.stringify({ ambiente: document.getElementById('fiscal-cert-ambiente').value }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) { msgForm('msg-fiscal-certificado', data.error || 'Falha ao reprocessar.', 'red'); return; }
-        msgForm('msg-fiscal-certificado', `✓ ${data.corrigidos} documento(s) corrigido(s)${data.nao_encontrados ? `, ${data.nao_encontrados} não encontrado(s)` : ''}${data.erros ? `, ${data.erros} erro(s)` : ''}.`, 'green');
+        if (!resp.ok) { msgForm('msg-fiscal-certificado', data.error || 'Falha ao preparar.', 'red'); return; }
+        msgForm('msg-fiscal-certificado', `✓ ${data.apagados} documento(s) quebrado(s) removido(s). ${data.aviso || ''}`, 'green');
       } catch (e) {
         msgForm('msg-fiscal-certificado', 'Erro inesperado: ' + e.message, 'red');
       }

@@ -220,7 +220,35 @@ module.exports = async function handler(req, res) {
 
         if (tipo === 'documento') {
           const { data: existente } = await supabaseAdmin.from('fiscal_documentos')
-            .select('id').or(`hash_xml.eq.${hashXml}${dados.chave_acesso ? ',chave_acesso.eq.' + dados.chave_acesso : ''}`).maybeSingle();
+            .select('id, status').or(`hash_xml.eq.${hashXml}${dados.chave_acesso ? ',chave_acesso.eq.' + dados.chave_acesso : ''}`).maybeSingle();
+
+          // Cenário pós-manifestação: já existia um RESUMO (pendente, sem
+          // itens) dessa chave, e agora chegou o documento COMPLETO —
+          // antes disso era simplesmente ignorado como "duplicado", e o
+          // usuário nunca via os itens mesmo depois de manifestar. Agora
+          // atualiza em vez de pular.
+          if (existente && existente.status === 'pendente' && !dados._resumo) {
+            const { error: errAtualizar } = await supabaseAdmin.from('fiscal_documentos').update({
+              modelo: dados.modelo || null, serie: dados.serie || null, numero: dados.numero || null,
+              data_emissao: dados.data_emissao ? new Date(dados.data_emissao).toISOString() : null,
+              cnpj_emitente: dados.cnpj_emitente || null, cnpj_destinatario: dados.cnpj_destinatario || null,
+              valor_total: dados.valor_total || 0, protocolo: dados.protocolo || null,
+              status: 'processada', hash_xml: hashXml,
+            }).eq('id', existente.id);
+
+            if (errAtualizar) { resumo.erros++; continue; }
+
+            if (dados.itens && dados.itens.length) {
+              await supabaseAdmin.from('fiscal_documento_itens').insert(dados.itens.map(it => ({ ...it, documento_id: existente.id })));
+            }
+            const vinculoAtualizado = await vincularFornecedorEClassificar(supabaseAdmin, existente.id, dados);
+            if (vinculoAtualizado.fornecedorCriado) resumo.fornecedores_criados++;
+            resumo.itens_vinculados += vinculoAtualizado.itensVinculados;
+            resumo.itens_pendentes += vinculoAtualizado.itensPendentes;
+            resumo.processados++;
+            continue;
+          }
+
           if (existente) { resumo.ignorados_duplicados++; continue; }
 
           const { data: novoDoc, error: errDoc } = await supabaseAdmin.from('fiscal_documentos').insert([{
