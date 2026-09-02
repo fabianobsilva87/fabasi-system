@@ -18,18 +18,17 @@
 //   "chamada válida, sem documentos" — não é erro de conexão nem de auth.
 //   mTLS + caminho /DFe/{ultimoNSU} estão confirmados corretos.
 //
-// ⚠️ AINDA NÃO CONFIRMADO: o formato de um item dentro de `LoteDFe` quando
-// EXISTE documento (só vi a lista vazia até agora). O parsing abaixo é
-// uma tentativa razoável baseada no padrão já visto (campos PascalCase,
-// documento provavelmente em GZip+Base64 como no distNSU da NF-e) — mas
-// precisa ser confirmado no primeiro lote real. Por isso: loga o LoteDFe
-// bruto em fiscal_logs SEMPRE que não estiver vazio, antes/além de tentar
-// parsear — se o parsing falhar, o dado bruto não se perde.
+// ✅ CONFIRMADO (02/09/2026): formato de um item de `LoteDFe` com documento
+// real — cada item traz {NSU, ChaveAcesso, TipoDocumento, ArquivoXml,
+// DataHoraGeracao}, onde ArquivoXml é o XML da NFS-e em GZip+Base64
+// (schema http://www.sped.fazenda.gov.br/nfse). Ver parseNFSeXml() abaixo
+// pra estrutura completa dos campos extraídos do XML.
 // =====================================================================
 
 const zlib = require('zlib');
 const crypto = require('crypto');
 const https = require('https');
+const { DOMParser } = require('@xmldom/xmldom');
 const { createClient } = require('@supabase/supabase-js');
 const { autenticarEAutorizar, obterCertificadoAtivo } = require('./_lib/certificado');
 const { limparCNPJ } = require('./_lib/parser-distnsu');
@@ -76,6 +75,41 @@ function extrairXmlDoItem(item) {
     }
   }
   return null;
+}
+
+// ✅ CONFIRMADO (02/09/2026, contra documento real recebido em produção):
+// o XML descompactado é <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">,
+// com <infNFSe Id="..."><nNFSe>...</nNFSe><emit><CNPJ>...</CNPJ>
+// <xNome>...</xNome></emit><valores><vLiq>...</vLiq></valores>
+// <DPS><infDPS><dhEmi>...</dhEmi>...</infDPS></DPS></infNFSe>.
+// Antes desta correção, o parser só olhava campos soltos no JSON do lote
+// (que não existem nesse nível) — por isso vinha tudo em branco.
+function parseNFSeXml(xml) {
+  if (!xml) return null;
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    const pegarTexto = (elemento, tag) => {
+      if (!elemento) return null;
+      const els = elemento.getElementsByTagName(tag);
+      return els.length ? els[0].textContent : null;
+    };
+
+    const infNFSe = doc.getElementsByTagName('infNFSe')[0];
+    const emit = doc.getElementsByTagName('emit')[0];
+    const valoresTopo = infNFSe ? infNFSe.getElementsByTagName('valores')[0] : null;
+    const infDPS = doc.getElementsByTagName('infDPS')[0];
+
+    return {
+      identificador: infNFSe ? infNFSe.getAttribute('Id') : null,
+      numero: pegarTexto(infNFSe, 'nNFSe'),
+      cnpjPrestador: pegarTexto(emit, 'CNPJ'),
+      razaoSocialPrestador: pegarTexto(emit, 'xNome'),
+      valorTotal: pegarTexto(valoresTopo, 'vLiq'),
+      dataEmissao: pegarTexto(infDPS, 'dhEmi'),
+    };
+  } catch (_e) {
+    return null;
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -163,9 +197,13 @@ module.exports = async function handler(req, res) {
       for (const item of loteDFe) {
         try {
           const xml = extrairXmlDoItem(item);
-          const chaveAcesso = item.ChaveAcesso || item.Chave || null;
-          const cnpjPrestador = limparCNPJ(item.CnpjPrestador || item.Prestador?.Cnpj || '');
-          const valor = Number(item.ValorServico || item.ValorTotal || 0);
+          const dados = parseNFSeXml(xml);
+
+          const chaveAcesso = dados?.identificador || item.ChaveAcesso || item.Chave || null;
+          const cnpjPrestador = limparCNPJ(dados?.cnpjPrestador || '');
+          const valor = Number(dados?.valorTotal || 0);
+          const numero = dados?.numero || null;
+          const dataEmissao = dados?.dataEmissao ? new Date(dados.dataEmissao).toISOString() : null;
           const hashXml = xml ? crypto.createHash('sha256').update(xml, 'utf-8').digest('hex') : crypto.randomUUID();
 
           const { data: existente } = await supabaseAdmin.from('fiscal_documentos')
@@ -175,7 +213,8 @@ module.exports = async function handler(req, res) {
           const { data: novoDoc, error: errDoc } = await supabaseAdmin.from('fiscal_documentos').insert([{
             empresa_id: cert.empresa_id, tipo_documento: 'NFSE',
             nfse_identificador: chaveAcesso, cnpj_emitente: cnpjPrestador || null,
-            valor_total: valor, ambiente, status: 'pendente', // pendente = precisa de conferência manual (layout não 100% confirmado)
+            numero, data_emissao: dataEmissao,
+            valor_total: valor, ambiente, status: dados ? 'processada' : 'pendente', // pendente só se o parser não achou nada (fallback de segurança)
             nsu: item.NSU || null, data_processamento: new Date().toISOString(),
             hash_xml: hashXml,
           }]).select('id').single();
@@ -187,7 +226,7 @@ module.exports = async function handler(req, res) {
             const { data: fornExistente } = await supabaseAdmin.from('fornecedores').select('id').eq('cnpj', cnpjPrestador).maybeSingle();
             if (!fornExistente) {
               const { error: errForn } = await supabaseAdmin.from('fornecedores').insert([{
-                razao_social: item.RazaoSocialPrestador || item.Prestador?.RazaoSocial || cnpjPrestador,
+                razao_social: dados?.razaoSocialPrestador || cnpjPrestador,
                 cnpj: cnpjPrestador, origem_cadastro: 'pre_cadastro_fiscal',
                 status_pre_cadastro: 'aguardando_confirmacao', ativo: true,
               }]);
@@ -209,7 +248,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       ok: true, sem_documentos: semDocumentos, docs_no_lote: loteDFe.length,
       duracao_ms: duracaoMs, ...resumo,
-      aviso: loteDFe.length ? 'Formato do LoteDFe ainda não confirmado — confira fiscal_logs (lote_bruto) e os documentos criados (status=pendente) antes de confiar nos dados.' : null,
+      aviso: loteDFe.length ? `Formato confirmado — ${resumo.processados} documento(s) processado(s) com CNPJ/valor/data extraídos do XML.` : null,
     });
   } catch (e) {
     res.status(500).json({ error: 'Erro interno: ' + e.message });

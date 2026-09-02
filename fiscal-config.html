@@ -75,6 +75,7 @@
               <button type="button" class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="testarConexaoSefaz()">📡 Testar Conexão SEFAZ (real)</button>
               <button type="button" class="btn-secondary" style="background:#0891b2;color:#fff;border-color:#0891b2;" onclick="testarConexaoAdn()">📡 Testar Conexão ADN (NFS-e, exploratório)</button>
               <button type="button" class="btn-secondary" style="background:#0e7490;color:#fff;border-color:#0e7490;" onclick="sincronizarNfseAgora()">🔄 Sincronizar NFS-e (ADN)</button>
+              <button type="button" class="btn-secondary" style="background:#dc2626;color:#fff;border-color:#dc2626;" onclick="reprocessarNfseAntigas()">🔧 Corrigir NFS-e com Campos Vazios (uso único)</button>
             </div>
             <p style="font-size:11px;color:#a0aec0;margin-top:6px;">"Testar Conexão SEFAZ" faz uma chamada real e de baixíssimo custo (NFeStatusServico — não consome cota de importação de notas) para confirmar que o certificado autentica de verdade junto à SEFAZ-MT, em homologação.</p>
             <p id="msg-fiscal-certificado" class="msg-form" style="white-space:pre-wrap;"></p>
@@ -224,6 +225,23 @@
         msgForm('msg-fiscal-certificado', `Resposta do ADN recebida! HTTP ${data.http_status} de ${data.url_tentada} (${data.duracao_ms}ms)\n\nEssa é uma chamada EXPLORATÓRIA — o corpo abaixo ainda não é interpretado, é só pra eu conseguir escrever o parser certo.\n\nContent-Type: ${data.content_type}\n\nCorpo bruto:\n${data.corpo_bruto}`, data.http_status < 400 ? 'green' : 'red');
       } catch (e) {
         msgForm('msg-fiscal-certificado', 'Erro inesperado ao chamar /api/fiscal-nfse-adn-status: ' + e.message, 'red');
+      }
+    }
+
+    async function reprocessarNfseAntigas() {
+      if (!confirm('Reprocessar documentos NFS-e antigos que ficaram com campos vazios (CNPJ/valor/data)? Usa o dado bruto já salvo em fiscal_logs — não faz nenhuma chamada nova à SEFAZ/ADN. Correção de uso único.')) return;
+      msgForm('msg-fiscal-certificado', 'Reprocessando...', 'green');
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const resp = await fetch('/api/fiscal-nfse-reprocessar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { msgForm('msg-fiscal-certificado', data.error || 'Falha ao reprocessar.', 'red'); return; }
+        msgForm('msg-fiscal-certificado', `✓ ${data.corrigidos} documento(s) corrigido(s)${data.nao_encontrados ? `, ${data.nao_encontrados} não encontrado(s)` : ''}${data.erros ? `, ${data.erros} erro(s)` : ''}.`, 'green');
+      } catch (e) {
+        msgForm('msg-fiscal-certificado', 'Erro inesperado: ' + e.message, 'red');
       }
     }
 
