@@ -141,23 +141,9 @@
 
     // Cálculo transparente, linha a linha — devolve o detalhamento completo,
     // não só o total, pra ficar auditável.
-    function calcularCustoColaborador(colab, parametros) {
-      const S = Number(colab.salario || 0);
-      const beneficios = Number(colab.vale_transporte || 0) + Number(colab.vale_refeicao || 0) + Number(colab.plano_saude || 0) + Number(colab.outros_beneficios || 0);
+    // calcularCustoColaborador() agora é global (app.js) — reaproveitado
+    // também em rh-controle-horas.html.
 
-      const encargosDiretos = S * (parametros.inss_patronal_pct + parametros.rat_pct + parametros.sistema_s_pct) / 100;
-      const fgtsSalario = S * parametros.fgts_pct / 100;
-      const provisao13 = S / 12;
-      const provisaoFerias = (S / 12) * (4 / 3);
-      const fgtsProvisoes = (provisao13 + provisaoFerias) * parametros.fgts_pct / 100;
-      const fgtsTotalMensal = fgtsSalario + fgtsProvisoes;
-      const provisaoMultaRescisoria = fgtsTotalMensal * parametros.multa_fgts_rescisao_pct / 100;
-
-      const encargosEProvisoes = encargosDiretos + fgtsSalario + provisao13 + provisaoFerias + fgtsProvisoes + provisaoMultaRescisoria;
-      const custoTotal = S + beneficios + encargosEProvisoes;
-
-      return { S, beneficios, encargosDiretos, fgtsSalario, provisao13, provisaoFerias, fgtsProvisoes, provisaoMultaRescisoria, encargosEProvisoes, custoTotal };
-    }
 
     function alternarDetalheCusto(id) {
       const el = document.getElementById('detalhe-custo-' + id);

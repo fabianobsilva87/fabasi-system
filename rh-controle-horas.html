@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Controle de horas por colaborador e obra, com relatório de resultado por colaborador — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Controle de Horas</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>⏱️ Controle de Horas</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <p style="font-size:12px;color:#a0aec0;margin:0 0 16px;">
+            Registro de horas por atividade (não é ponto eletrônico legal com entrada/saída/intervalo — é visibilidade
+            de alocação real: quanto tempo cada colaborador dedicou a cada obra/centro de custo).
+          </p>
+
+          <div class="card">
+            <h3 class="card-title">➕ Registrar Horas</h3>
+            <div class="form-grid">
+              <div class="form-group"><label for="rh-colaborador">Colaborador *</label><select id="rh-colaborador" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="rh-centro-custo">Centro de Custo *</label><select id="rh-centro-custo" class="form-input-style"><option value="">-- Selecione --</option></select></div>
+              <div class="form-group"><label for="rh-data">Data *</label><input type="date" id="rh-data"></div>
+              <div class="form-group"><label for="rh-horas">Horas Trabalhadas *</label><input type="number" id="rh-horas" step="0.25" placeholder="Ex: 8"></div>
+              <div class="form-group"><label for="rh-tipo-hora">Tipo</label>
+                <select id="rh-tipo-hora" class="form-input-style">
+                  <option value="normal">Normal</option>
+                  <option value="extra">Extra</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="rh-atividade">Atividade Realizada</label><input type="text" id="rh-atividade" placeholder="Ex: Instalação elétrica"></div>
+              <div class="form-group" style="grid-column:span 3;"><label for="rh-observacoes">Observações</label><input type="text" id="rh-observacoes"></div>
+            </div>
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" id="btn-salvar-horas" class="btn-primary">💾 Registrar</button>
+            </div>
+            <p id="msg-horas" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">📊 Resultado por Colaborador</h3>
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+              <div class="form-group" style="margin:0;"><label for="rel-de">De</label><input type="date" id="rel-de" class="form-input-style" onchange="carregarResultadoPorColaborador()"></div>
+              <div class="form-group" style="margin:0;"><label for="rel-ate">Até</label><input type="date" id="rel-ate" class="form-input-style" onchange="carregarResultadoPorColaborador()"></div>
+              <button type="button" class="btn-refresh" onclick="carregarResultadoPorColaborador()">↺ Atualizar</button>
+            </div>
+            <p style="font-size:11px;color:#a0aec0;margin-bottom:10px;">O custo é o total mensal projetado do colaborador (salário + encargos + provisões), rateado proporcionalmente pelas horas lançadas em cada centro de custo no período — não é um valor pago de verdade, é uma distribuição de custo pra visibilidade.</p>
+            <div id="resultado-colaboradores"><p class="td-loading">Carregando...</p></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Histórico de Lançamentos</h3>
+              <button type="button" class="btn-refresh" onclick="carregarHistoricoHoras()">↺ Atualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Colaborador</th><th>Centro de Custo</th><th>Horas</th><th>Tipo</th><th>Atividade</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-horas"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _parametrosEncargosHoras = null;
+
+    async function carregarSelectsHoras() {
+      const { data: colaboradores } = await db.from('colaboradores').select('id,nome,salario,vale_transporte,vale_refeicao,plano_saude,outros_beneficios').order('nome');
+      window._colaboradoresParaHorasCache = colaboradores || [];
+      document.getElementById('rh-colaborador').innerHTML = '<option value="">-- Selecione --</option>' +
+        (colaboradores || []).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.nome)}</option>`).join('');
+
+      const { data: ccs } = await db.from('centros_custo').select('id,codigo,nome,tipo').eq('ativo', true).order('tipo').order('codigo');
+      document.getElementById('rh-centro-custo').innerHTML = '<option value="">-- Selecione --</option>' +
+        (ccs || []).map(c => `<option value="${escapeHTML(c.id)}">${c.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(c.codigo)} — ${escapeHTML(c.nome)}</option>`).join('');
+    }
+
+    async function salvarRegistroHoras() {
+      const colaboradorId = document.getElementById('rh-colaborador').value;
+      const centroCustoId = document.getElementById('rh-centro-custo').value;
+      const horas = Number(document.getElementById('rh-horas').value);
+
+      if (!colaboradorId) { msgForm('msg-horas', 'Selecione o colaborador.', 'red'); return; }
+      if (!centroCustoId) { msgForm('msg-horas', 'Selecione o centro de custo.', 'red'); return; }
+      if (!horas || horas <= 0) { msgForm('msg-horas', 'Informe uma quantidade de horas válida.', 'red'); return; }
+
+      const { error } = await db.from('registro_horas').insert([{
+        colaborador_id: colaboradorId, centro_custo_id: centroCustoId,
+        data: document.getElementById('rh-data').value || new Date().toISOString().slice(0,10),
+        horas_trabalhadas: horas, tipo_hora: document.getElementById('rh-tipo-hora').value,
+        descricao_atividade: document.getElementById('rh-atividade').value.trim() || null,
+        observacoes: document.getElementById('rh-observacoes').value.trim() || null,
+        criado_por_nome: window._usuarioAtual?.nome || null,
+      }]);
+      if (error) { msgForm('msg-horas', 'Erro ao salvar: ' + error.message, 'red'); return; }
+
+      msgForm('msg-horas', '✓ Horas registradas!', 'green');
+      document.getElementById('rh-horas').value = '';
+      document.getElementById('rh-atividade').value = '';
+      document.getElementById('rh-observacoes').value = '';
+      await carregarHistoricoHoras();
+      await carregarResultadoPorColaborador();
+    }
+
+    async function excluirRegistroHoras(id) {
+      if (!confirm('Excluir este lançamento de horas?')) return;
+      const { error } = await db.from('registro_horas').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarHistoricoHoras();
+      await carregarResultadoPorColaborador();
+    }
+
+    async function carregarHistoricoHoras() {
+      const tbody = document.getElementById('tbody-horas');
+      const { data, error } = await db.from('registro_horas').select('*, colaboradores(nome), centros_custo(codigo,nome,tipo)').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(200);
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhum lançamento registrado ainda.</td></tr>'; return; }
+
+      tbody.innerHTML = data.map(h => `<tr>
+        <td>${fmtDate(h.data)}</td>
+        <td>${escapeHTML(h.colaboradores?.nome || '—')}</td>
+        <td>${h.centros_custo ? (h.centros_custo.tipo === 'obra' ? '🏗️ ' : '🏢 ') + escapeHTML(h.centros_custo.nome) : '—'}</td>
+        <td>${Number(h.horas_trabalhadas)}h</td>
+        <td><span class="tag-badge ${h.tipo_hora === 'extra' ? 'warning' : ''}">${h.tipo_hora === 'extra' ? 'Extra' : 'Normal'}</span></td>
+        <td style="font-size:12px;">${escapeHTML(h.descricao_atividade || '—')}</td>
+        <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirRegistroHoras('${escapeHTML(h.id)}')">✕</button></td>
+      </tr>`).join('');
+    }
+
+    // ===================== RESULTADO POR COLABORADOR =====================
+    async function carregarParametrosEncargosHoras() {
+      const { data } = await db.from('rh_parametros_encargos').select('*').order('data_vigencia', { ascending: false }).limit(1).maybeSingle();
+      _parametrosEncargosHoras = data || { inss_patronal_pct: 20, rat_pct: 2, sistema_s_pct: 5.8, fgts_pct: 8, multa_fgts_rescisao_pct: 40 };
+    }
+
+    async function carregarResultadoPorColaborador() {
+      const wrap = document.getElementById('resultado-colaboradores');
+      wrap.innerHTML = '<p class="td-loading">Carregando...</p>';
+      if (!_parametrosEncargosHoras) await carregarParametrosEncargosHoras();
+
+      const de = document.getElementById('rel-de').value;
+      const ate = document.getElementById('rel-ate').value;
+      let query = db.from('registro_horas').select('colaborador_id, centro_custo_id, horas_trabalhadas, centros_custo(nome,tipo)');
+      if (de) query = query.gte('data', de);
+      if (ate) query = query.lte('data', ate);
+      const { data: registros, error } = await query;
+      if (error) { wrap.innerHTML = '<p style="color:#dc2626;">Erro: ' + escapeHTML(error.message) + '</p>'; return; }
+
+      if (!registros || !registros.length) { wrap.innerHTML = '<p class="td-loading">Nenhum lançamento de horas no período.</p>'; return; }
+
+      // Agrupa por colaborador -> centro de custo -> soma de horas.
+      const porColaborador = {};
+      registros.forEach(r => {
+        if (!r.colaborador_id) return;
+        porColaborador[r.colaborador_id] = porColaborador[r.colaborador_id] || { totalHoras: 0, porCC: {} };
+        porColaborador[r.colaborador_id].totalHoras += Number(r.horas_trabalhadas || 0);
+        const chaveCC = r.centro_custo_id || 'sem_cc';
+        porColaborador[r.colaborador_id].porCC[chaveCC] = porColaborador[r.colaborador_id].porCC[chaveCC] || { horas: 0, nome: r.centros_custo?.nome || 'Sem centro de custo', tipo: r.centros_custo?.tipo };
+        porColaborador[r.colaborador_id].porCC[chaveCC].horas += Number(r.horas_trabalhadas || 0);
+      });
+
+      const colaboradoresCache = window._colaboradoresParaHorasCache || [];
+      const blocos = Object.entries(porColaborador).map(([colabId, info]) => {
+        const colab = colaboradoresCache.find(c => c.id === colabId);
+        if (!colab) return '';
+        const custo = colab.salario ? calcularCustoColaborador(colab, _parametrosEncargosHoras) : null;
+
+        const linhasCC = Object.values(info.porCC).sort((a, b) => b.horas - a.horas).map(cc => {
+          const pct = info.totalHoras > 0 ? (cc.horas / info.totalHoras) * 100 : 0;
+          const custoRateado = custo ? custo.custoTotal * (pct / 100) : null;
+          return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #f1f5f9;">
+            <span>${cc.tipo === 'obra' ? '🏗️' : '🏢'} ${escapeHTML(cc.nome)}</span>
+            <span>${cc.horas.toFixed(1)}h (${pct.toFixed(0)}%)${custoRateado !== null ? ' — R$ ' + custoRateado.toFixed(2).replace('.', ',') : ''}</span>
+          </div>`;
+        }).join('');
+
+        return `<div class="card" style="margin-bottom:10px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <strong style="font-size:14px;">${escapeHTML(colab.nome)}</strong>
+            <span style="font-size:12px;color:#4a5568;">${info.totalHoras.toFixed(1)}h no período${custo ? ' — custo mensal: R$ ' + custo.custoTotal.toFixed(2).replace('.', ',') : ' — sem salário cadastrado'}</span>
+          </div>
+          ${linhasCC}
+        </div>`;
+      }).filter(Boolean).join('');
+
+      wrap.innerHTML = blocos || '<p class="td-loading">Nenhum colaborador com lançamento válido.</p>';
+    }
+
+    document.getElementById('btn-salvar-horas').addEventListener('click', salvarRegistroHoras);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('rh-data').value = new Date().toISOString().slice(0,10);
+      const hoje = new Date();
+      document.getElementById('rel-de').value = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0,10);
+      document.getElementById('rel-ate').value = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().slice(0,10);
+      await carregarSelectsHoras();
+      await carregarHistoricoHoras();
+      await carregarResultadoPorColaborador();
+    });
+  </script>
+</body>
+</html>

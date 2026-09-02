@@ -429,6 +429,28 @@ function msgForm(id, texto, cor) {
   if (cor === 'green') setTimeout(() => { el.textContent = ''; }, 4000);
 }
 
+// ===================== RH — CÁLCULO DE CUSTO DE COLABORADOR =====================
+// Compartilhado entre rh-custo-colaboradores.html, rh-controle-horas.html e
+// futuramente a Folha de Pagamento — cálculo transparente, linha a linha,
+// dos encargos e provisões (13º, férias, multa rescisória).
+function calcularCustoColaborador(colab, parametros) {
+  const S = Number(colab.salario || 0);
+  const beneficios = Number(colab.vale_transporte || 0) + Number(colab.vale_refeicao || 0) + Number(colab.plano_saude || 0) + Number(colab.outros_beneficios || 0);
+
+  const encargosDiretos = S * (parametros.inss_patronal_pct + parametros.rat_pct + parametros.sistema_s_pct) / 100;
+  const fgtsSalario = S * parametros.fgts_pct / 100;
+  const provisao13 = S / 12;
+  const provisaoFerias = (S / 12) * (4 / 3);
+  const fgtsProvisoes = (provisao13 + provisaoFerias) * parametros.fgts_pct / 100;
+  const fgtsTotalMensal = fgtsSalario + fgtsProvisoes;
+  const provisaoMultaRescisoria = fgtsTotalMensal * parametros.multa_fgts_rescisao_pct / 100;
+
+  const encargosEProvisoes = encargosDiretos + fgtsSalario + provisao13 + provisaoFerias + fgtsProvisoes + provisaoMultaRescisoria;
+  const custoTotal = S + beneficios + encargosEProvisoes;
+
+  return { S, beneficios, encargosDiretos, fgtsSalario, provisao13, provisaoFerias, fgtsProvisoes, provisaoMultaRescisoria, encargosEProvisoes, custoTotal };
+}
+
 // ===================== COMPRESSÃO E UPLOAD DE FOTO =====================
 const FOTO_CONFIG = { maxWidth: 1280, maxHeight: 1280, qualidade: 0.78, maxBytes: 800_000 };
 
@@ -781,6 +803,7 @@ const MENU_SECTIONS = [
   { id: 'rh', label: 'RH', items: [
     { icon: '👷', label: 'Colaboradores', href: 'colaborador.html' },
     { icon: '💰', label: 'Custo de Colaboradores', href: 'rh-custo-colaboradores.html' },
+    { icon: '⏱️', label: 'Controle de Horas', href: 'rh-controle-horas.html' },
   ]},
   { id: 'financeiro', label: 'Financeiro', items: [
     { icon: '💵', label: 'Contas a Pagar', href: 'financeiro-contas-pagar.html' },
