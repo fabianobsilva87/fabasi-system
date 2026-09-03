@@ -57,10 +57,10 @@
 
           <div class="card">
             <h3 class="card-title">🏷️ Itens Pendentes de Classificação de Material</h3>
-            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Itens de NF-e/NFS-e cujo material ainda não foi vinculado ao catálogo (Cadastro de Materiais).</p>
+            <p style="font-size:12px;color:#a0aec0;margin:0 0 14px;">Itens de NF-e/NFS-e cujo material ainda não foi vinculado ao catálogo (Cadastro de Materiais). Vincular também ensina o sistema — a próxima nota do mesmo fornecedor com essa mesma descrição já vem classificada sozinha.</p>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Descrição no Documento</th><th>NCM</th><th>Qtd.</th><th>Valor Unit.</th><th>Confiança</th></tr></thead>
+                <thead><tr><th>Descrição no Documento</th><th>NCM</th><th>Qtd.</th><th>Valor Unit.</th><th>Vincular / Criar Material</th></tr></thead>
                 <tbody id="tbody-fconf-itens"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
@@ -94,6 +94,78 @@
 
   <script src="app.js"></script>
   <script>
+    let _itensPendentesCache = [];
+
+    async function carregarMateriaisParaClassificar() {
+      const { data } = await db.from('materiais').select('id,codigo,nome').eq('ativo', true).order('nome');
+      window._materiaisParaClassificarCache = data || [];
+      const { data: tipos } = await db.from('tipos_material').select('id,nome,prefixo').order('nome');
+      window._tiposMaterialParaClassificarCache = tipos || [];
+    }
+
+    async function vincularItemAMaterial(itemId) {
+      const materialId = document.getElementById('sel-material-' + itemId).value;
+      if (!materialId) { toast('Selecione um material.', 'erro'); return; }
+      await efetivarVinculo(itemId, materialId);
+    }
+
+    async function alternarCriarMaterialInline(itemId) {
+      const el = document.getElementById('criar-material-' + itemId);
+      if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function criarMaterialEVincular(itemId) {
+      const nome = document.getElementById('novo-mat-nome-' + itemId).value.trim();
+      const tipoId = document.getElementById('novo-mat-tipo-' + itemId).value;
+      const unidade = document.getElementById('novo-mat-unidade-' + itemId).value.trim();
+      const valorRef = document.getElementById('novo-mat-valor-' + itemId).value;
+      const msgId = 'msg-novo-mat-' + itemId;
+
+      if (!nome) { msgForm(msgId, 'Informe o nome.', 'red'); return; }
+      if (!tipoId) { msgForm(msgId, 'Selecione a família (Tipo de Material).', 'red'); return; }
+
+      const tipo = (window._tiposMaterialParaClassificarCache || []).find(t => t.id === tipoId);
+      if (!tipo) { msgForm(msgId, 'Família inválida.', 'red'); return; }
+
+      const { data: codigo, error: errCod } = await db.rpc('gerar_codigo_item', { p_prefixo: tipo.prefixo });
+      if (errCod) { msgForm(msgId, 'Erro ao gerar código: ' + errCod.message, 'red'); return; }
+
+      const item = _itensPendentesCache.find(i => i.id === itemId);
+      const { data: novoMaterial, error } = await db.from('materiais').insert([{
+        nome, codigo, tipo_material_id: tipoId, unidade: unidade || null,
+        ncm: item?.ncm || null, valor_referencia: valorRef ? Number(valorRef) : null,
+      }]).select('id').single();
+
+      if (error) { msgForm(msgId, 'Erro ao criar material: ' + error.message, 'red'); return; }
+      msgForm(msgId, `✓ Material ${codigo} criado! Vinculando...`, 'green');
+      await efetivarVinculo(itemId, novoMaterial.id);
+    }
+
+    async function efetivarVinculo(itemId, materialId) {
+      const item = _itensPendentesCache.find(i => i.id === itemId);
+      if (!item) return;
+
+      const { error } = await db.from('fiscal_documento_itens').update({
+        material_id: materialId, status_classificacao: 'vinculado', confianca_vinculo: 'manual',
+      }).eq('id', itemId);
+      if (error) { toast('Erro ao vincular: ' + error.message, 'erro'); return; }
+
+      // Ensina o sistema: próxima nota do mesmo fornecedor com essa mesma
+      // descrição já vem classificada sozinha (mesmo mecanismo que o
+      // vínculo automático de fornecedor já usa).
+      const fornecedorId = item.fiscal_documentos?.fornecedor_id;
+      if (fornecedorId) {
+        await db.from('fornecedor_item_nomenclatura').upsert([{
+          fornecedor_id: fornecedorId, tipo_item: 'material', material_id: materialId,
+          descricao_fornecedor: item.descricao_original, origem: 'fiscal', confianca: 'manual',
+        }], { onConflict: 'fornecedor_id,tipo_item,descricao_fornecedor' });
+      }
+
+      toast('Item vinculado!', 'sucesso');
+      document.getElementById('linha-item-' + itemId)?.remove();
+      await carregarConferenciaFiscal();
+    }
+
     async function confirmarFornecedorPendente(id) {
       if (!confirm('Confirmar este fornecedor? Ele deixa de aparecer como pendência (você ainda pode editar os dados depois em Fornecedores, se precisar).')) return;
       const { error } = await db.from('fornecedores').update({ status_pre_cadastro: null }).eq('id', id);
@@ -104,7 +176,7 @@
 
     async function carregarConferenciaFiscal() {
       const [itens, fornecedoresPendentes, erros] = await Promise.all([
-        db.from('fiscal_documento_itens').select('*').eq('status_classificacao', 'pendente').order('created_at', { ascending: false }).limit(100),
+        db.from('fiscal_documento_itens').select('*, fiscal_documentos(fornecedor_id)').eq('status_classificacao', 'pendente').order('created_at', { ascending: false }).limit(100),
         db.from('fornecedores').select('*').eq('status_pre_cadastro', 'aguardando_confirmacao').order('created_at', { ascending: false }),
         db.from('fiscal_documentos').select('*').eq('status', 'erro').order('data_importacao', { ascending: false }).limit(100),
       ]);
@@ -113,16 +185,46 @@
       document.getElementById('fconf-txt-fornecedores').textContent = fornecedoresPendentes.data?.length ?? 0;
       document.getElementById('fconf-txt-erros').textContent = erros.data?.length ?? 0;
 
+      _itensPendentesCache = itens.data || [];
+      if (!window._materiaisParaClassificarCache) await carregarMateriaisParaClassificar();
+
       const tbodyItens = document.getElementById('tbody-fconf-itens');
-      tbodyItens.innerHTML = (!itens.data || !itens.data.length)
+      tbodyItens.innerHTML = (!_itensPendentesCache.length)
         ? '<tr><td colspan="5" class="td-loading">Nenhum item pendente de classificação no momento.</td></tr>'
-        : itens.data.map(i => `<tr>
+        : _itensPendentesCache.map(i => `<tr id="linha-item-${i.id}">
             <td>${escapeHTML(i.descricao_original)}</td>
             <td style="font-family:monospace;">${escapeHTML(i.ncm || '—')}</td>
             <td>${Number(i.quantidade || 0)}</td>
             <td>R$ ${Number(i.valor_unitario || 0).toFixed(2).replace('.', ',')}</td>
-            <td>${escapeHTML(i.confianca_vinculo || '—')}</td>
+            <td>
+              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                <select id="sel-material-${i.id}" class="form-input-style" style="font-size:11px;width:auto;max-width:220px;">
+                  <option value="">-- selecione um material --</option>
+                  ${(window._materiaisParaClassificarCache || []).map(m => `<option value="${escapeHTML(m.id)}">${escapeHTML(m.codigo)} — ${escapeHTML(m.nome)}</option>`).join('')}
+                </select>
+                <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="vincularItemAMaterial('${escapeHTML(i.id)}')">✓ Vincular</button>
+                <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarCriarMaterialInline('${escapeHTML(i.id)}')">+ Criar Material</button>
+              </div>
+              <div id="criar-material-${i.id}" style="display:none;margin-top:6px;padding:8px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                  <input type="text" id="novo-mat-nome-${i.id}" class="form-input-style" style="font-size:11px;width:180px;" value="${escapeHTML(i.descricao_original || '')}" placeholder="Nome do material">
+                  <select id="novo-mat-tipo-${i.id}" class="form-input-style" style="font-size:11px;width:auto;"><option value="">-- família --</option></select>
+                  <input type="text" id="novo-mat-unidade-${i.id}" class="form-input-style" style="font-size:11px;width:70px;" value="${escapeHTML(i.unidade || '')}" placeholder="Unid.">
+                  <input type="number" id="novo-mat-valor-${i.id}" class="form-input-style" style="font-size:11px;width:90px;" step="0.01" value="${i.valor_unitario || ''}" placeholder="Valor ref.">
+                  <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;" onclick="criarMaterialEVincular('${escapeHTML(i.id)}')">💾 Criar e Vincular</button>
+                </div>
+                <p id="msg-novo-mat-${i.id}" class="msg-form" style="margin:4px 0 0;"></p>
+              </div>
+            </td>
           </tr>`).join('');
+
+      // Popula o select de família em cada mini-formulário recém-criado.
+      if (window._tiposMaterialParaClassificarCache) {
+        _itensPendentesCache.forEach(i => {
+          const sel = document.getElementById('novo-mat-tipo-' + i.id);
+          if (sel) sel.innerHTML = '<option value="">-- família --</option>' + window._tiposMaterialParaClassificarCache.map(t => `<option value="${escapeHTML(t.id)}">${escapeHTML(t.nome)}</option>`).join('');
+        });
+      }
 
       const tbodyForn = document.getElementById('tbody-fconf-fornecedores');
       tbodyForn.innerHTML = (!fornecedoresPendentes.data || !fornecedoresPendentes.data.length)

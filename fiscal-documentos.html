@@ -453,6 +453,7 @@
         <td>${escapeHTML(d.fornecedores?.razao_social || 'Pendente de vínculo')}</td>
         <td><span class="tag-badge ${statusBadge[d.status] || ''}">${escapeHTML(d.status || '—')}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarEspelhoDocumento('${escapeHTML(d.id)}')">👁️ Ver Itens</button>
           ${
             d.gerou_conta_pagar
               ? '<span style="font-size:11px;color:#059669;">✓ Conta a pagar gerada</span>'
@@ -469,7 +470,38 @@
           }
           <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirDocumentoFiscal('${escapeHTML(d.id)}','${escapeHTML(d.tipo_documento)} ${escapeHTML(d.numero || d.chave_acesso || '')}')">✕ Excluir</button>
         </td>
+      </tr>
+      <tr id="espelho-doc-${d.id}" style="display:none;">
+        <td colspan="9" style="background:#f8fafc;">
+          <div id="espelho-conteudo-${d.id}" class="td-loading">Carregando itens...</div>
+        </td>
       </tr>`).join('');
+    }
+
+    async function alternarEspelhoDocumento(documentoId) {
+      const linha = document.getElementById('espelho-doc-' + documentoId);
+      if (!linha) return;
+      const mostrando = linha.style.display !== 'none';
+      linha.style.display = mostrando ? 'none' : 'table-row';
+      if (mostrando) return;
+
+      const conteudo = document.getElementById('espelho-conteudo-' + documentoId);
+      const { data: itens, error } = await db.from('fiscal_documento_itens').select('*, materiais(nome,codigo)').eq('documento_id', documentoId).order('numero_item');
+      if (error) { conteudo.innerHTML = 'Erro ao carregar itens: ' + escapeHTML(error.message); return; }
+      if (!itens || !itens.length) { conteudo.innerHTML = 'Este documento não tem itens registrados (pode ser um resumo, ainda sem manifestação — ou não trouxe itens).'; return; }
+
+      const STATUS_CLASS_LABEL = { pendente: '⏳ Pendente', vinculado: '✓ Vinculado', ignorado: 'Ignorado' };
+      conteudo.innerHTML = `<table style="width:100%;font-size:12px;">
+        <thead><tr><th style="text-align:left;">Item</th><th style="text-align:left;">NCM</th><th>Qtd.</th><th>Vlr. Unit.</th><th>Vlr. Total</th><th>Material</th></tr></thead>
+        <tbody>${itens.map(i => `<tr>
+          <td>${escapeHTML(i.descricao_original || '—')}</td>
+          <td style="font-family:monospace;">${escapeHTML(i.ncm || '—')}</td>
+          <td style="text-align:center;">${Number(i.quantidade || 0)}</td>
+          <td style="text-align:right;">R$ ${Number(i.valor_unitario || 0).toFixed(2).replace('.', ',')}</td>
+          <td style="text-align:right;">R$ ${Number(i.valor_total || 0).toFixed(2).replace('.', ',')}</td>
+          <td>${i.materiais ? `${escapeHTML(i.materiais.codigo)} — ${escapeHTML(i.materiais.nome)}` : `<span style="color:#d97706;">${STATUS_CLASS_LABEL[i.status_classificacao] || '⏳ Pendente'}</span>`}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
     }
 
     async function manifestarDocumentoFiscal(documentoId) {
