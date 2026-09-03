@@ -107,8 +107,8 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Nº</th><th>Obra</th><th>Modelo</th><th>Data</th><th>Status</th><th>Fotos</th></tr></thead>
-                <tbody id="tbody-historico-fvs"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+                <thead><tr><th>Nº</th><th>Obra</th><th>Modelo</th><th>Data</th><th>Status</th><th>Fotos</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-historico-fvs"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -350,13 +350,22 @@
       if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
     }
 
+    async function excluirFvs(id, numero) {
+      if (!confirm(`Excluir a FVS Nº ${numero}? Os itens preenchidos e as fotos também são removidos.`)) return;
+      const { error } = await db.from('fvs_preenchidas').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      toast('FVS excluída.', 'sucesso');
+      await carregarHistoricoFvs();
+      await carregarNaoConformidades();
+    }
+
     async function carregarHistoricoFvs() {
       const tbody = document.getElementById('tbody-historico-fvs'); if (!tbody) return;
       const { data, error } = await db.from('fvs_preenchidas').select('*, obras(nome), fvs_modelos(nome)').order('created_at', { ascending: false }).limit(100);
-      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
       _historicoFvsCache = data || [];
 
-      if (!_historicoFvsCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma FVS registrada ainda.</td></tr>'; return; }
+      if (!_historicoFvsCache.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma FVS registrada ainda.</td></tr>'; return; }
       tbody.innerHTML = _historicoFvsCache.map(f => {
         const fotos = lerFotos(f);
         return `<tr>
@@ -366,9 +375,10 @@
         <td>${fmtDate(f.data_inspecao)}</td>
         <td><span class="tag-badge ${STATUS_FVS_COR[f.status] || ''}">${STATUS_FVS_LABEL[f.status] || escapeHTML(f.status)}</span></td>
         <td><button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarFotosFvs('${escapeHTML(f.id)}')">📷 (${fotos.length})</button></td>
+        <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirFvs('${escapeHTML(f.id)}', ${f.numero})">✕</button></td>
       </tr>
       <tr id="fotos-fvs-${f.id}" style="display:none;">
-        <td colspan="6" style="background:#f8fafc;">
+        <td colspan="7" style="background:#f8fafc;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             ${fotos.length ? fotos.map(ft => `<a href="${escapeHTML(ft.url)}" target="_blank" rel="noopener"><img src="${escapeHTML(ft.url)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;"></a>`).join('') : '<span style="font-size:12px;color:#a0aec0;">Nenhuma foto.</span>'}
           </div>

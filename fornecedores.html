@@ -639,11 +639,23 @@ async function carregarAvaliacoesFicha(fornecedorId) {
 
   const { data: lista } = await db.from('avaliacoes_fornecedor').select('*').eq('fornecedor_id', fornecedorId).order('created_at', { ascending: false });
   document.getElementById('ficha-lista-avaliacoes').innerHTML = (lista || []).map(a => `
-    <div style="padding:8px 0;border-bottom:1px solid #edf2f7;font-size:12px;">
-      <strong>${new Date(a.created_at).toLocaleDateString('pt-BR')}</strong> — Q:${a.qualidade} P:${a.preco} Prz:${a.prazo} At:${a.atendimento} Cnf:${a.conformidade} PV:${a.pos_venda}
-      ${a.avaliado_por_nome ? ' · por ' + escapeHTML(a.avaliado_por_nome) : ''}
-      ${a.observacoes ? `<p style="color:#718096;margin-top:2px;">${escapeHTML(a.observacoes)}</p>` : ''}
+    <div style="padding:8px 0;border-bottom:1px solid #edf2f7;font-size:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div>
+        <strong>${new Date(a.created_at).toLocaleDateString('pt-BR')}</strong> — Q:${a.qualidade} P:${a.preco} Prz:${a.prazo} At:${a.atendimento} Cnf:${a.conformidade} PV:${a.pos_venda}
+        ${a.avaliado_por_nome ? ' · por ' + escapeHTML(a.avaliado_por_nome) : ''}
+        ${a.observacoes ? `<p style="color:#718096;margin-top:2px;">${escapeHTML(a.observacoes)}</p>` : ''}
+      </div>
+      <button type="button" class="btn-excluir" style="padding:2px 6px;font-size:10px;flex-shrink:0;" onclick="excluirAvaliacaoFicha('${escapeHTML(a.id)}', '${escapeHTML(fornecedorId)}')">✕</button>
     </div>`).join('') || '<p style="font-size:12px;color:#a0aec0;">Nenhuma avaliação registrada ainda.</p>';
+}
+
+async function excluirAvaliacaoFicha(id, fornecedorId) {
+  if (!confirm('Excluir esta avaliação?')) return;
+  const { error } = await db.from('avaliacoes_fornecedor').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  toast('Avaliação excluída.', 'sucesso');
+  await carregarAvaliacoesFicha(fornecedorId);
+  carregarScoreFicha(fornecedorId);
 }
 
 async function salvarAvaliacaoFicha() {

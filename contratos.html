@@ -110,8 +110,8 @@
 
             <div class="table-wrap" style="margin-top:16px;">
               <table>
-                <thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Valor</th><th>Descrição</th><th>Doc</th></tr></thead>
-                <tbody id="tbody-aditivos"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+                <thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Valor</th><th>Descrição</th><th>Doc</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-aditivos"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -307,20 +307,37 @@
       await carregarContratos();
     }
 
+    async function excluirAditivo(id, valorAlteracao) {
+      if (!confirm('Excluir este aditivo? O valor dele será subtraído de volta do valor atual do contrato. Se for um aditivo de prazo, a data de vigência não volta sozinha — ajuste manualmente se precisar.')) return;
+      const { data: contrato } = await db.from('contratos').select('valor_total_atual').eq('id', _contratoAditivosAtualId).maybeSingle();
+      const { error } = await db.from('contrato_aditivos').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      if (contrato) {
+        await db.from('contratos').update({ valor_total_atual: Number(contrato.valor_total_atual || 0) - Number(valorAlteracao || 0) }).eq('id', _contratoAditivosAtualId);
+      }
+      toast('Aditivo excluído.', 'sucesso');
+      await carregarAditivos();
+      await carregarContratos();
+    }
+
     async function carregarAditivos() {
       const tbody = document.getElementById('tbody-aditivos'); if (!tbody || !_contratoAditivosAtualId) return;
       const { data, error } = await db.from('contrato_aditivos').select('*').eq('contrato_id', _contratoAditivosAtualId).order('numero_aditivo');
-      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
-      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum aditivo registrado ainda.</td></tr>'; return; }
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro ao carregar: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhum aditivo registrado ainda.</td></tr>'; return; }
 
-      tbody.innerHTML = data.map(a => `<tr>
+      tbody.innerHTML = data.map(a => {
+        const valorAlteracao = Number(a.valor_alteracao) || 0;
+        return `<tr>
         <td>${a.numero_aditivo}</td>
         <td><span class="tag-badge">${TIPO_ADITIVO_LABEL[a.tipo] || escapeHTML(a.tipo)}</span></td>
         <td>${fmtDate(a.data)}</td>
-        <td style="${Number(a.valor_alteracao) < 0 ? 'color:#dc2626;' : Number(a.valor_alteracao) > 0 ? 'color:#059669;' : ''}">${Number(a.valor_alteracao) !== 0 ? 'R$ ' + Number(a.valor_alteracao).toFixed(2).replace('.', ',') : '—'}</td>
+        <td style="${valorAlteracao < 0 ? 'color:#dc2626;' : valorAlteracao > 0 ? 'color:#059669;' : ''}">${valorAlteracao !== 0 ? 'R$ ' + valorAlteracao.toFixed(2).replace('.', ',') : '—'}</td>
         <td>${escapeHTML(a.descricao || '—')}</td>
         <td>${a.arquivo_url ? `<a href="${escapeHTML(a.arquivo_url)}" target="_blank" rel="noopener">📄 Ver</a>` : '—'}</td>
-      </tr>`).join('');
+        <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirAditivo('${escapeHTML(a.id)}', ${valorAlteracao})">✕</button></td>
+      </tr>`;
+      }).join('');
     }
 
     document.getElementById('btn-salvar-contrato').addEventListener('click', salvarContrato);

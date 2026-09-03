@@ -68,6 +68,7 @@
             </div>
             <div class="btn-row" style="margin-top:12px;">
               <button type="button" id="btn-salvar-meta" class="btn-primary">💾 Salvar Meta deste Mês</button>
+              <button type="button" id="btn-excluir-meta" class="btn-excluir" style="display:none;" onclick="excluirMeta()">✕ Excluir Meta deste Mês</button>
             </div>
             <p id="msg-meta" class="msg-form"></p>
           </div>
@@ -158,6 +159,7 @@
       _metaAtual = meta;
       document.getElementById('pe-meta-receita').value = meta?.receita_meta || '';
       document.getElementById('pe-meta-lucro').value = meta?.lucro_liquido_meta || '';
+      document.getElementById('btn-excluir-meta').style.display = meta ? 'inline-block' : 'none';
 
       renderizarKpis(atual, passado, trimestrePassado, caixaAtual, burnRate, runwayMeses, meta);
       renderizarResumo(atual, passado, meta, runwayMeses);
@@ -225,6 +227,16 @@
         : await db.from('metas_financeiras').insert([payload]);
       if (error) { msgForm('msg-meta', 'Erro ao salvar: ' + error.message, 'red'); return; }
       msgForm('msg-meta', '✓ Meta salva!', 'green');
+      await carregarPainelExecutivo();
+    }
+
+    async function excluirMeta() {
+      if (!_metaAtual) return;
+      if (!confirm('Excluir a meta deste mês?')) return;
+      const { error } = await db.from('metas_financeiras').delete().eq('id', _metaAtual.id);
+      if (error) { msgForm('msg-meta', 'Erro ao excluir: ' + error.message, 'red'); return; }
+      document.getElementById('pe-meta-receita').value = '';
+      document.getElementById('pe-meta-lucro').value = '';
       await carregarPainelExecutivo();
     }
 

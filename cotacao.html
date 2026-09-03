@@ -293,6 +293,7 @@ function renderizarMapaCotacao() {
           ${!encerrada ? `<button type="button" class="btn-secondary" style="font-size:10px;padding:3px 6px;" onclick="salvarPrecosProposta('${escapeHTML(p.id)}')">💾 Salvar Preços</button>` : ''}
           ${!encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#b45309;" onclick="marcarPropostaVencedora('${escapeHTML(p.id)}')">🏆 Marcar Vencedora</button>` : ''}
           ${p.vencedora && encerrada ? `<button type="button" class="btn-primary" style="font-size:10px;padding:3px 6px;background:#1a56db;" onclick="gerarOCDaCotacao('${escapeHTML(p.id)}')">📦 Gerar Ordem de Compra</button>` : ''}
+          ${!encerrada ? `<button type="button" class="btn-excluir" style="font-size:10px;padding:3px 6px;" onclick="excluirPropostaCotacao('${escapeHTML(p.id)}')">✕ Excluir Proposta</button>` : ''}
         </div>
       </td>`).join('')}
   </tr>`;
@@ -381,6 +382,14 @@ async function salvarPrecosProposta(propostaId) {
   const total = recalcularTotalProposta(propostaId);
   await db.from('cotacoes_propostas').update({ valor_total: total }).eq('id', propostaId);
   toast('Preços salvos.', 'info');
+}
+
+async function excluirPropostaCotacao(propostaId) {
+  if (!confirm('Excluir esta proposta de fornecedor? Os preços lançados por ela também são removidos.')) return;
+  const { error } = await db.from('cotacoes_propostas').delete().eq('id', propostaId);
+  if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+  toast('Proposta excluída.', 'sucesso');
+  await abrirDetalheCotacao(_cotacaoAtual.id);
 }
 
 async function marcarPropostaVencedora(propostaId) {

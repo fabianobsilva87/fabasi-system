@@ -122,8 +122,8 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Almoxarifado</th><th>Quantidade</th><th>Origem</th></tr></thead>
-                <tbody id="tbody-movimentos"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+                <thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Almoxarifado</th><th>Quantidade</th><th>Origem</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-movimentos"><tr><td colspan="7" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -295,13 +295,22 @@
       </tr>`).join('');
     }
 
+    async function excluirMovimentoEstoque(id) {
+      if (!confirm('Excluir esta movimentação? O saldo é recalculado automaticamente (é uma soma em tempo real, não precisa "desfazer" nada além disso).')) return;
+      const { error } = await db.from('estoque_movimentos').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      toast('Movimentação excluída.', 'sucesso');
+      await carregarSaldoAtual();
+      await carregarHistoricoMovimentos();
+    }
+
     async function carregarHistoricoMovimentos() {
       const tbody = document.getElementById('tbody-movimentos');
-      tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Carregando...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Carregando...</td></tr>';
       const { data, error } = await db.from('estoque_movimentos').select('*, materiais(nome,unidade), almoxarifados(nome)').order('data_movimento', { ascending: false }).order('created_at', { ascending: false }).limit(200);
-      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (error) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
 
-      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma movimentação registrada ainda.</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="7" class="td-loading">Nenhuma movimentação registrada ainda.</td></tr>'; return; }
       tbody.innerHTML = data.map(m => `<tr>
         <td>${fmtDate(m.data_movimento)}</td>
         <td><span class="tag-badge ${TIPO_MOV_COR[m.tipo] || ''}">${TIPO_MOV_LABEL[m.tipo] || escapeHTML(m.tipo)}</span></td>
@@ -309,6 +318,7 @@
         <td>${escapeHTML(m.almoxarifados?.nome || '—')}</td>
         <td>${Number(m.quantidade)} ${escapeHTML(m.materiais?.unidade || '')}</td>
         <td style="font-size:11px;color:#718096;">${ORIGEM_MOV_LABEL[m.origem] || escapeHTML(m.origem)}</td>
+        <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMovimentoEstoque('${escapeHTML(m.id)}')">✕</button></td>
       </tr>`).join('');
     }
 

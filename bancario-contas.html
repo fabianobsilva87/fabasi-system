@@ -91,6 +91,23 @@
             <div id="cb-extrato-resultado" style="margin-top:14px;font-size:13px;"></div>
           </div>
 
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0;">Movimentos Importados (últimos 100)</h3>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="cb-filtro-conta-movimentos" class="form-input-style" style="width:auto;font-size:12px;" onchange="carregarMovimentosImportados()"><option value="">Todas as contas</option></select>
+                <button type="button" class="btn-refresh" onclick="carregarMovimentosImportados()">↺ Atualizar</button>
+              </div>
+            </div>
+            <p style="font-size:11px;color:#a0aec0;margin-bottom:10px;">Se um extrato foi importado errado (arquivo duplicado, conta errada), exclua os movimentos aqui e reimporte.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Valor</th><th>Conciliação</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-movimentos-importados"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
     </main>
@@ -293,6 +310,51 @@
       document.getElementById('cb-extrato-arquivo').value = '';
     }
 
+    async function excluirMovimentoBancario(id) {
+      const mov = _movimentosImportadosCache?.find(m => m.id === id);
+      let aviso = 'Excluir este movimento bancário?';
+      if (mov?.status_conciliacao === 'conciliado') {
+        aviso += '\n\n⚠️ Esse movimento já está conciliado com uma parcela — ao excluir, a parcela volta a aparecer como pendente de conciliação de novo.';
+      }
+      if (!confirm(aviso)) return;
+      const { error } = await db.from('bancario_movimentos').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      toast('Movimento excluído.', 'sucesso');
+      await carregarMovimentosImportados();
+    }
+
+    async function carregarSelectFiltroMovimentos() {
+      document.getElementById('cb-filtro-conta-movimentos').innerHTML = '<option value="">Todas as contas</option>' +
+        _contasBancariasCache.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.banco)}</option>`).join('');
+    }
+
+    let _movimentosImportadosCache = [];
+    async function carregarMovimentosImportados() {
+      const tbody = document.getElementById('tbody-movimentos-importados');
+      tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Carregando...</td></tr>';
+
+      const filtroConta = document.getElementById('cb-filtro-conta-movimentos').value;
+      let query = db.from('bancario_movimentos').select('*, contas_bancarias(banco)').order('data_movimento', { ascending: false }).order('created_at', { ascending: false }).limit(100);
+      if (filtroConta) query = query.eq('conta_bancaria_id', filtroConta);
+
+      const { data, error } = await query;
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      _movimentosImportadosCache = data || [];
+
+      if (!_movimentosImportadosCache.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhum movimento importado ainda.</td></tr>'; return; }
+
+      const STATUS_CONC_LABEL = { pendente: 'Pendente', conciliado: '✓ Conciliado', ignorado: 'Ignorado' };
+      const STATUS_CONC_COR = { pendente: 'warning', conciliado: 'success', ignorado: '' };
+      tbody.innerHTML = _movimentosImportadosCache.map(m => `<tr>
+        <td>${fmtDate(m.data_movimento)}</td>
+        <td>${escapeHTML(m.contas_bancarias?.banco || '—')}</td>
+        <td style="font-size:12px;">${escapeHTML(m.descricao || '—')}</td>
+        <td style="${Number(m.valor) < 0 ? 'color:#dc2626;' : 'color:#059669;'}">R$ ${Number(m.valor).toFixed(2).replace('.', ',')}</td>
+        <td><span class="tag-badge ${STATUS_CONC_COR[m.status_conciliacao] || ''}">${STATUS_CONC_LABEL[m.status_conciliacao] || escapeHTML(m.status_conciliacao)}</span></td>
+        <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMovimentoBancario('${escapeHTML(m.id)}')">✕</button></td>
+      </tr>`).join('');
+    }
+
     document.getElementById('btn-salvar-cb').addEventListener('click', salvarContaBancaria);
     document.getElementById('btn-importar-extrato').addEventListener('click', processarExtrato);
 
@@ -300,6 +362,8 @@
       await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
       await carregarContasBancarias();
       await carregarSelectContaExtrato();
+      await carregarSelectFiltroMovimentos();
+      await carregarMovimentosImportados();
     });
   </script>
 </body>

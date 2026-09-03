@@ -99,6 +99,7 @@
             </div>
             <div class="btn-row" style="margin-top:10px;">
               <button type="button" id="btn-gerar-folha" class="btn-primary">⚙️ Gerar/Recalcular Folha deste Mês</button>
+              <button type="button" id="btn-excluir-folha" class="btn-excluir" onclick="excluirFolhaDoMes()">✕ Excluir Folha deste Mês</button>
             </div>
             <p id="msg-folha" class="msg-form"></p>
           </div>
@@ -315,6 +316,45 @@
     }
 
     document.getElementById('btn-salvar-parametros-folha').addEventListener('click', salvarParametrosFolha);
+    async function excluirFolhaDoMes() {
+      if (!_folhaAtual) return;
+
+      // Regra: pode excluir enquanto não gerou algo financeiro já pago de
+      // verdade. Se algum holerite já foi marcado como pago (gerou Conta
+      // a Pagar), precisa desfazer esse vínculo primeiro.
+      const { data: holeritesPagos } = await db.from('folha_colaboradores').select('id, colaboradores(nome), origem_conta_pagar_id').eq('folha_id', _folhaAtual.id).eq('status_pagamento', 'pago');
+
+      let aviso = `Excluir a folha de ${_folhaAtual.mes_referencia.slice(0,7)}? Todos os holerites deste mês serão removidos.`;
+      if (holeritesPagos && holeritesPagos.length) {
+        aviso += `\n\n⚠️ ${holeritesPagos.length} holerite(s) já foram marcados como pagos (${holeritesPagos.map(h => h.colaboradores?.nome).join(', ')}) — as Contas a Pagar geradas por eles também serão excluídas, DESDE que ainda não tenham parcela recebida/paga de verdade no Financeiro.`;
+      }
+      if (!confirm(aviso)) return;
+
+      // Verifica se alguma dessas Contas a Pagar já tem parcela paga de
+      // verdade — se tiver, bloqueia tudo (dinheiro já saiu, não dá pra
+      // desfazer sem deixar rastro perdido).
+      if (holeritesPagos && holeritesPagos.length) {
+        for (const h of holeritesPagos) {
+          if (!h.origem_conta_pagar_id) continue;
+          const { data: parcelasPagas } = await db.from('contas_pagar_parcelas').select('id').eq('conta_pagar_id', h.origem_conta_pagar_id).eq('status', 'paga');
+          if (parcelasPagas && parcelasPagas.length) {
+            alert(`Não é possível excluir — a Conta a Pagar do holerite de ${h.colaboradores?.nome} já tem parcela paga de verdade no Financeiro.`);
+            return;
+          }
+        }
+        for (const h of holeritesPagos) {
+          if (!h.origem_conta_pagar_id) continue;
+          await db.from('contas_pagar_parcelas').delete().eq('conta_pagar_id', h.origem_conta_pagar_id);
+          await db.from('contas_pagar').delete().eq('id', h.origem_conta_pagar_id);
+        }
+      }
+
+      const { error } = await db.from('folhas_pagamento').delete().eq('id', _folhaAtual.id);
+      if (error) { msgForm('msg-folha', 'Erro ao excluir: ' + error.message, 'red'); return; }
+      toast('Folha excluída.', 'sucesso');
+      await carregarOuCriarFolha();
+    }
+
     document.getElementById('btn-gerar-folha').addEventListener('click', gerarOuRecalcularFolha);
 
     window.addEventListener('DOMContentLoaded', async () => {

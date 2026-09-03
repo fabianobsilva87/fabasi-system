@@ -180,8 +180,8 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Equipamento</th><th>Tipo</th><th>Data</th><th>Custo</th><th>Próx. Revisão</th></tr></thead>
-                <tbody id="tbody-manutencoes"><tr><td colspan="5" class="td-loading">Carregando...</td></tr></tbody>
+                <thead><tr><th>Equipamento</th><th>Tipo</th><th>Data</th><th>Custo</th><th>Próx. Revisão</th><th>Ações</th></tr></thead>
+                <tbody id="tbody-manutencoes"><tr><td colspan="6" class="td-loading">Carregando...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -399,17 +399,25 @@
       await carregarHistoricoManutencoes();
     }
 
+    async function excluirManutencao(id) {
+      if (!confirm('Excluir este registro de manutenção?')) return;
+      const { error } = await db.from('equipamento_manutencoes').delete().eq('id', id);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
+      await carregarHistoricoManutencoes();
+    }
+
     async function carregarHistoricoManutencoes() {
       const tbody = document.getElementById('tbody-manutencoes');
       const { data, error } = await db.from('equipamento_manutencoes').select('*, equipamentos_proprios(nome)').order('data', { ascending: false }).limit(100);
-      if (error) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
-      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="5" class="td-loading">Nenhuma manutenção registrada ainda.</td></tr>'; return; }
+      if (error) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Erro: ' + escapeHTML(error.message) + '</td></tr>'; return; }
+      if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="6" class="td-loading">Nenhuma manutenção registrada ainda.</td></tr>'; return; }
       tbody.innerHTML = data.map(m => `<tr>
         <td>${escapeHTML(m.equipamentos_proprios?.nome || '—')}</td>
         <td><span class="tag-badge ${m.tipo === 'corretiva' ? 'danger' : ''}">${m.tipo === 'corretiva' ? 'Corretiva' : 'Preventiva'}</span></td>
         <td>${fmtDate(m.data)}</td>
         <td>R$ ${Number(m.custo || 0).toFixed(2).replace('.', ',')}</td>
         <td>${m.proxima_revisao ? fmtDate(m.proxima_revisao) : '—'}</td>
+        <td><button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirManutencao('${escapeHTML(m.id)}')">✕</button></td>
       </tr>`).join('');
     }
 
