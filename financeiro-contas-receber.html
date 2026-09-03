@@ -274,7 +274,21 @@
     }
 
     async function excluirContaReceber(id, descricao) {
-      if (!confirm(`Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.`)) return;
+      // Se essa conta foi gerada a partir de uma Medição de Obra, precisa
+      // desfazer esse vínculo primeiro (sem isso, o banco bloqueia a
+      // exclusão) — a medição volta pro status "aprovada" (não perde os
+      // dados de avanço físico, só deixa de estar "faturada").
+      const { data: medicoesVinculadas } = await db.from('medicoes_obra').select('id, numero_medicao').eq('origem_conta_receber_id', id);
+      let avisoVinculo = '';
+      if (medicoesVinculadas && medicoesVinculadas.length) {
+        avisoVinculo = `\n\n⚠️ Essa conta foi gerada pela(s) Medição(ões) Nº ${medicoesVinculadas.map(m => m.numero_medicao).join(', ')} — elas voltam pro status "Aprovada" (não são excluídas, só deixam de estar faturadas).`;
+      }
+      if (!confirm(`Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.${avisoVinculo}`)) return;
+
+      if (medicoesVinculadas && medicoesVinculadas.length) {
+        await db.from('medicoes_obra').update({ status: 'aprovada', origem_conta_receber_id: null }).eq('origem_conta_receber_id', id);
+      }
+
       const { error } = await db.from('contas_receber').delete().eq('id', id);
       if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
       toast('Conta a receber excluída.', 'sucesso');

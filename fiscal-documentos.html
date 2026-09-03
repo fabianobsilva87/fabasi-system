@@ -577,7 +577,13 @@
     }
 
     async function excluirDocumentoFiscal(documentoId, identificacao) {
-      if (!confirm(`Excluir o documento "${identificacao}"? Isso remove só o registro local (itens, vínculos, eventos) — não desfaz nada na SEFAZ, nem afeta uma eventual Conta a Pagar já gerada a partir dele.`)) return;
+      if (!confirm(`Excluir o documento "${identificacao}"? Isso remove só o registro local (itens, vínculos, eventos) — não desfaz nada na SEFAZ. Se já gerou uma Conta a Pagar, ela continua existindo, só perde o vínculo com este documento.`)) return;
+
+      // Se já gerou Conta a Pagar, desfaz o vínculo primeiro (a conta em
+      // si continua existindo — é dinheiro real — só deixa de apontar pra
+      // este documento, que está sendo apagado).
+      await db.from('contas_pagar').update({ origem_fiscal_documento_id: null }).eq('origem_fiscal_documento_id', documentoId);
+
       const { error } = await db.from('fiscal_documentos').delete().eq('id', documentoId);
       if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
       toast('Documento excluído.', 'sucesso');

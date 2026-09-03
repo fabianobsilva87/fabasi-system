@@ -291,7 +291,19 @@
       let aviso = `Excluir "${descricao}"? Todas as parcelas dessa conta também serão removidas.`;
       if (c?.origem === 'ordem_compra') aviso += '\n\n⚠️ Essa conta veio de uma Ordem de Compra. Se as parcelas dessa OC forem editadas de novo depois, ela pode ser recriada automaticamente pelo espelho.';
       if (c?.origem === 'fiscal') aviso += '\n\n⚠️ Essa conta veio de um documento Fiscal. Ao excluir, o documento fica liberado para gerar uma nova Conta a Pagar novamente, se precisar.';
+
+      // Se essa conta é o pagamento (líquido) de um holerite da Folha de
+      // Pagamento, precisa desfazer esse vínculo primeiro (senão o banco
+      // bloqueia a exclusão) — o holerite volta pra "pendente" de pagamento.
+      const { data: holeritesVinculados } = await db.from('folha_colaboradores').select('id, colaboradores(nome)').eq('origem_conta_pagar_id', id);
+      if (holeritesVinculados && holeritesVinculados.length) {
+        aviso += `\n\n⚠️ Essa conta é o pagamento de holerite(s) de: ${holeritesVinculados.map(h => h.colaboradores?.nome || '—').join(', ')} — volta(m) pro status "Pendente" na Folha de Pagamento.`;
+      }
       if (!confirm(aviso)) return;
+
+      if (holeritesVinculados && holeritesVinculados.length) {
+        await db.from('folha_colaboradores').update({ status_pagamento: 'pendente', origem_conta_pagar_id: null, data_pagamento: null }).eq('origem_conta_pagar_id', id);
+      }
 
       const { error } = await db.from('contas_pagar').delete().eq('id', id);
       if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }

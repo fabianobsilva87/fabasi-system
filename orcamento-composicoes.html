@@ -57,6 +57,7 @@
             <div class="form-group"><label for="ins-unidade">Unidade *</label><input type="text" id="ins-unidade" placeholder="kg, m³, h, dia, un..."></div>
             <div class="form-group"><label for="ins-custo">Custo Unitário de Referência (R$) *</label><input type="number" id="ins-custo" step="0.0001"></div>
           </div>
+          <p id="ins-aviso-sincronizado" style="display:none;font-size:11px;color:#0891b2;margin-top:-8px;">🔄 Vinculado ao Cadastro de Materiais — o custo acompanha o valor de referência de lá automaticamente. Se o preço mudar no Cadastro de Materiais, atualiza aqui sozinho.</p>
           <div class="btn-row" style="margin-top:16px;">
             <button type="button" id="btn-salvar-insumo" class="btn-primary">💾 Registrar Insumo</button>
             <button type="button" id="btn-cancelar-insumo" class="btn-secondary" style="display:none;" onclick="resetarFormInsumo()">✕ Cancelar</button>
@@ -147,10 +148,20 @@
     function aoSelecionarMaterialInsumo() {
       const id = document.getElementById('ins-material').value;
       const m = (window._materiaisParaInsumoCache || []).find(x => x.id === id);
+      const campoCusto = document.getElementById('ins-custo');
+      const aviso = document.getElementById('ins-aviso-sincronizado');
       if (m) {
         document.getElementById('ins-descricao').value = m.nome;
         if (m.unidade) document.getElementById('ins-unidade').value = m.unidade;
-        if (m.valor_referencia) document.getElementById('ins-custo').value = m.valor_referencia;
+        campoCusto.value = m.valor_referencia || '';
+        // Trava edição manual — o custo passa a ser sempre o do Cadastro
+        // de Materiais (sincronizado via trigger no banco). Editar aqui
+        // não faria sentido, ficaria sobrescrito na próxima mudança lá.
+        campoCusto.disabled = true;
+        aviso.style.display = 'block';
+      } else {
+        campoCusto.disabled = false;
+        aviso.style.display = 'none';
       }
     }
 
@@ -184,6 +195,8 @@
       document.getElementById('ins-tipo').value = 'material';
       document.getElementById('ins-material').value = '';
       ['ins-descricao','ins-unidade','ins-custo'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('ins-custo').disabled = false;
+      document.getElementById('ins-aviso-sincronizado').style.display = 'none';
       aoTrocarTipoInsumo();
       document.getElementById('btn-salvar-insumo').textContent = '💾 Registrar Insumo';
       document.getElementById('btn-cancelar-insumo').style.display = 'none';
@@ -198,6 +211,13 @@
       document.getElementById('ins-unidade').value = i.unidade || '';
       document.getElementById('ins-custo').value = i.custo_unitario_referencia || '';
       aoTrocarTipoInsumo();
+      // Se está vinculado a um material, trava o custo de novo (mesma
+      // regra da criação) — evita editar manualmente um valor que o
+      // trigger vai sobrescrever de qualquer forma na próxima mudança.
+      const campoCusto = document.getElementById('ins-custo');
+      const aviso = document.getElementById('ins-aviso-sincronizado');
+      if (i.material_id) { campoCusto.disabled = true; aviso.style.display = 'block'; }
+      else { campoCusto.disabled = false; aviso.style.display = 'none'; }
       document.getElementById('btn-salvar-insumo').textContent = '💾 Salvar Alterações';
       document.getElementById('btn-cancelar-insumo').style.display = 'inline-block';
       window.scrollTo({ top: 0, behavior: 'smooth' });

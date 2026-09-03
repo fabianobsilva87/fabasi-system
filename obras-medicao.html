@@ -317,7 +317,21 @@
     }
 
     async function excluirMedicao(id, numero) {
-      if (!confirm(`Excluir a medição Nº ${numero} (rascunho)?`)) return;
+      // Se veio de "sincronizar OS" (origem='ordens_servico'), tem OS's
+      // vinculadas a ela — precisa desvincular primeiro (senão o banco
+      // bloqueia), voltando as OS's pro status "Concluída" pra poderem
+      // ser selecionadas de novo numa medição futura.
+      const { data: osVinculadas } = await db.from('ordens_servico_obra').select('id, numero_os').eq('medicao_id', id);
+      let aviso = `Excluir a medição Nº ${numero} (rascunho)?`;
+      if (osVinculadas && osVinculadas.length) {
+        aviso += `\n\n⚠️ Essa medição tem ${osVinculadas.length} OS(s) vinculada(s) (Nº ${osVinculadas.map(o => o.numero_os).join(', ')}) — elas voltam pro status "Concluída" e ficam disponíveis pra entrar numa nova medição.`;
+      }
+      if (!confirm(aviso)) return;
+
+      if (osVinculadas && osVinculadas.length) {
+        await db.from('ordens_servico_obra').update({ status: 'concluida', medicao_id: null }).eq('medicao_id', id);
+      }
+
       const { error } = await db.from('medicoes_obra').delete().eq('id', id);
       if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
       await carregarMedicoesDaObra();
