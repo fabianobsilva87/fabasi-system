@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Painel executivo — receita, margens, caixa, burn rate e runway, comparado com metas — Fabasi Engenharia & Construção.">
+    <meta name="theme-color" content="var(--brand-navy)">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" href="logo-fabasi.png" type="image/png">
+    <title>Fabasi — Painel Executivo</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    /* T2.3 — oculta o conteúdo até a sessão ser validada (ver style.css).
+       O timeout é rede de segurança: a tela nunca fica invisível para sempre. */
+    document.documentElement.classList.add('sessao-pendente');
+    setTimeout(function () {
+      document.documentElement.classList.remove('sessao-pendente');
+    }, 8000);
+  </script>
+  <style>
+    .kpi-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px; }
+    .kpi-titulo { font-size:11px; color:#718096; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+    .kpi-valor { font-size:22px; font-weight:700; color:#1a202c; }
+    .kpi-comparativos { display:flex; gap:10px; margin-top:8px; font-size:11px; flex-wrap:wrap; }
+    .kpi-comp-positivo { color:#059669; }
+    .kpi-comp-negativo { color:#dc2626; }
+    .kpi-comp-neutro { color:#a0aec0; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <img class="sidebar-logo-img" src="logo-fabasi.png" alt="Fabasi" style="height:28px;width:auto;display:block;margin-bottom:6px;filter:brightness(0) invert(1);"><p>Gestão de Manutenção</p>
+        <div class="user-logged-badge"><span class="user-icon-dot">●</span><span id="user-display-email">...</span></div>
+      </div>
+      <nav id="app-nav"></nav>
+      <div class="sidebar-footer"><button type="button" id="btn-logout" class="btn-sair">⬅ Sair</button></div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar no-print"><h2>📊 Painel Executivo</h2></div>
+      <div class="section-content">
+        <div class="app-sub-panel">
+
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;font-size:12px;color:#1e40af;margin-bottom:20px;line-height:1.5;">
+            ℹ️ Os números aqui são calculados 100% em cima do que já está lançado no sistema (Contas a Pagar/Receber, Bancário, Plano de Contas). O "Resumo" no final é gerado por <strong>regras automáticas</strong> comparando os números — não é uma análise de CFO gerada por IA (isso exigiria uma integração que ainda não existe no sistema).
+          </div>
+
+          <div class="card">
+            <div class="form-grid">
+              <div class="form-group"><label for="pe-mes">Mês de Referência</label><input type="month" id="pe-mes" onchange="carregarPainelExecutivo()"></div>
+            </div>
+          </div>
+
+          <div id="pe-kpis" class="dash-cards-grid" style="grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+            <div class="td-loading">Carregando...</div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">🎯 Metas do Mês</h3>
+            <div class="form-grid">
+              <div class="form-group"><label for="pe-meta-receita">Meta de Receita (R$)</label><input type="number" id="pe-meta-receita" step="0.01"></div>
+              <div class="form-group"><label for="pe-meta-lucro">Meta de Lucro Líquido (R$)</label><input type="number" id="pe-meta-lucro" step="0.01"></div>
+            </div>
+            <div class="btn-row" style="margin-top:12px;">
+              <button type="button" id="btn-salvar-meta" class="btn-primary">💾 Salvar Meta deste Mês</button>
+            </div>
+            <p id="msg-meta" class="msg-form"></p>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">📋 Resumo (gerado por regras automáticas)</h3>
+            <div id="pe-resumo"><p class="td-loading">Carregando...</p></div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    let _metaAtual = null;
+
+    function inicioFimMes(mesStr) {
+      const [ano, mes] = mesStr.split('-').map(Number);
+      const inicio = new Date(ano, mes - 1, 1);
+      const fim = new Date(ano, mes, 0);
+      return { inicio: inicio.toISOString().slice(0,10), fim: fim.toISOString().slice(0,10) };
+    }
+
+    function mesAnterior(mesStr, n) {
+      const [ano, mes] = mesStr.split('-').map(Number);
+      const d = new Date(ano, mes - 1 - n, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
+    }
+
+    async function calcularResultadoDoMes(mesStr) {
+      const { inicio, fim } = inicioFimMes(mesStr);
+
+      const [receitaRes, custoRes] = await Promise.all([
+        db.from('contas_receber_parcelas').select('valor_recebido, contas_receber(plano_conta_id, plano_contas(tipo))').eq('status', 'recebida').gte('data_recebimento', inicio).lte('data_recebimento', fim),
+        db.from('contas_pagar_parcelas').select('valor_pago, contas_pagar(plano_conta_id, plano_contas(tipo))').eq('status', 'paga').gte('data_pagamento', inicio).lte('data_pagamento', fim),
+      ]);
+
+      const receita = (receitaRes.data || []).reduce((acc, r) => acc + Number(r.valor_recebido || 0), 0);
+      const custoDireto = (custoRes.data || []).filter(p => p.contas_pagar?.plano_contas?.tipo === 'custo').reduce((acc, p) => acc + Number(p.valor_pago || 0), 0);
+      const despesaOperacional = (custoRes.data || []).filter(p => p.contas_pagar?.plano_contas?.tipo === 'despesa').reduce((acc, p) => acc + Number(p.valor_pago || 0), 0);
+      const totalPago = (custoRes.data || []).reduce((acc, p) => acc + Number(p.valor_pago || 0), 0);
+
+      const lucroBruto = receita - custoDireto;
+      const margemBruta = receita > 0 ? (lucroBruto / receita) * 100 : 0;
+      const lucroLiquido = lucroBruto - despesaOperacional;
+      const margemLiquida = receita > 0 ? (lucroLiquido / receita) * 100 : 0;
+      const fluxoLiquidoCaixa = receita - totalPago;
+
+      return { receita, custoDireto, despesaOperacional, lucroBruto, margemBruta, lucroLiquido, margemLiquida, fluxoLiquidoCaixa };
+    }
+
+    function formatarMoeda(v) { return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ','); }
+
+    function badgeComparativo(atual, anterior, label) {
+      if (anterior === 0 && atual === 0) return `<span class="kpi-comp-neutro">${label}: —</span>`;
+      if (anterior === 0) return `<span class="kpi-comp-positivo">${label}: novo</span>`;
+      const variacao = ((atual - anterior) / Math.abs(anterior)) * 100;
+      const cor = variacao >= 0 ? 'kpi-comp-positivo' : 'kpi-comp-negativo';
+      const seta = variacao >= 0 ? '▲' : '▼';
+      return `<span class="${cor}">${label}: ${seta} ${Math.abs(variacao).toFixed(1)}%</span>`;
+    }
+
+    async function carregarPainelExecutivo() {
+      const mesStr = document.getElementById('pe-mes').value;
+      if (!mesStr) return;
+
+      const mesPassadoStr = mesAnterior(mesStr, 1);
+      const trimestreStr = mesAnterior(mesStr, 3);
+
+      const [atual, passado, trimestrePassado] = await Promise.all([
+        calcularResultadoDoMes(mesStr),
+        calcularResultadoDoMes(mesPassadoStr),
+        calcularResultadoDoMes(trimestreStr),
+      ]);
+
+      const { data: contas } = await db.from('contas_bancarias').select('saldo_atual').eq('ativo', true);
+      const caixaAtual = (contas || []).reduce((acc, c) => acc + Number(c.saldo_atual || 0), 0);
+
+      const mesesParaMedia = [mesStr, mesAnterior(mesStr, 1), mesAnterior(mesStr, 2)];
+      const resultadosParaMedia = await Promise.all(mesesParaMedia.map(m => calcularResultadoDoMes(m)));
+      const mediaFluxoCaixa = resultadosParaMedia.reduce((acc, r) => acc + r.fluxoLiquidoCaixa, 0) / resultadosParaMedia.length;
+      const burnRate = mediaFluxoCaixa < 0 ? Math.abs(mediaFluxoCaixa) : 0;
+      const runwayMeses = burnRate > 0 ? (caixaAtual / burnRate) : null;
+
+      const { data: meta } = await db.from('metas_financeiras').select('*').eq('mes_referencia', mesStr + '-01').maybeSingle();
+      _metaAtual = meta;
+      document.getElementById('pe-meta-receita').value = meta?.receita_meta || '';
+      document.getElementById('pe-meta-lucro').value = meta?.lucro_liquido_meta || '';
+
+      renderizarKpis(atual, passado, trimestrePassado, caixaAtual, burnRate, runwayMeses, meta);
+      renderizarResumo(atual, passado, meta, runwayMeses);
+    }
+
+    function renderizarKpis(atual, passado, trimestre, caixaAtual, burnRate, runwayMeses, meta) {
+      const wrap = document.getElementById('pe-kpis');
+      const cards = [
+        { titulo: 'Receita', valor: formatarMoeda(atual.receita), comp: [badgeComparativo(atual.receita, passado.receita, 'vs mês passado'), badgeComparativo(atual.receita, trimestre.receita, 'vs trimestre'), meta?.receita_meta ? badgeComparativo(atual.receita, meta.receita_meta, 'vs meta') : ''] },
+        { titulo: 'Crescimento (Receita)', valor: (passado.receita > 0 ? (((atual.receita - passado.receita) / passado.receita) * 100).toFixed(1) : '—') + '%', comp: [] },
+        { titulo: 'Lucro Bruto', valor: formatarMoeda(atual.lucroBruto), comp: [badgeComparativo(atual.lucroBruto, passado.lucroBruto, 'vs mês passado')] },
+        { titulo: 'Margem Bruta', valor: atual.margemBruta.toFixed(1) + '%', comp: [badgeComparativo(atual.margemBruta, passado.margemBruta, 'vs mês passado')] },
+        { titulo: 'Despesas Operacionais', valor: formatarMoeda(atual.despesaOperacional), comp: [badgeComparativo(passado.despesaOperacional, atual.despesaOperacional, 'vs mês passado (menor é melhor)')] },
+        { titulo: 'Lucro Líquido', valor: formatarMoeda(atual.lucroLiquido), comp: [badgeComparativo(atual.lucroLiquido, passado.lucroLiquido, 'vs mês passado'), meta?.lucro_liquido_meta ? badgeComparativo(atual.lucroLiquido, meta.lucro_liquido_meta, 'vs meta') : ''] },
+        { titulo: 'Margem Líquida', valor: atual.margemLiquida.toFixed(1) + '%', comp: [badgeComparativo(atual.margemLiquida, passado.margemLiquida, 'vs mês passado')] },
+        { titulo: 'Caixa Atual (contas bancárias)', valor: formatarMoeda(caixaAtual), comp: [] },
+        { titulo: 'Burn Rate (média 3 meses)', valor: burnRate > 0 ? formatarMoeda(burnRate) + '/mês' : 'Gerando caixa ✓', comp: [] },
+        { titulo: 'Runway', valor: runwayMeses !== null ? runwayMeses.toFixed(1) + ' meses' : '∞ (sem queima de caixa)', comp: [] },
+      ];
+
+      wrap.innerHTML = cards.map(c => `<div class="kpi-card">
+        <div class="kpi-titulo">${c.titulo}</div>
+        <div class="kpi-valor">${c.valor}</div>
+        <div class="kpi-comparativos">${c.comp.filter(Boolean).join(' &nbsp;·&nbsp; ')}</div>
+      </div>`).join('');
+    }
+
+    function renderizarResumo(atual, passado, meta, runwayMeses) {
+      const melhorou = [], piorou = [], atencao = [];
+
+      if (passado.receita > 0 && atual.receita > passado.receita) melhorou.push(`Receita cresceu ${(((atual.receita - passado.receita) / passado.receita) * 100).toFixed(1)}% vs o mês passado.`);
+      if (passado.margemLiquida && atual.margemLiquida > passado.margemLiquida) melhorou.push(`Margem líquida melhorou de ${passado.margemLiquida.toFixed(1)}% para ${atual.margemLiquida.toFixed(1)}%.`);
+      if (atual.fluxoLiquidoCaixa > 0) melhorou.push(`O caixa gerado no mês foi positivo (${formatarMoeda(atual.fluxoLiquidoCaixa)}).`);
+
+      if (passado.receita > 0 && atual.receita < passado.receita) piorou.push(`Receita caiu ${(((passado.receita - atual.receita) / passado.receita) * 100).toFixed(1)}% vs o mês passado.`);
+      if (passado.margemLiquida && atual.margemLiquida < passado.margemLiquida) piorou.push(`Margem líquida caiu de ${passado.margemLiquida.toFixed(1)}% para ${atual.margemLiquida.toFixed(1)}%.`);
+      if (atual.despesaOperacional > passado.despesaOperacional && passado.despesaOperacional > 0) piorou.push(`Despesas operacionais subiram ${(((atual.despesaOperacional - passado.despesaOperacional) / passado.despesaOperacional) * 100).toFixed(1)}%.`);
+
+      if (runwayMeses !== null && runwayMeses < 6) atencao.push(`Runway em ${runwayMeses.toFixed(1)} meses — abaixo de 6 meses, vale atenção ao ritmo de queima de caixa.`);
+      if (meta?.receita_meta && atual.receita < meta.receita_meta) atencao.push(`Receita ficou ${formatarMoeda(meta.receita_meta - atual.receita)} abaixo da meta do mês.`);
+      if (meta?.lucro_liquido_meta && atual.lucroLiquido < meta.lucro_liquido_meta) atencao.push(`Lucro líquido ficou ${formatarMoeda(meta.lucro_liquido_meta - atual.lucroLiquido)} abaixo da meta do mês.`);
+      if (atual.lucroLiquido < 0) atencao.push(`O mês fechou com prejuízo líquido (${formatarMoeda(atual.lucroLiquido)}).`);
+
+      const secao = (titulo, cor, itens) => itens.length
+        ? `<div style="margin-bottom:14px;"><strong style="color:${cor};">${titulo}</strong><ul style="margin:6px 0 0;padding-left:20px;font-size:13px;">${itens.map(i => `<li>${escapeHTML(i)}</li>`).join('')}</ul></div>`
+        : '';
+
+      document.getElementById('pe-resumo').innerHTML =
+        secao('✅ O que melhorou', '#059669', melhorou) +
+        secao('⚠️ O que piorou', '#dc2626', piorou) +
+        secao('👀 O que exige atenção', '#d97706', atencao) +
+        (!melhorou.length && !piorou.length && !atencao.length ? '<p class="td-loading">Sem dados suficientes ainda pra gerar comparações neste mês.</p>' : '');
+    }
+
+    async function salvarMeta() {
+      const mesStr = document.getElementById('pe-mes').value;
+      if (!mesStr) return;
+      const payload = {
+        mes_referencia: mesStr + '-01',
+        receita_meta: Number(document.getElementById('pe-meta-receita').value) || 0,
+        lucro_liquido_meta: Number(document.getElementById('pe-meta-lucro').value) || 0,
+      };
+      const { error } = _metaAtual
+        ? await db.from('metas_financeiras').update(payload).eq('id', _metaAtual.id)
+        : await db.from('metas_financeiras').insert([payload]);
+      if (error) { msgForm('msg-meta', 'Erro ao salvar: ' + error.message, 'red'); return; }
+      msgForm('msg-meta', '✓ Meta salva!', 'green');
+      await carregarPainelExecutivo();
+    }
+
+    document.getElementById('btn-salvar-meta').addEventListener('click', salvarMeta);
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await window.sessaoPronta;   // T2.2 — mesmo padrão de sequenciamento das outras páginas
+      document.getElementById('pe-mes').value = new Date().toISOString().slice(0,7);
+      await carregarPainelExecutivo();
+    });
+  </script>
+</body>
+</html>

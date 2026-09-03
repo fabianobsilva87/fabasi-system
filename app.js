@@ -855,6 +855,7 @@ const MENU_SECTIONS = [
     { icon: '🏛️', label: 'Empresa Master', href: 'empresa-master.html' },
     { icon: '👥', label: 'Gestão de Usuários', href: 'usuarios.html' },
     { icon: '🔔', label: 'Central de Pendências', href: 'central-pendencias.html' },
+    { icon: '📊', label: 'Painel Executivo', href: 'dashboard-executivo.html' },
     { icon: '🏢', label: 'Orçamento Administrativo', href: 'orcamento-administrativo.html' },
     { icon: '📜', label: 'Auditoria', href: 'auditoria.html' },
   ]},
