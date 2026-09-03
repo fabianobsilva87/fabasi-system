@@ -264,7 +264,7 @@
         <td style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
           <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarFotosMedicao('${escapeHTML(m.id)}')">📷 Fotos (${fotos.length})</button>
           ${m.status === 'rascunho' && podeAprovar() ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="aprovarMedicao('${escapeHTML(m.id)}')">✓ Aprovar</button>` : ''}
-          ${m.status === 'rascunho' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMedicao('${escapeHTML(m.id)}', ${m.numero_medicao})">✕</button>` : ''}
+          <button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirMedicao('${escapeHTML(m.id)}', ${m.numero_medicao})">✕</button>
           ${m.status === 'aprovada' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#0e7490;" onclick="gerarContaReceberMedicao('${escapeHTML(m.id)}')">📤 Gerar Conta a Receber</button>` : ''}
           ${m.status === 'faturada' ? '<span style="font-size:11px;color:#059669;">✓ Faturada</span>' : ''}
         </td>
@@ -317,19 +317,41 @@
     }
 
     async function excluirMedicao(id, numero) {
-      // Se veio de "sincronizar OS" (origem='ordens_servico'), tem OS's
-      // vinculadas a ela — precisa desvincular primeiro (senão o banco
-      // bloqueia), voltando as OS's pro status "Concluída" pra poderem
-      // ser selecionadas de novo numa medição futura.
+      const medicao = _medicoesCache.find(m => m.id === id);
+
+      // Regra: pode excluir enquanto não gerou algo financeiro já
+      // recebido de verdade. Se já faturou (gerou Conta a Receber) e
+      // alguma parcela dessa conta já foi recebida, bloqueia — dinheiro
+      // que já entrou não dá pra desfazer sem deixar rastro perdido.
+      if (medicao?.origem_conta_receber_id) {
+        const { data: parcelasRecebidas } = await db.from('contas_receber_parcelas')
+          .select('id').eq('conta_receber_id', medicao.origem_conta_receber_id).eq('status', 'recebida');
+        if (parcelasRecebidas && parcelasRecebidas.length) {
+          alert(`Não é possível excluir a medição Nº ${numero} — a Conta a Receber gerada por ela já tem parcela(s) recebida(s). Dinheiro já recebido não pode ser desfeito por aqui.`);
+          return;
+        }
+      }
+
+      // Se tem OS's vinculadas, precisa desvincular primeiro (senão o
+      // banco bloqueia) — elas voltam pra "Concluída", disponíveis pra
+      // entrar numa medição nova.
       const { data: osVinculadas } = await db.from('ordens_servico_obra').select('id, numero_os').eq('medicao_id', id);
-      let aviso = `Excluir a medição Nº ${numero} (rascunho)?`;
+      let aviso = `Excluir a medição Nº ${numero}?`;
       if (osVinculadas && osVinculadas.length) {
-        aviso += `\n\n⚠️ Essa medição tem ${osVinculadas.length} OS(s) vinculada(s) (Nº ${osVinculadas.map(o => o.numero_os).join(', ')}) — elas voltam pro status "Concluída" e ficam disponíveis pra entrar numa nova medição.`;
+        aviso += `\n\n⚠️ Essa medição tem ${osVinculadas.length} OS(s) vinculada(s) (Nº ${osVinculadas.map(o => o.numero_os).join(', ')}) — elas voltam pro status "Concluída".`;
+      }
+      if (medicao?.origem_conta_receber_id) {
+        aviso += `\n\n⚠️ A Conta a Receber gerada por essa medição (ainda não recebida) também será excluída.`;
       }
       if (!confirm(aviso)) return;
 
       if (osVinculadas && osVinculadas.length) {
         await db.from('ordens_servico_obra').update({ status: 'concluida', medicao_id: null }).eq('medicao_id', id);
+      }
+
+      if (medicao?.origem_conta_receber_id) {
+        await db.from('contas_receber_parcelas').delete().eq('conta_receber_id', medicao.origem_conta_receber_id);
+        await db.from('contas_receber').delete().eq('id', medicao.origem_conta_receber_id);
       }
 
       const { error } = await db.from('medicoes_obra').delete().eq('id', id);

@@ -339,7 +339,7 @@
           <td style="display:flex;gap:4px;flex-wrap:wrap;">
             <button type="button" class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="alternarFotosOS('${escapeHTML(os.id)}')">📷 (${fotos.length})</button>
             ${os.status === 'aberta' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;background:#059669;" onclick="concluirOS('${escapeHTML(os.id)}')">✓ Concluir</button>` : ''}
-            ${os.status === 'aberta' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirOsObra('${escapeHTML(os.id)}', ${os.numero_os})">✕</button>` : ''}
+            ${os.status !== 'sincronizada' ? `<button type="button" class="btn-excluir" style="padding:3px 8px;font-size:11px;" onclick="excluirOsObra('${escapeHTML(os.id)}', ${os.numero_os})">✕</button>` : ''}
           </td>
         </tr>
         <tr id="fotos-os-${os.id}" style="display:none;">
@@ -365,6 +365,11 @@
     }
 
     async function excluirOsObra(id, numero) {
+      const os = _osCache.find(o => o.id === id);
+      if (os?.status === 'sincronizada') {
+        toast('Essa OS já está vinculada a uma Medição — exclua/desvincule a medição primeiro, em Medição de Obra.', 'erro');
+        return;
+      }
       if (!confirm(`Excluir a OS Nº ${numero}?`)) return;
       const { error } = await db.from('ordens_servico_obra').delete().eq('id', id);
       if (error) { toast('Erro ao excluir: ' + error.message, 'erro'); return; }
